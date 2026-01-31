@@ -1,7 +1,7 @@
 # AGENTS.md - Resume Optimizer Explainability Project
 
-> **Note:** For system architecture and agent responsibilities, see [ARCHITECTURE.md](ARCHITECTURE.md)
-> **Note:** For current status of project and project roadmap, see [PROJECT-STATUS.md](PROJECT-STATUS.md)
+> **Note:** For system architecture and agent responsibilities, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+> **Note:** For current status of project and project roadmap, see [docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)
 > **Note:** Tests are required to be written and to pass for each phase to complete.
 
 ## 1. Build/Lint/Test Commands

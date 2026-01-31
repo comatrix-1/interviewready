@@ -1,0 +1,11 @@
+index.ts
+jest.config.js
+jest.config.cjs
+.eslintrc.js
+.eslintrc.cjs
+.prettierrc.js
+bun.lockb
+node_modules/
+coverage/
+dist/
+*.md
