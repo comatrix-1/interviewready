@@ -1,0 +1,5 @@
+{
+  "name": "Career Co-Pilot",
+  "description": "A stateful AI-driven system for persistent resume management, optimization, and mock interviewing based on real-world job descriptions.",
+  "requestFramePermissions": []
+}
