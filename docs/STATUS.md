@@ -1,7 +1,7 @@
 # Implementation Status & Plan
 
 ## Project Overview
-**Persistent Career Co-Pilot (Job Agent System)** - A stateful, multi-agent AI system for resume optimization using LangGraph orchestration with integrated feedback loops.
+** InterviewReady (Job Agent System)** - A stateful, multi-agent AI system for resume optimization using LangGraph orchestration with integrated feedback loops.
 
 ## Current State
 - ✅ **Frontend Prototype**: React + TypeScript + Gemini API working

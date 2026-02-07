@@ -3,61 +3,67 @@ export interface Experience {
   company: string;
   role: string;
   duration: string;
-  bullets: string[];
+  achievements: string[];
+}
+
+export interface Education {
+  institution: string;
+  degree: string;
+  year: string;
 }
 
 export interface ResumeSchema {
   id: string;
   name: string;
   email: string;
-  summary: string;
-  skills: string[]; // Original raw skills list
-  taggedSkills: string[]; // Refined key skills tags
-  yearsOfExperience: number; // Quantitative years of experience
+  skills: string[];
   experience: Experience[];
-  timestamp: number;
+  education: Education[];
+  timestamp: string;
 }
 
-export interface GapReport {
+export interface StructuralAssessment {
+  score: number;
+  readability: string;
+  formattingRecommendations: string[];
+  suggestions: string[];
+}
+
+export interface ContentAnalysisReport {
+  strengths: string[];
+  gaps: string[];
+  skillImprovements: string[];
+  quantifiedImpactScore: number;
+}
+
+export interface AlignmentReport {
   overallScore: number;
-  matchingSkills: string[];
-  missingSkills: string[];
-  experienceGaps: string[];
-  impactScore: Record<string, number>; // Mock SHAP values
+  matchingKeywords: string[];
+  missingKeywords: string[];
+  roleFitAnalysis: string;
 }
 
-export interface OptimizationSuggestion {
-  id: string;
-  originalBullet: string;
-  suggestedBullet: string;
-  reasoning: string;
-  status: 'pending' | 'approved' | 'rejected';
-}
-
-export enum PipelineStep {
+export enum WorkflowStatus {
   IDLE = 'IDLE',
   EXTRACTING = 'EXTRACTING',
   ROUTING = 'ROUTING',
-  SCORING = 'SCORING',
-  AWAITING_ANALYSIS_CONFIRMATION = 'AWAITING_ANALYSIS_CONFIRMATION',
-  OPTIMIZING = 'OPTIMIZING',
-  AWAITING_EDIT_REVIEW = 'AWAITING_EDIT_REVIEW',
+  CRITIQUING = 'CRITIQUING',
+  AWAITING_CRITIC_APPROVAL = 'AWAITING_CRITIC_APPROVAL',
+  ANALYZING_CONTENT = 'ANALYZING_CONTENT',
+  AWAITING_CONTENT_APPROVAL = 'AWAITING_CONTENT_APPROVAL',
+  ALIGNING_JD = 'ALIGNING_JD',
+  AWAITING_ALIGNMENT_APPROVAL = 'AWAITING_ALIGNMENT_APPROVAL',
   INTERVIEWING = 'INTERVIEWING',
   COMPLETED = 'COMPLETED'
 }
 
-export interface InterviewMessage {
-  role: 'assistant' | 'user';
-  content: string;
-}
-
-export interface AppState {
-  resumes: ResumeSchema[];
-  selectedResumeId: string | null;
-  currentJD: string;
-  currentStep: PipelineStep;
-  gapReport: GapReport | null;
-  suggestions: OptimizationSuggestion[];
-  interviewHistory: InterviewMessage[];
-  isStale: boolean;
+export interface SharedState {
+  currentResume: ResumeSchema | null;
+  history: ResumeSchema[];
+  jobDescription: string;
+  status: WorkflowStatus;
+  criticReport: StructuralAssessment | null;
+  contentReport: ContentAnalysisReport | null;
+  alignmentReport: AlignmentReport | null;
+  interviewHistory: { role: 'user' | 'agent'; text: string }[];
 }

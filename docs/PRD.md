@@ -1,4 +1,4 @@
-**PRD.md: Persistent Career Co-Pilot (Job Agent System)**
+**PRD.md: InterviewReady (Job Agent System)**
 
 **1\. Objective**
 
@@ -9,7 +9,7 @@ Enable users to manage and optimize their job applications through a **stateful,
 - Suggests improvements with **human-in-the-loop (HITL)** validation.
 - Conducts interactive mock interviews based on identified gaps.
 
-The system functions as a **career co-pilot**, combining automation with optional human oversight for accuracy, safety, and compliance.
+The system functions as a **InterviewReady**, combining automation with optional human oversight for accuracy, safety, and compliance.
 
 **2\. Key Use Cases**
 
@@ -17,8 +17,10 @@ The system functions as a **career co-pilot**, combining automation with optiona
 | --- | --- | --- | --- |
 | Upload Resume | User uploads a resume. | User | Resume is parsed, stored, and timestamped. |
 | Submit Job Description | User provides a JD to match. | User | System identifies matching resumes; prompts user if multiple exist. |
-| Optimize Resume | System proposes content improvements. | System + User | OptimizerAgent suggests edits; ValidatorAgent checks for hallucinations; user approves/rejects. |
-| Conduct Mock Interview | System generates targeted questions. | System + User | InterviewerAgent generates questions based on GapReport; user may approve if HITL triggered. |
+| Analyze Resume Structure | System evaluates resume formatting and organization. | System + User | ResumeCriticAgent provides structural feedback; user reviews formatting recommendations. |
+| Analyze Content Strength | System analyzes skills and achievements. | System + User | ContentStrengthSkillsReasoningAgent identifies skills gaps; user reviews content analysis. |
+| Align with Job Description | System matches resume to target role. | System + User | JobDescriptionAlignmentAgent provides alignment scores; user reviews role fit analysis. |
+| Conduct Mock Interview | System generates targeted interview scenarios. | System + User | InterviewCoachFeedbackAgent creates role-specific questions and provides response feedback. |
 | Persistent State Recovery | User leaves and returns. | User | System restores exact previous session state from database, including ongoing processes. |
 
 **3\. Functional Requirements**
@@ -36,16 +38,20 @@ The system functions as a **career co-pilot**, combining automation with optiona
 | --- | --- | --- | --- | --- |
 | ExtractorAgent | Deterministic / LLM | Parses PDFs into structured ResumeSchema | PDF | ResumeSchema + timestamp |
 | Router | Logic-Gate | Determines next action | Resume, JD | Next agent or HITL interrupt |
-| Scorer | Analytical | Gap analysis between Resume and JD | ResumeSchema, JD | GapReport |
-| Optimizer | Generative | Suggests resume improvements | GapReport | Suggested edits + reasoning |
-| Interviewer | ReAct | Generates interactive interview questions | GapReport | Questions awaiting responses |
-| Validator | Analytical | Checks outputs internally | Optimizer/Interviewer output | Hallucination flags, NLI validation |
+| ResumeCriticAgent | Analytical | Evaluates structural quality, clarity, formatting from recruiter's perspective | ResumeSchema | StructuralAssessment + FormatRecommendations |
+| ContentStrengthSkillsReasoningAgent | Analytical | Analyzes resume to identify key skills, achievements and evidence of impact | ResumeSchema | ContentAnalysisReport + SkillGapAssessment |
+| JobDescriptionAlignmentAgent | Analytical | Compares resume content with job description requirements to assess role fit | ResumeSchema, JD | AlignmentReport + MissingKeywordsAnalysis |
+| InterviewCoachFeedbackAgent | ReAct | Simulates role-specific interview scenarios and evaluates candidate responses | AlignmentReport, GapReport | InterviewScenarios + ResponseFeedback |
+| Validator | Analytical | Checks outputs internally | Agent outputs | Hallucination flags, NLI validation |
 
 **3.3 Human-in-the-Loop (HITL)**
 
 - Critical steps trigger pauses for user approval:
-  - **Confirmation Gate:** before Scorer/Optimizer.
-  - **Edit Review:** after suggested resume edits.
+- **Confirmation Gate:** before ResumeCriticAgent/JobDescriptionAlignmentAgent.
+- **Structure Review:** after ResumeCriticAgent formatting recommendations.
+- **Content Review:** after ContentStrengthSkillsReasoningAgent analysis.
+- **Alignment Review:** after JobDescriptionAlignmentAgent matching results.
+- **Interview Practice:** after InterviewCoachFeedbackAgent scenarios.
 - HITL updates state: state\['status'\] = 'AWAITING_USER_APPROVAL'.
 - UI displays pending suggestions for review/approval.
 
@@ -94,17 +100,29 @@ The UI supports **all human-facing interactions**, focusing on **clarity, HITL a
 - Input or paste job descriptions.
 - Confirm selected resume if multiple exist.
 
-**6.3 Resume Optimization**
+**6.3 Resume Structure Analysis**
 
-- Display **suggested edits** from the OptimizerAgent.
-- Show **reasoning/explanation** for each suggestion (SHAP/Explainer outputs).
-- Allow **approval or rejection** for each suggestion.
+- Display **structural assessment** from the ResumeCriticAgent.
+- Show **formatting recommendations** and ATS readability scores.
+- Allow **approval or rejection** of formatting changes.
 
-**6.4 Mock Interview / Gap Analysis**
+**6.4 Content Strength Analysis**
 
-- Display AI-generated interview questions.
-- Capture user responses.
-- Highlight gaps identified by the Scorer and Explainer.
+- Display **skills analysis** from the ContentStrengthSkillsReasoningAgent.
+- Show **achievement quantification** and impact evidence gaps.
+- Allow **approval or rejection** of content enhancement suggestions.
+
+**6.5 Job Description Alignment**
+
+- Display **alignment scores** from the JobDescriptionAlignmentAgent.
+- Show **missing keywords** and role fit analysis.
+- Allow **approval or rejection** of alignment-based optimizations.
+
+**6.6 Mock Interview & Feedback**
+
+- Display **role-specific interview scenarios** from the InterviewCoachFeedbackAgent.
+- Capture user responses and provide **real-time feedback**.
+- Highlight **strength areas** and improvement opportunities.
 
 **6.5 System State & Workflow Indicators**
 

@@ -1,4 +1,4 @@
-**TECHNICAL_SPEC.md: Persistent Career Co-Pilot (Job Agent System)**
+**TECHNICAL_SPEC.md: Persistent InterviewReady (Job Agent System)**
 
 **1. Project Overview**
 
@@ -21,26 +21,27 @@ A **stateful, multi-agent orchestration pipeline** that uses LangGraph for persi
 
 **4. Data Flow & Component Interaction**
 
-| **Step** | **Component** | **Input**                    | **Output**        | **Responsibility**                            |
-| -------- | ------------- | ---------------------------- | ----------------- | --------------------------------------------- |
-| 1        | Extractor     | Raw text/PDF                 | ResumeSchema      | Schema enforcement + confidence scoring       |
-| 2        | Router        | ResumeSchema + JD            | Next agent/HITL   | Determines workflow path; flags stale resumes |
-| 3        | Scorer        | ResumeSchema + JD            | GapReport         | Baseline calculation and gap analysis         |
-| 4        | Explainer     | GapReport                    | SHAP Map          | Identify features for improvement             |
-| 5        | Optimizer     | GapReport + SHAP             | Suggested edits   | Rewrite bullets with source grounding         |
-| 6        | Interviewer   | GapReport                    | Questions + state | Generate interactive interview questions      |
-| 7        | Validator     | Optimizer/Interviewer output | ApprovalStatus    | NLI entailment + integrity hash checks        |
+| **Step** | **Component**                          | **Input**                    | **Output**                                 | **Responsibility**                                                    |
+| -------- | ------------------------------------- | ---------------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
+| 1        | Extractor                             | Raw text/PDF                 | ResumeSchema                              | Schema enforcement + confidence scoring                             |
+| 2        | Router                                | ResumeSchema + JD            | Next agent/HITL                           | Determines workflow path; flags stale resumes                        |
+| 3        | ResumeCriticAgent                    | ResumeSchema                 | StructuralAssessment                      | Evaluates formatting, structure, ATS readability                    |
+| 4        | ContentStrengthSkillsReasoningAgent   | ResumeSchema                 | ContentAnalysisReport                     | Analyzes skills, achievements, impact evidence                      |
+| 5        | JobDescriptionAlignmentAgent          | ResumeSchema + JD            | AlignmentReport                           | Semantic matching, role fit assessment                              |
+| 6        | InterviewCoachFeedbackAgent          | AlignmentReport + GapReport  | InterviewScenarios + ResponseFeedback     | Generates role-specific questions and evaluates responses            |
+| 7        | Validator                            | Agent outputs                | ApprovalStatus                           | NLI entailment + integrity hash checks                               |
 
 **5. Agents & Workflow (Technical Implementation)**
 
-| **Agent**      | **Type**          | **Function**                              | **Input**        | **Output**                          | **Technical Notes**                          |
-| -------------- | ----------------- | ----------------------------------------- | ---------------- | ----------------------------------- | -------------------------------------------- |
-| ExtractorAgent | Deterministic/LLM | Parses PDFs into structured ResumeSchema  | PDF              | ResumeSchema + timestamp            | Uses LlamaParse for Markdown-centric parsing |
-| Router         | Logic-Gate        | Determines next action based on state     | Resume, JD       | Next agent or HITL interrupt        | Flags resumes >3 months as "stale"           |
-| Scorer         | Analytical        | Gap analysis between Resume and JD        | ResumeSchema, JD | GapReport                           | Deterministic scoring function               |
-| Optimizer      | Generative        | Suggests resume improvements              | GapReport        | Suggested edits + reasoning         | GPT-4o/Claude 3.5 Sonnet with SHAP guidance  |
-| Interviewer    | ReAct             | Generates interactive interview questions | GapReport        | Questions awaiting responses        | Stateful conversation management             |
-| Validator      | Analytical        | Checks outputs internally                 | Agent outputs    | Hallucination flags, NLI validation | DeBERTa-v3-large-mnli for NLI                |
+| **Agent**                              | **Type**          | **Function**                                                              | **Input**                  | **Output**                                      | **Technical Notes**                                  |
+| -------------------------------------- | ----------------- | ------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| ExtractorAgent                         | Deterministic/LLM | Parses PDFs into structured ResumeSchema                                  | PDF                        | ResumeSchema + timestamp                        | Uses LlamaParse for Markdown-centric parsing         |
+| Router                                 | Logic-Gate        | Determines next action based on state                                     | Resume, JD                 | Next agent or HITL interrupt                    | Flags resumes >3 months as "stale"                   |
+| ResumeCriticAgent                      | Analytical        | Evaluates structural quality, clarity, formatting from recruiter's perspective | ResumeSchema               | StructuralAssessment + FormatRecommendations     | ATS readability scoring, formatting consistency checks |
+| ContentStrengthSkillsReasoningAgent     | Analytical        | Analyzes resume to identify key skills, achievements and evidence of impact   | ResumeSchema               | ContentAnalysisReport + SkillGapAssessment       | STAR/XYZ methodology, achievement quantification      |
+| JobDescriptionAlignmentAgent            | Analytical        | Compares resume content with job description requirements to assess role fit | ResumeSchema, JD           | AlignmentReport + MissingKeywordsAnalysis        | Semantic matching, role-specific alignment scoring     |
+| InterviewCoachFeedbackAgent            | ReAct             | Simulates role-specific interview scenarios and evaluates candidate responses | AlignmentReport, GapReport | InterviewScenarios + ResponseFeedback            | Behavioral/technical question generation, real-time coaching |
+| Validator                              | Analytical        | Checks outputs internally                                                 | Agent outputs              | Hallucination flags, NLI validation             | DeBERTa-v3-large-mnli for NLI                        |
 
 **6. Scoring Formula**
 
@@ -153,10 +154,10 @@ traces (trace_id, agent_name, input, output, metadata)
 ├── base.py                # Abstract base class
 ├── extractor.py           # Parsing logic
 ├── router.py              # Workflow routing and stale detection
-├── scorer.py              # Deterministic math & embeddings
-├── explainer.py           # SHAP/XAI logic
-├── optimizer.py           # LLM rewriting
-├── interviewer.py         # ReAct interview generation
+├── resume_critic.py       # Structural quality and formatting analysis
+├── content_strength.py    # Skills reasoning and achievement analysis
+├── jd_alignment.py        # Job description matching and alignment
+├── interview_coach.py     # Interview simulation and feedback
 └── validator.py           # NLI & integrity checks
 
 /core/                     # Shared domain logic
