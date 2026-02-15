@@ -61,13 +61,10 @@ const App: React.FC = () => {
         interviewHistory: []
       });
       setError(null);
-      // Optional: scroll to top or force a clean visual state
     }
   }, []);
 
   const handleStepClick = useCallback((status: WorkflowStatus) => {
-    // Only allow navigating to steps that have been reached or are currently active
-    // We determine "reached" by checking if we have the necessary data for that step
     let canNavigate = false;
 
     if (status === WorkflowStatus.IDLE) canNavigate = true;
@@ -77,8 +74,6 @@ const App: React.FC = () => {
     if (status === WorkflowStatus.INTERVIEWING && state.alignmentReport) canNavigate = true;
 
     if (canNavigate) {
-      // If we are navigating to a step that has an "awaiting approval" sub-state,
-      // decide which one to show based on data existence.
       let targetStatus = status;
       if (status === WorkflowStatus.CRITIQUING && state.criticReport) {
         targetStatus = WorkflowStatus.AWAITING_CRITIC_APPROVAL;
@@ -225,9 +220,9 @@ const App: React.FC = () => {
         </div>
       </nav>
 
-      {/* 2. Secondary Workflow Indicator Bar - Full Width */}
-      <div className="h-14 flex-none bg-slate-50/50 border-b border-slate-200 flex items-center px-6 z-30 overflow-x-auto no-scrollbar">
-        <div className="w-full">
+      {/* 2. Secondary Workflow Indicator Bar - Centered width */}
+      <div className="h-14 flex-none bg-slate-50/50 border-b border-slate-200 flex items-center px-6 z-30">
+        <div className="w-full max-w-4xl mx-auto flex justify-center overflow-x-auto no-scrollbar">
           <StepIndicator currentStatus={state.status} onStepClick={handleStepClick} />
         </div>
       </div>
