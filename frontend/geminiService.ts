@@ -2,13 +2,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ResumeSchema, StructuralAssessment, ContentAnalysisReport, AlignmentReport } from './types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize the Google GenAI client with the API key from environment variables.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export interface ExtractorFileData {
   data: string;
   mimeType: string;
 }
 
+// Uses Gemini 3 Flash to parse resume into a structured JSON schema.
 export const extractorAgent = async (input: string | ExtractorFileData): Promise<ResumeSchema> => {
   const parts = [];
   
@@ -34,6 +36,9 @@ export const extractorAgent = async (input: string | ExtractorFileData): Promise
         properties: {
           name: { type: Type.STRING },
           email: { type: Type.STRING },
+          phone: { type: Type.STRING },
+          location: { type: Type.STRING },
+          summary: { type: Type.STRING },
           skills: { type: Type.ARRAY, items: { type: Type.STRING } },
           experience: {
             type: Type.ARRAY,
@@ -59,6 +64,42 @@ export const extractorAgent = async (input: string | ExtractorFileData): Promise
               },
               required: ["institution", "degree", "year"]
             }
+          },
+          projects: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                date: { type: Type.STRING }
+              },
+              required: ["title", "description", "date"]
+            }
+          },
+          certifications: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                issuer: { type: Type.STRING },
+                date: { type: Type.STRING }
+              },
+              required: ["name", "issuer", "date"]
+            }
+          },
+          awards: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                issuer: { type: Type.STRING },
+                date: { type: Type.STRING }
+              },
+              required: ["title", "issuer", "date"]
+            }
           }
         },
         required: ["name", "email", "skills", "experience", "education"]
@@ -70,10 +111,14 @@ export const extractorAgent = async (input: string | ExtractorFileData): Promise
   return {
     ...data,
     id: crypto.randomUUID(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    projects: data.projects || [],
+    certifications: data.certifications || [],
+    awards: data.awards || []
   };
 };
 
+// Critic agent reviews the resume's visual hierarchy and formatting.
 export const resumeCriticAgent = async (resume: ResumeSchema): Promise<StructuralAssessment> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -95,6 +140,7 @@ export const resumeCriticAgent = async (resume: ResumeSchema): Promise<Structura
   return JSON.parse(response.text || '{}');
 };
 
+// Content agent analyzes the impact of bullet points using STAR/XYZ methodology.
 export const contentStrengthAgent = async (resume: ResumeSchema): Promise<ContentAnalysisReport> => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -116,10 +162,34 @@ export const contentStrengthAgent = async (resume: ResumeSchema): Promise<Conten
   return JSON.parse(response.text || '{}');
 };
 
+// Alignment agent uses Google Search grounding to contextualize the resume against market requirements.
 export const alignmentAgent = async (resume: ResumeSchema, jd: string): Promise<AlignmentReport> => {
+  // Use Google Search grounding to gather real-world context for the comparison.
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Compare this resume: ${JSON.stringify(resume)} against this Job Description: ${jd}`,
+    contents: `Analyze the fit between this resume and the Job Description. Use Google Search to research the company or specific technology trends if necessary.
+    Resume: ${JSON.stringify(resume)}
+    JD: ${jd}`,
+    config: {
+      tools: [{ googleSearch: {} }],
+    },
+  });
+
+  // Extract grounding chunks to display research sources in the UI.
+  const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+    ?.filter(chunk => chunk.web)
+    ?.map(chunk => ({
+      title: chunk.web?.title || 'Search Source',
+      uri: chunk.web?.uri || ''
+    })) || [];
+  
+  // Follow-up with a structured JSON request to summarize the findings.
+  const responseStructured = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Based on your analysis of the fit between this resume and JD, provide a structured report.
+    Resume: ${JSON.stringify(resume)}
+    JD: ${jd}
+    Detailed Analysis: ${response.text}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -134,16 +204,22 @@ export const alignmentAgent = async (resume: ResumeSchema, jd: string): Promise<
       }
     }
   });
-  return JSON.parse(response.text || '{}');
+  
+  const data = JSON.parse(responseStructured.text || '{}');
+  return {
+    ...data,
+    sources
+  };
 };
 
+// Interview coach uses Gemini 3 Pro for advanced reasoning during mock interviews.
 export const interviewCoachAgent = async (
   alignment: AlignmentReport, 
   history: { role: 'user' | 'agent'; text: string }[]
 ): Promise<string> => {
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `You are an Interview Coach. Based on this alignment report: ${JSON.stringify(alignment)}, continue the interview. History: ${JSON.stringify(history)}`,
+    model: 'gemini-3-pro-preview',
+    contents: `You are a high-stakes Interview Coach. Based on this alignment report: ${JSON.stringify(alignment)}, conduct a realistic mock interview. Ask one targeted question at a time. History: ${JSON.stringify(history)}`,
   });
   return response.text || "I'm sorry, I couldn't generate a response.";
 };

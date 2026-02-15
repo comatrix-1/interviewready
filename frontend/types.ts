@@ -12,13 +12,37 @@ export interface Education {
   year: string;
 }
 
+export interface Project {
+  title: string;
+  description: string;
+  date: string;
+}
+
+export interface Certification {
+  name: string;
+  issuer: string;
+  date: string;
+}
+
+export interface Award {
+  title: string;
+  issuer: string;
+  date: string;
+}
+
 export interface ResumeSchema {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  location?: string;
+  summary?: string;
   skills: string[];
   experience: Experience[];
   education: Education[];
+  projects: Project[];
+  certifications: Certification[];
+  awards: Award[];
   timestamp: string;
 }
 
@@ -41,6 +65,7 @@ export interface AlignmentReport {
   matchingKeywords: string[];
   missingKeywords: string[];
   roleFitAnalysis: string;
+  sources?: { title: string; uri: string }[];
 }
 
 export enum WorkflowStatus {

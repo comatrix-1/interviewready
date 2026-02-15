@@ -4,17 +4,18 @@ import { WorkflowStatus } from '../types';
 
 interface StepIndicatorProps {
   currentStatus: WorkflowStatus;
+  onStepClick: (status: WorkflowStatus) => void;
 }
 
 const steps = [
   { status: WorkflowStatus.IDLE, label: 'Upload' },
-  { status: WorkflowStatus.CRITIQUING, label: 'Critic' },
-  { status: WorkflowStatus.ANALYZING_CONTENT, label: 'Content' },
-  { status: WorkflowStatus.ALIGNING_JD, label: 'Alignment' },
+  { status: WorkflowStatus.CRITIQUING, label: 'Review' },
+  { status: WorkflowStatus.ANALYZING_CONTENT, label: 'Analysis' },
+  { status: WorkflowStatus.ALIGNING_JD, label: 'Matching' },
   { status: WorkflowStatus.INTERVIEWING, label: 'Interview' },
 ];
 
-export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStatus }) => {
+export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStatus, onStepClick }) => {
   const getStepIndex = (status: WorkflowStatus) => {
     if (status === WorkflowStatus.AWAITING_CRITIC_APPROVAL) return 1;
     if (status === WorkflowStatus.AWAITING_CONTENT_APPROVAL) return 2;
@@ -26,31 +27,42 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStatus }) =
   const currentIndex = getStepIndex(currentStatus);
 
   return (
-    <div className="flex items-center justify-between w-full max-w-4xl mx-auto px-4 py-8">
+    <div className="flex items-center justify-between w-full">
       {steps.map((step, idx) => {
         const isActive = idx <= currentIndex;
         const isCurrent = idx === currentIndex;
-        
+        const isFuture = idx > currentIndex;
+
         return (
-          <div key={step.label} className="flex flex-col items-center relative flex-1">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-              isCurrent ? 'border-blue-600 bg-blue-50 text-blue-600 scale-110 z-10' : 
-              isActive ? 'border-blue-600 bg-blue-600 text-white' : 
-              'border-slate-300 bg-white text-slate-400'
-            }`}>
-              {isActive && !isCurrent && idx < currentIndex ? (
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              ) : (
-                <span className="text-sm font-semibold">{idx + 1}</span>
-              )}
-            </div>
-            <span className={`mt-2 text-xs font-medium uppercase tracking-wider ${isActive ? 'text-blue-600' : 'text-slate-400'}`}>
-              {step.label}
-            </span>
+          <React.Fragment key={step.label}>
+            <button
+              onClick={() => !isFuture && onStepClick(step.status)}
+              disabled={isFuture}
+              className={`flex items-center gap-3 py-2 px-4 rounded-lg transition-all focus:outline-none ${
+                isFuture ? 'cursor-not-allowed' : 'hover:bg-slate-100/80 cursor-pointer active:scale-95'
+              }`}
+            >
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 ${
+                isCurrent ? 'bg-slate-900 text-white shadow-md ring-4 ring-slate-900/10' : 
+                isActive ? 'bg-slate-200 text-slate-700' : 
+                'bg-transparent border border-slate-200 text-slate-300'
+              }`}>
+                {idx + 1}
+              </div>
+              <span className={`text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${
+                isCurrent ? 'text-slate-900' : 
+                isActive ? 'text-slate-500' : 
+                'text-slate-300'
+              }`}>
+                {step.label}
+              </span>
+            </button>
             {idx < steps.length - 1 && (
-              <div className={`absolute top-5 left-[50%] w-full h-0.5 -z-0 transition-colors duration-300 ${idx < currentIndex ? 'bg-blue-600' : 'bg-slate-200'}`} />
+              <div className={`flex-1 h-[1px] mx-4 transition-colors duration-500 ${
+                idx < currentIndex ? 'bg-slate-300' : 'bg-slate-200'
+              }`}></div>
             )}
-          </div>
+          </React.Fragment>
         );
       })}
     </div>
