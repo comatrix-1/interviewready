@@ -7,7 +7,7 @@ on:
 
 env:
   PROJECT_ID: architecting-ai-systems-e71af
-  REGION: us-central1
+  REGION: asia-southeast1
   REPOSITORY: interviewready-repo
 
 jobs:
