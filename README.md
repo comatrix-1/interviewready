@@ -30,38 +30,49 @@ InterviewReady is a high-integrity AI system that converts unstructured resumes 
 
 ### Prerequisites
 
-- Python 3.9+
-- PostgreSQL 15+ with pgvector extension
-- Node.js 18+
-- Redis (for caching)
+- Java 17 (for Backend)
+- Node.js 20+ (for Frontend)
+- Docker & Docker Compose (for Containerization)
+- Google Cloud SDK (for GCP Deployment)
 
-### Installation
+### Local Development
 
+#### Backend
 ```bash
-npm install
-npm run build
+cd backend
+mvn clean install
+mvn spring-boot:run
 ```
 
-### Setup
-
-1. Install dependencies:
-
-```bash
-npm install
-```
-
-2. Create a `.env.local` file inside the `frontend` folder and add your Gemini API key:
-
-```env
-GEMINI_API_KEY=your_api_key_here
-```
-
-3. Run the development server:
-
+#### Frontend
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
+
+### Containerization
+
+#### Run with Docker Compose
+You can run the entire stack locally using Docker:
+
+```bash
+docker-compose up --build
+```
+- Frontend: `http://localhost:80`
+- Backend: `http://localhost:8080`
+
+### Deployment to GCP
+
+This project is configured for deployment to **GCP Cloud Run** via GitHub Actions.
+
+#### Setup Requirements:
+1. **Artifact Registry**: Create a repository named `interviewready-repo` in `us-central1`.
+2. **GitHub Secrets**: Add `GCP_SA_KEY` (Service Account JSON) to your repository.
+3. **Environment Variables**: Update `PROJECT_ID` in `.github/workflows/gcp-deploy.yaml` if necessary.
+
+The pipeline will automatically build and deploy both services to Cloud Run on every push to the `main` branch.
+
 
 ## Directory Structure
 
