@@ -26,6 +26,10 @@ public class OrchestrationAgent {
         String targetAgent = route(input);
         BaseAgent agent = agents.get(targetAgent);
         
+        if (agent == null) {
+            throw new RuntimeException("No agent found for target: " + targetAgent + ". Available agents: " + agents.keySet());
+        }
+        
         // 2. Execute Agent
         AgentResponse response = agent.process(input, context);
         
@@ -45,6 +49,7 @@ public class OrchestrationAgent {
     }
 
     private String route(String input) {
+        if (input == null) return "ResumeCriticAgent";
         if (input.toLowerCase().contains("interview")) return "InterviewCoachAgent";
         if (input.toLowerCase().contains("job")) return "JobAlignmentAgent";
         return "ResumeCriticAgent";
