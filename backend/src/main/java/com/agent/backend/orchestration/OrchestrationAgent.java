@@ -1,9 +1,12 @@
 package com.agent.backend.orchestration;
 
 import com.agent.backend.agent.BaseAgent;
+import com.agent.backend.agent.JobAlignmentAgent;
 import com.agent.backend.model.AgentResponse;
 import com.agent.backend.model.SessionContext;
 import com.agent.backend.governance.SharpGovernanceService;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,7 @@ public class OrchestrationAgent {
     private final Map<String, BaseAgent> agents;
     private final SharpGovernanceService governance;
 
+    @Autowired
     public OrchestrationAgent(List<BaseAgent> agentList, SharpGovernanceService governance) {
         this.agents = agentList.stream()
                 .collect(Collectors.toMap(BaseAgent::getName, agent -> agent));
