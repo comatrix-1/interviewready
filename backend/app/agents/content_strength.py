@@ -3,15 +3,15 @@
 import json
 import time
 from typing import Dict, Any
-from .base import BaseAgent
+
 from langfuse import observe
+
+from .base import BaseAgent
 from ..core.logging import logger
 from ..core.config import settings
-from ..core.security_constants import ANTI_JAILBREAK_DIRECTIVE
-from ..models.agent import AgentResponse, ContentAnalysisReport
+from ..core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
+from ..models.agent import AgentResponse, ContentAnalysisReport, AgentInput
 from ..models.session import SessionContext
-from ..utils.json_parser import parse_json_object
-from langfuse import observe
 
 class ContentStrengthAgent(BaseAgent):
     """Agent for analyzing content strength, skills reasoning, and evidence evaluation."""
@@ -50,7 +50,7 @@ Faithful Transformation Rules:
 RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
 {
   "skills": [
-    {"name": "skill name", "category": "Technical|Soft|Domain|Tool", "confidenceScore": 0.85, "evidenceStrength": "HIGH|MEDIUM|LOW", "evidence": "quote from resume"}
+    {"name": "skill name", "category": "category name", "confidenceScore": 0.85, "evidenceStrength": "HIGH|MEDIUM|LOW", "evidence": "quote from resume"}
   ],
   "achievements": [
     {"description": "achievement", "impact": "HIGH|MEDIUM|LOW", "quantifiable": true, "confidenceScore": 0.9, "originalText": "original text"}
@@ -62,6 +62,7 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
   "summary": "brief summary of analysis"
 }
 """
+    + RESUME_SCHEMA
     + ANTI_JAILBREAK_DIRECTIVE
 )
     
@@ -78,19 +79,26 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         )
     
     @observe(name="content_strength_process", as_type="agent")
-    def process(self, input_text: str, context: SessionContext) -> AgentResponse:
+    def process(
+        self, input_data: AgentInput, context: SessionContext
+    ) -> AgentResponse:
         """Process resume text and analyze content strength.
 
         Args:
-            input_text: Resume text to analyze
+            input_data: Structured agent input
             context: Session context
 
         Returns:
             Agent response with content strength analysis
         """
+        if not isinstance(input_data, AgentInput):
+            raise TypeError("ContentStrengthAgent expects AgentInput.")
+
         session_id = getattr(context, "session_id", "unknown")
         agent_name = self.get_name()
         processing_start_time = time.time()
+
+        input_text = self._build_prompt(input_data)
 
         logger.debug(
             "ContentStrengthAgent processing started",
@@ -282,3 +290,10 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
             return float(node.get(field, 0.0))
         except (ValueError, TypeError):
             return 0.0
+
+    @staticmethod
+    def _build_prompt(input_data: AgentInput) -> str:
+        resume_data: Dict[str, Any] = {}
+        if input_data.resume is not None:
+            resume_data = input_data.resume.model_dump(exclude_none=True)
+        return f"Resume data: {json.dumps(resume_data, indent=2)}"

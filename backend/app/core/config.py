@@ -48,9 +48,6 @@ class Settings(BaseSettings):
     # Langfuse
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None
-    
-    # Security
-    LLM_GUARD_ENABLED: bool = True
     LANGFUSE_HOST: Optional[str] = "https://cloud.langfuse.com"
 
     # Mock agent response

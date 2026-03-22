@@ -3,18 +3,16 @@
 import json
 import time
 from typing import List, Dict, Any
+
 from langfuse import observe
 
 from .base import BaseAgent
-from langfuse import observe
 from ..core.logging import logger
 from ..core.config import settings
-from ..models.agent import AgentResponse, AlignmentReport
+from ..models.agent import AgentResponse, AlignmentReport, AgentInput
 from ..models.session import SessionContext
 from ..utils.json_parser import parse_json_object
-
-
-from ..core.security_constants import ANTI_JAILBREAK_DIRECTIVE
+from ..core.constants import ANTI_JAILBREAK_DIRECTIVE
 
 
 class JobAlignmentAgent(BaseAgent):
@@ -92,19 +90,26 @@ class JobAlignmentAgent(BaseAgent):
         return max(0.3, min(0.95, base - penalty))
 
     @observe(name="job_alignment_process", as_type="agent")
-    def process(self, input_text: str, context: SessionContext) -> AgentResponse:
+    def process(
+        self, input_data: AgentInput, context: SessionContext
+    ) -> AgentResponse:
         """Process resume and job description to evaluate alignment.
 
         Args:
-            input_text: Resume text (also used as job description placeholder here)
+            input_data: Structured agent input
             context: Session context
 
         Returns:
             Agent response with alignment evaluation
         """
+        if not isinstance(input_data, AgentInput):
+            raise TypeError("JobAlignmentAgent expects AgentInput.")
+
         session_id = getattr(context, "session_id", "unknown")
         agent_name = self.get_name()
         processing_start_time = time.time()
+
+        input_text = self._build_prompt(input_data)
 
         logger.debug(
             "JobAlignmentAgent processing started",
@@ -131,6 +136,7 @@ class JobAlignmentAgent(BaseAgent):
 
             raw_result = raw_result or self.call_gemini(input_text, context)
 
+            raw_payload = parse_json_object(raw_result) or {}
             structured_result = self.parse_and_validate(
                 raw_result, AlignmentReport
             ).model_dump()
@@ -148,7 +154,17 @@ class JobAlignmentAgent(BaseAgent):
 
             skills_match: List[str] = structured_result.get("skillsMatch", [])
             missing_skills: List[str] = structured_result.get("missingSkills", [])
-            fit_score: int = int(structured_result.get("fitScore", 50))
+            fit_score_raw = structured_result.get("fitScore")
+            if fit_score_raw is None:
+                fit_score_raw = raw_payload.get("fitScore")
+            if fit_score_raw is None:
+                fit_score_raw = raw_payload.get("alignment_score")
+            if fit_score_raw is None:
+                fit_score_raw = raw_payload.get("alignmentScore")
+            try:
+                fit_score = int(fit_score_raw) if fit_score_raw is not None else 50
+            except (TypeError, ValueError):
+                fit_score = 50
             reasoning: str = structured_result.get(
                 "reasoning", "No reasoning provided."
             )
@@ -189,3 +205,17 @@ class JobAlignmentAgent(BaseAgent):
                 error_message=str(e),
             )
             raise
+
+    @staticmethod
+    def _build_prompt(input_data: AgentInput) -> str:
+        resume_data: Dict[str, Any] = {}
+        if input_data.resume is not None:
+            resume_data = input_data.resume.model_dump(exclude_none=True)
+        elif input_data.resume_document is not None:
+            resume_data = input_data.resume_document.model_dump(exclude_none=True)
+
+        job_description = input_data.job_description or ""
+        return (
+            f"Resume data: {json.dumps(resume_data, indent=2)}\n"
+            f"Job Description: {job_description}"
+        )
