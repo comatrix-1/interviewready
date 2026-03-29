@@ -1,11 +1,6 @@
 """Chat endpoint for interacting with the agentic system."""
 
-import asyncio
-import datetime as dt
-import random
 from typing import Annotated, Any
-from app.core.config import settings
-from fastapi import APIRouter, HTTPException, Query, status
 
 from fastapi import APIRouter, HTTPException, Query, status, Request
 from fastapi.concurrency import run_in_threadpool
@@ -16,31 +11,21 @@ from app.api.v1.services import (
     get_or_create_session_context,
     get_orchestration_agent,
 )
-from app.agents import GeminiService
-from app.agents.llm_judge import LLmasJudgeEvaluator
-from app.agents import GeminiService
-from app.agents.llm_judge import LLmasJudgeEvaluator
+from langfuse import Langfuse, observe, propagate_attributes
+
+langfuse = Langfuse()
 from app.models import AgentResponse, ChatApiResponse, ChatRequest
 from app.utils.json_parser import parse_json_payload
+from app.core.limiter import limiter
+from app.core.config import settings
 
 router = APIRouter()
 
 langfuse = get_client()
 
-_llm_judge_evaluator = None
-
-
-def get_llm_judge() -> LLmasJudgeEvaluator:
-    """Get or create LLM-as-a-judge evaluator instance."""
-    global _llm_judge_evaluator
-    if _llm_judge_evaluator is None:
-        gemini_service = GeminiService()
-        _llm_judge_evaluator = LLmasJudgeEvaluator(gemini_service)
-    return _llm_judge_evaluator
-
 
 @router.post("")
-@limiter.limit("10/minute")
+@limiter.limit(settings.DEFAULT_RATE_LIMIT)
 @observe(name="chat_endpoint")
 async def chat_endpoint(
     request: Request,
@@ -87,46 +72,6 @@ async def chat_endpoint(
                 internal_response = await run_in_threadpool(
                     orchestrator.orchestrate, chat_request, context
                 )
-
-                if settings.LANGFUSE_LLM_AS_A_JUDGE_ENABLED and internal_response.content:
-                    sample_rate = max(0.0, min(settings.EVAL_SAMPLE_RATE, 1.0))
-                    if sample_rate > 0 and random.random() < sample_rate:
-                        input_summary = (
-                            "Intent: "
-                            f"{chat_request.intent}, "
-                            "Job Description: "
-                            f"{chat_request.jobDescription[:200] if chat_request.jobDescription else 'None'}"
-                        )
-                        current_trace = langfuse.get_current_trace()
-                        trace_id = current_trace.id if current_trace else None
-                        run_name = (
-                            f"live/{internal_response.agent_name or 'unknown'}/"
-                            f"{chat_request.intent}/{dt.date.today().isoformat()}"
-                        )
-
-                        async def _run_judge_eval() -> None:
-                            try:
-                                judge = get_llm_judge()
-                                await run_in_threadpool(
-                                    judge.evaluate,
-                                    agent_name=internal_response.agent_name or "unknown",
-                                    input_data=input_summary,
-                                    output=internal_response.content,
-                                    trace_id=trace_id,
-                                    intent=chat_request.intent,
-                                    session_id=session_id,
-                                    message_history=chat_request.messageHistory or [],
-                                    run_name=run_name,
-                                )
-                            except Exception as judge_error:
-                                import logging
-
-                                logging.getLogger(__name__).warning(
-                                    f"LLM-as-a-judge evaluation failed: {judge_error}"
-                                )
-
-                        asyncio.create_task(_run_judge_eval())
-
                 result = ChatApiResponse(
                     agent=internal_response.agent_name,
                     payload=_extract_api_payload(internal_response),
@@ -164,7 +109,10 @@ def _extract_api_payload(response: AgentResponse) -> dict[str, Any] | list[Any] 
 
 def _parse_json_payload(content: str) -> dict[str, Any] | list[Any] | None:
     """Parse JSON payload from raw content or fenced markdown code block."""
-    parsed = parse_json_payload(content, allow_array=True)
-    if isinstance(parsed, (dict, list)):
-        return parsed
+    try:
+        parsed = parse_json_payload(content, allow_array=True)
+        if isinstance(parsed, (dict, list)):
+            return parsed
+    except Exception as exc:
+        logger.warning(f"Failed to parse JSON payload in chat endpoint: {exc}", content_preview=content[:100])
     return None

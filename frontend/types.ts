@@ -247,8 +247,12 @@ export enum WorkflowStatus {
   ALIGNING_JD = 'ALIGNING_JD',
   AWAITING_ALIGNMENT_APPROVAL = 'AWAITING_ALIGNMENT_APPROVAL',
   INTERVIEWING = 'INTERVIEWING',
+  SELECTING_INTERVIEW_MODE = 'SELECTING_INTERVIEW_MODE',
+  DEBUG_VOICE = 'DEBUG_VOICE',
   COMPLETED = 'COMPLETED'
 }
+
+export type InterviewMode = 'CHAT' | 'VOICE';
 
 export interface ResumeFile {
   data: string;
@@ -278,6 +282,7 @@ export interface SharedState {
   contentReport: ContentStrengthReport | null;
   alignmentReport: AlignmentReport | null;
   interviewHistory: InterviewMessage[];
+  interviewMode?: InterviewMode;
 }
 
 export type ResumeLookupResult = {

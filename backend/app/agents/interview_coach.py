@@ -183,21 +183,34 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
     def _store_answer_and_advance(self, user_answer: str, context: SessionContext) -> None:
         """Store user's answer and advance to next question."""
         shared_memory = self._ensure_shared_memory(context)
+        # Ensure we don't duplicate answers if the process is called multiple times for the same state
         user_answers = list(shared_memory.get("user_answers", []))
-        user_answers.append(user_answer)
-        shared_memory["user_answers"] = user_answers
         user_answers_redacted = list(shared_memory.get("user_answers_redacted", []))
-        redacted_answer, _ = self._sanitize_text(user_answer)
-        user_answers_redacted.append(redacted_answer)
-        shared_memory["user_answers_redacted"] = user_answers_redacted
         current_index = shared_memory.get("current_question_index", 0)
-        shared_memory["current_question_index"] = current_index + 1
-        logger.debug(
-            "User answer stored and advanced",
-            session_id=getattr(context, "session_id", "unknown"),
-            question_index=current_index,
-            next_index=current_index + 1,
-        )
+
+        # If we have more answers than the current index, we might be re-processing or have a race
+        if len(user_answers) <= current_index:
+            user_answers.append(user_answer)
+            shared_memory["user_answers"] = user_answers
+
+            sanitized_answer, _ = self._sanitize_text(user_answer)
+            user_answers_redacted.append(sanitized_answer)
+            shared_memory["user_answers_redacted"] = user_answers_redacted
+
+            shared_memory["current_question_index"] = current_index + 1
+            logger.debug(
+                "User answer stored and advanced",
+                session_id=getattr(context, "session_id", "unknown"),
+                question_index=current_index,
+                next_index=current_index + 1,
+            )
+        else:
+            logger.warning(
+                "User answer already stored for this index, skipping advance",
+                session_id=getattr(context, "session_id", "unknown"),
+                current_index=current_index,
+                num_answers=len(user_answers),
+            )
 
     def _store_question_if_new(self, question: str, context: SessionContext) -> None:
         """Store a new interview question once."""
@@ -1060,7 +1073,7 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                     session_id=session_id,
                     execution_time_ms=round(live_execution_time * 1000, 2),
                 )
-                return None
+                return "(No response from Gemini Live for audio)"
 
             logger.debug(
                 "InterviewCoachAgent Gemini Live audio call successful",
@@ -1079,7 +1092,7 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
-            return None
+            return f"Error contacting Gemini Live for audio: {str(e)}"
 
     @observe(name="_call_gemini_live", as_type="tool")
     def _call_gemini_live(self, input_text: str, system_prompt: str) -> Optional[str]:
@@ -1120,7 +1133,7 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                     session_id=session_id,
                     execution_time_ms=round(live_execution_time * 1000, 2),
                 )
-                return None
+                return "(No response from Gemini Live)"
 
             logger.debug(
                 "InterviewCoachAgent Gemini Live call successful",
@@ -1139,7 +1152,7 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                 error_type=type(e).__name__,
                 error_message=str(e),
             )
-            return None
+            return f"Error contacting Gemini Live: {str(e)}"
 
     def _call_gemini_with_system_prompt(self, input_text: str, context: SessionContext, system_prompt: str) -> str:
         """Call Gemini API with custom system prompt.
