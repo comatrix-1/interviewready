@@ -456,7 +456,11 @@ export const InterviewStep: React.FC<{
     let isComponentMounted = true;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
-    const wsUrl = `${protocol}//${API_BASE_URL.replace(/^https?:\/\//, '')}/api/v1/interview/live?sessionId=${sessionId}`;
+    
+    // Robustly construct the WebSocket URL to avoid double-slash issues.
+    // If the base URL includes a protocol, strip it before prepending the ws protocol.
+    const hostAndPath = API_BASE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const wsUrl = `${protocol}//${hostAndPath}/api/v1/interview/live?sessionId=${sessionId}`;
 
     const initializeRelaySession = async () => {
       try {
