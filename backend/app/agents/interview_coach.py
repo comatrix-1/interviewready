@@ -816,6 +816,20 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                         )
                         response_json["total_questions"] = state["total_questions"]
 
+                        # Hide scoring and coaching metadata on the initial interview prompt.
+                        if (
+                            not is_follow_up
+                            and state["current_question_index"] == 0
+                            and response_json["current_question_number"] == 1
+                        ):
+                            for hidden_field in (
+                                "tip",
+                                "answer_score",
+                                "can_proceed",
+                                "next_challenge",
+                            ):
+                                response_json.pop(hidden_field, None)
+
                     if (
                         response_json.get("question")
                         and response_json.get("current_question_number", state["current_question_index"] + 1)
