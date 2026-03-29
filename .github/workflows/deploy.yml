@@ -55,7 +55,7 @@ jobs:
 
   build-backend:
     name: Build Backend
-    needs: backend-quality-gates
+    needs: security-scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
