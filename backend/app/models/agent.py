@@ -160,14 +160,14 @@ class ContentSuggestion(BaseModel):
 class ContentStrengthReport(BaseModel):
     """Content strength analysis report."""
 
-    suggestions: List[ContentSuggestion]
-    summary: str
+    suggestions: List[ContentSuggestion] = Field(default_factory=list)
+    summary: str = ""
     score: Optional[int] = None
 
 
 class ResumeCriticIssue(BaseModel):
     """Resume critic issue."""
-    
+
     location: str
     type: Literal["ats", "structure", "impact", "readability"]
     severity: Literal["HIGH", "MEDIUM", "LOW"]
@@ -176,8 +176,8 @@ class ResumeCriticIssue(BaseModel):
 class ResumeCriticReport(BaseModel):
     """Resume critic analysis report."""
 
-    issues: List[ResumeCriticIssue]
-    summary: str
+    issues: List[ResumeCriticIssue] = Field(default_factory=list)
+    summary: str = ""
     score: Optional[int] = None
 
 class WorkflowStatus(BaseModel):
