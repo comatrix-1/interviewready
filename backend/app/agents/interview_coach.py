@@ -232,6 +232,8 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         """Get the appropriate mock response key based on interview state."""
         state = self._get_interview_state(context)
         question_num = state["current_question_index"] + 1
+        if not state["asked_questions"]:
+            return self.MOCK_RESPONSE_KEY
         if not state["interview_active"] and state["current_question_index"] >= state["total_questions"]:
             return "InterviewCoachAgent_Summary"
         if is_follow_up:
@@ -530,18 +532,25 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         )
 
     def _extract_follow_up(self, input_data: AgentInput) -> tuple[bool, str]:
-        """Extract the latest user answer from message history."""
+        """Extract the latest valid user answer from message history."""
         message_history = getattr(input_data, "message_history", []) or []
+
         def _message_value(message, key: str) -> str:
             if isinstance(message, dict):
                 value = message.get(key, "")
             else:
                 value = getattr(message, key, "")
-            return (value or "").strip() if isinstance(value, str) else value
+            return (value or "").strip() if isinstance(value, str) else ""
 
-        user_messages = [msg for msg in message_history if _message_value(msg, "role") == "user"]
+        user_messages = [
+            msg
+            for msg in message_history
+            if _message_value(msg, "role") == "user"
+            and _message_value(msg, "text")
+        ]
         if not user_messages:
             return False, ""
+
         last_user_message = user_messages[-1]
         return True, _message_value(last_user_message, "text")
 
@@ -601,8 +610,11 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                         "First question of interview - initializing session",
                         session_id=session_id,
                     )
+                    is_follow_up = False
+                    user_answer = ""
+                else:
+                    is_follow_up, user_answer = self._extract_follow_up(input_data)
 
-                is_follow_up, user_answer = self._extract_follow_up(input_data)
                 sanitized_user_answer, answer_findings = self._sanitize_text(user_answer)
                 security_findings.extend(answer_findings)
                 bias_flags.extend(self._detect_bias_flags(context.job_description or input_data.job_description))

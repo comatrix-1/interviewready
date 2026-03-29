@@ -50,6 +50,31 @@ def test_interview_coach_returns_first_question_and_initializes_state(monkeypatc
     assert len(context.shared_memory["asked_questions"]) == 1
 
 
+def test_interview_coach_ignores_blank_user_history_on_first_question(monkeypatch) -> None:
+    agent = _build_agent(monkeypatch)
+    context = SessionContext(session_id="s1_blank", user_id="u1", shared_memory=None)
+
+    response = agent.process(
+        AgentInput(
+            intent="INTERVIEW_COACH",
+            job_description="Backend engineer role",
+            message_history=[{"role": "user", "text": "   "}],
+        ),
+        context,
+    )
+
+    payload = json.loads(response.content)
+    assert payload["current_question_number"] == 1
+    assert payload["feedback"] == ""
+    assert payload.get("tip") is None
+    assert payload.get("answer_score") is None
+    assert payload.get("can_proceed") is None
+    assert payload.get("next_challenge") is None
+    assert context.shared_memory["interview_active"] is True
+    assert context.shared_memory["current_question_index"] == 0
+    assert len(context.shared_memory["asked_questions"]) == 1
+
+
 def test_interview_coach_reasks_question_one_on_invalid_answer(monkeypatch) -> None:
     agent = _build_agent(monkeypatch)
     context = SessionContext(
