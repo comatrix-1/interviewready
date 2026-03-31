@@ -14,6 +14,8 @@ class AgentResponse(BaseModel):
     content: Optional[str] = None
     reasoning: Optional[str] = None  # Explainability
     confidence_score: Optional[float] = None  # Confidence Indicator
+    needs_review: Optional[bool] = None
+    low_confidence_fields: Optional[List[str]] = Field(default_factory=list)
     decision_trace: Optional[List[str]] = Field(default_factory=list)  # Auditability
     sharp_metadata: Optional[Dict[str, Any]] = Field(
         default_factory=dict
@@ -25,6 +27,9 @@ class ChatApiResponse(BaseModel):
 
     agent: Optional[str] = None
     payload: Optional[Dict[str, Any] | List[Any] | str] = None
+    confidence_score: Optional[float] = None
+    needs_review: Optional[bool] = None
+    low_confidence_fields: Optional[List[str]] = Field(default_factory=list)
 
 
 class InterviewMessage(BaseModel):
@@ -117,54 +122,13 @@ class NormalizationFailure(BaseModel):
     details: Optional[str] = None
 
 
-class ResumeDocument(BaseModel):
-    """Normalized resume document (lite)."""
-
-    id: Optional[str] = None
-    source: Optional[str] = None
-    raw_text: Optional[str] = None
-    parse_confidence: Optional[float] = None
-    warnings: List[str] = Field(default_factory=list)
-    sections: Optional[Dict[str, str]] = None
-    spans: Optional[List[Dict[str, Any]]] = None
-
-
-class AnalysisArtifact(BaseModel):
-    """Structured output captured from an agent."""
-
-    agent: Optional[str] = None
-    artifact_type: Optional[str] = None
-    payload: Optional[Dict[str, Any] | List[Any] | str] = None
-    confidence_score: Optional[float] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ActionPlan(BaseModel):
-    """Synthesis plan for resume edits or next steps."""
-
-    summary: Optional[str] = None
-    actions: List[str] = Field(default_factory=list)
-    priority: Optional[str] = None
-    no_change: Optional[bool] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class NormalizationFailure(BaseModel):
-    """Normalization failure details."""
-
-    reason: str
-    recovery_steps: Optional[str] = None
-    details: Optional[str] = None
-
-
 class AlignmentReport(BaseModel):
     """Job alignment analysis report."""
 
     skillsMatch: Optional[List[str]] = Field(default_factory=list)
     missingSkills: Optional[List[str]] = Field(default_factory=list)
-    experienceMatch: Optional[str] = None
-    fitScore: Optional[int] = None
-    reasoning: Optional[str] = None
+    experienceMatch: Optional[List[str]] = Field(default_factory=list)
+    summary: Optional[str] = None
 
 
 class ContentSkill(BaseModel):
@@ -200,14 +164,14 @@ class ContentSuggestion(BaseModel):
 class ContentStrengthReport(BaseModel):
     """Content strength analysis report."""
 
-    suggestions: List[ContentSuggestion]
-    summary: str
+    suggestions: List[ContentSuggestion] = Field(default_factory=list)
+    summary: str = ""
     score: Optional[int] = None
 
 
 class ResumeCriticIssue(BaseModel):
     """Resume critic issue."""
-    
+
     location: str
     type: Literal["ats", "structure", "impact", "readability"]
     severity: Literal["HIGH", "MEDIUM", "LOW"]
@@ -216,8 +180,8 @@ class ResumeCriticIssue(BaseModel):
 class ResumeCriticReport(BaseModel):
     """Resume critic analysis report."""
 
-    issues: List[ResumeCriticIssue]
-    summary: str
+    issues: List[ResumeCriticIssue] = Field(default_factory=list)
+    summary: str = ""
     score: Optional[int] = None
 
 class WorkflowStatus(BaseModel):
