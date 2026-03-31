@@ -1,103 +1,808 @@
-# InterviewReady Frontend
+# InterviewReady Frontend: React TypeScript SPA
 
-Modern React TypeScript application for AI-powered resume optimization and interview preparation.
+Modern React 18 + TypeScript + Tailwind CSS single-page application for AI-powered resume optimization and interview preparation with real-time backend integration.
 
-## Overview
+---
 
-The InterviewReady frontend provides an intuitive interface for interacting with specialized AI agents that analyze resumes, align them with job descriptions, and provide interview coaching. The application communicates with a comprehensive backend API that handles multi-agent orchestration and session management.
+## Table of Contents
 
-## Architecture
+1. [Architecture Overview](#architecture-overview)
+2. [Technology Stack](#technology-stack)
+3. [Setup & Installation](#setup--installation)
+4. [Application Structure](#application-structure)
+5. [Core Features](#core-features)
+6. [Component Library](#component-library)
+7. [API Integration](#api-integration)
+8. [State Management](#state-management)
+9. [Security Considerations](#security-considerations)
+10. [Testing](#testing)
+11. [Deployment](#deployment)
+12. [Performance Optimization](#performance-optimization)
 
-### Technology Stack
+---
 
-- **React 18** - Modern UI framework with hooks and concurrent features
-- **TypeScript** - Type-safe development with enhanced developer experience
-- **Vite** - Fast build tool and development server
-- **TailwindCSS** - Utility-first CSS framework for rapid styling
-- **Vitest** - Fast unit testing framework
+## 1. Architecture Overview
 
-### Application Structure
+### Frontend Component Architecture
 
-The frontend follows a service-oriented architecture with clear separation of concerns:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      React SPA (Client)                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  PRESENTATION LAYER (Views)                                    │
+│  ├─ App.tsx (Main application shell)                           │
+│  ├─ Workflow UI (5-step process)                               │
+│  └─ Agent response rendering (Resume, Graph, Chat)            │
+│                                                                 │
+│  COMPONENT LAYER (Reusable UI)                                 │
+│  ├─ ResumePreview (Resume display & editing)                   │
+│  ├─ StepIndicator (Progress tracking)                          │
+│  ├─ WorkflowSteps (Multi-agent orchestration UI)              │
+│  ├─ LoadingState (Loading spinners & skeletons)               │
+│  ├─ ReportHeader (Analysis header & metadata)                 │
+│  └─ Custom form/input components                              │
+│                                                                 │
+│  STATE MANAGEMENT LAYER (React Contexts)                       │
+│  ├─ LoadingContext (Async operation states)                    │
+│  ├─ SessionContext (Session data & history)                    │
+│  └─ Local component state (useState)                           │
+│                                                                 │
+│  SERVICE LAYER (API Integration)                               │
+│  ├─ backendService.ts (HTTP client for backend)               │
+│  ├─ Session management (localStorage + state)                  │
+│  ├─ Error handling & retry logic                               │
+│  └─ Request/response transformation                            │
+│                                                                 │
+│  STYLING & UTILITIES                                            │
+│  ├─ Tailwind CSS (utility-first CSS framework)                 │
+│  ├─ Dark mode support (via tailwind.config.ts)                │
+│  ├─ Responsive layout (mobile-first design)                    │
+│  └─ Custom utilities & helpers                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                            ↓ HTTPS API Calls
+        ┌───────────────────────────────────────┐
+        │   FastAPI Backend (Port 8000)        │
+        │   /api/v1/chat                        │
+        │   /api/v1/agents                      │
+        │   /api/v1/health                      │
+        └───────────────────────────────────────┘
+```
 
-- **Service Layer**: API communication and data management
-- **Component Layer**: Reusable UI components
-- **Application Layer**: Main application logic and state management
+### User Interaction Flow
 
-## Setup
+```
+Landing
+  ↓
+Upload Resume (PDF or Manual Entry)
+  ↓
+Enter Job Description (Primary intent)
+  ↓
+Select Agent/Intent
+  ├─ ResumeCritic: Get structural analysis
+  ├─ ContentStrength: Get skills evaluation
+  ├─ JobAlignment: Match to job description
+  └─ InterviewCoach: Multi-turn interview
+  ↓
+Agent Processing (with loading feedback)
+  ├─ Real-time status updates
+  ├─ Graceful error handling
+  ├─ Mock response fallback
+  ↓
+Display Results
+  ├─ Rendered response (format varies by agent)
+  ├─ Confidence scores & governance metadata
+  ├─ Decision trace for transparency
+  ↓
+Action
+  ├─ Download analysis
+  ├─ Copy to clipboard
+  ├─ Continue to next agent
+  └─ Start new session
+```
+
+---
+
+## 2. Technology Stack
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| **Framework** | React | 18.x | Modern UI framework with concurrent rendering |
+| **Language** | TypeScript | 5.x | Type-safe JavaScript superset |
+| **Build Tool** | Vite | 5.x | Fast ES module build tool with HMR |
+| **Styling** | TailwindCSS | 3.x | Utility-first CSS framework |
+| **Component Library** | Headless UI | Latest | Unstyled, accessible components |
+| **HTTP Client** | Fetch API | Native | Built-in, no additional library needed |
+| **Testing** | Vitest | Latest | Fast unit testing framework for Vite |
+| **State Management** | React Context | Native | Built-in context API for state sharing |
+| **Type Safety** | TypeScript | 5.x | Static type checking & intellisense |
+| **Routing** | React Router | Latest (optional) | Client-side routing if needed |
+| **Package Manager** | npm | Latest | Node package manager |
+| **Environment** | Node.js | 18+ | JavaScript runtime |
+
+---
+
+## 3. Setup & Installation
 
 ### Prerequisites
 
-- Node.js 18+
-- Backend server running on port 8000
+- **Node.js 18+** - Download from [nodejs.org](https://nodejs.org/)
+- **npm 9+** - Bundled with Node.js
+- **Backend running** - On `http://localhost:8000` (or configured URL)
+- **Git** - For version control
 
-### Installation
+### Installation Steps
 
-1. Install dependencies:
+**1. Install Dependencies**
 ```bash
 npm install
 ```
 
-2. Configure environment:
+**2. Create Environment File**
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-3. Update `.env` with your backend URL:
-```
+**3. Configure Environment Variables**
+Edit `.env.local`:
+```bash
+# Backend API configuration
 VITE_API_BASE_URL=http://localhost:8000
+
+# Optional: Sentry error tracking
+VITE_SENTRY_DSN=https://...
+
+# Optional: Analytics
+VITE_ANALYTICS_ID=...
 ```
 
-### Running the Application
-
-1. Ensure the backend is running on port 8000
-2. Start the development server:
+**4. Start Development Server**
 ```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`
+Application available at: `http://localhost:5173` (or shown in terminal)
 
-## Core Features
+**5. Build for Production**
+```bash
+npm run build
+```
 
-### Multi-Agent Interface
+Output in `dist/` directory
 
-The frontend provides seamless interaction with four specialized AI agents:
+**6. Preview Production Build**
+```bash
+npm run preview
+```
 
-1. **Resume Critic**: Structural analysis and ATS optimization recommendations
-2. **Content Strength**: Skills and achievements analysis with improvement suggestions
-3. **Job Alignment**: Semantic matching with job descriptions and fit scoring
-4. **Interview Coach**: Role-specific interview preparation and coaching
+### Docker Development
 
-### Session Management
+**Build Docker image:**
+```bash
+docker build -t interviewready-frontend .
+```
 
-- Persistent sessions across browser refreshes
-- Automatic session creation and tracking
-- Context preservation for multi-turn conversations
-- Real-time response streaming
+**Run container:**
+```bash
+docker run -p 3000:3000 interviewready-frontend
+```
 
-### User Experience
+---
 
-- Responsive design for desktop and mobile devices
-- Intuitive workflow guidance with step indicators
-- Real-time loading states and progress feedback
-- Error handling with user-friendly messages
-
-## Project Structure
+## 4. Application Structure
 
 ```
 frontend/
-├── components/              # Reusable UI components
-│   ├── ResumePreview.tsx   # Resume display component
-│   ├── StepIndicator.tsx   # Workflow progress indicator
-│   └── WorkflowSteps.tsx   # Step-by-step guidance
-├── tests/                  # Test suite
-│   └── backendService.test.js
-├── App.tsx                 # Main application component
-├── backendService.ts       # Backend API integration
-├── geminiService.ts        # Legacy service (deprecated)
-├── types.ts                # TypeScript type definitions
-├── index.html              # HTML template
+├── App.tsx                          # Root application component
+├── index.tsx                        # Entry point with React render
+├── index.css                        # Global Tailwind styles
+├── metadata.json                    # Application metadata
+├── vite.config.ts                   # Vite configuration
+├── vite-env.d.ts                    # Vite type definitions
+├── tsconfig.json                    # TypeScript configuration
+├── tailwind.config.ts               # Tailwind CSS configuration
+│
+├── components/                      # Reusable UI components
+│   ├── LoadingState.tsx            # Loading spinners & skeletons
+│   ├── ReportHeader.tsx            # Analysis header & metadata
+│   ├── ResumePreview.tsx           # Resume display component
+│   ├── StepIndicator.tsx           # Progress/step indicator
+│   └── WorkflowSteps.tsx           # Multi-step workflow UI
+│
+├── contexts/                        # React Context providers
+│   └── LoadingContext.tsx          # Global loading state context
+│
+├── utils/                           # Utility functions
+│   ├── resolve-resume-location.ts  # Parse resume data
+│   └── text.ts                      # Text formatting utilities
+│
+├── tests/                           # Test suite
+│   └── backendService.test.js      # API integration tests
+│
+├── index.html                       # HTML template
+├── nginx.conf                       # Nginx configuration (production)
+├── Dockerfile                       # Docker image definition
+└── package.json                     # Project dependencies & scripts
+```
+
+### Key Files
+
+**App.tsx** - Main application component:
+```typescript
+// Manages:
+// - Resume upload/input
+// - Job description input
+// - Agent selection
+// - Session management
+// - Response rendering
+// - Error handling & retry logic
+```
+
+**backendService.ts** - API integration layer:
+```typescript
+// Exports:
+// - Chat API client
+// - Resume normalization
+// - Session management
+// - Error handling
+// - Mock fallback responses
+```
+
+**LoadingContext.tsx** - Global loading state:
+```typescript
+// Provides:
+// - isLoading: boolean
+// - error: Error | null
+// - setLoading / setError actions
+// - useLoading() hook
+```
+
+---
+
+## 5. Core Features
+
+### 1. Multi-Agent Resume Analysis
+
+**Resume Upload & Processing:**
+- PDF file upload with client-side parsing
+- Manual resume data entry form
+- Resume preview with formatting
+- Live update to backend
+
+**Agent Selection:**
+```typescript
+type Intent = 
+  | "RESUME_CRITIC"        // Structural & ATS analysis
+  | "CONTENT_STRENGTH"     // Skills & achievements evaluation
+  | "ALIGNMENT"            // Job matching analysis
+  | "INTERVIEW_COACH"      // Multi-turn interview prep
+```
+
+### 2. Multi-Turn Interview Coach
+
+**Interview Workflow:**
+```
+Question 1 (Behavioral)
+  ↓ [User answer]
+Feedback & Scoring
+  ↓ [Proceed/Re-ask decision]
+Question 2 (Technical or Situational)
+  ↓ ...
+Total: 5 questions across different types
+```
+
+**State Persistence:**
+- Interview history stored in session
+- Progress tracking (current question #)
+- Answer scoring & feedback
+- Resume-job context maintained
+
+### 3. Real-Time Feedback & Loading States
+
+**Loading Indicators:**
+- Skeleton loaders for content areas
+- Progress spinner during API calls
+- Estimated time remaining (optional)
+- Cancel request functionality
+
+**Error Handling:**
+- User-friendly error messages
+- Retry logic with exponential backoff
+- Mock response fallback
+- Detailed error logs (dev mode)
+
+### 4. Session Management
+
+**Session States:**
+- Local session ID generation (client-side)
+- Session persistence via localStorage
+- Multi-turn conversation history
+- Resume data caching
+
+**Session Lifecycle:**
+```typescript
+// Session creation
+const sessionId = generateSessionId();  // UUID
+localStorage.setItem('sessionId', sessionId);
+
+// Session persistence
+const resumeData = JSON.stringify(resume);
+localStorage.setItem(`resume_${sessionId}`, resumeData);
+
+// Session cleanup (on logout)
+localStorage.removeItem('sessionId');
+sessionStorage.clear();
+```
+
+### 5. Responsive & Accessible UI
+
+**Responsive Design:**
+- Mobile-first approach (TailwindCSS breakpoints)
+- Tablet optimization
+- Desktop layout
+- Touch-friendly controls
+
+**Accessibility:**
+- Semantic HTML structure
+- ARIA labels on interactive elements
+- Keyboard navigation support
+- High contrast mode support (dark/light themes)
+
+---
+
+## 6. Component Library
+
+### ResumePreview Component
+
+**Purpose:** Display parsed resume in a formatted, readable layout
+
+**Props:**
+```typescript
+interface ResumePre viewProps {
+  resume: Resume;
+  editable?: boolean;
+  onUpdate?: (resume: Resume) => void;
+}
+```
+
+**Features:**
+- Sections: Contact, Summary, Experience, Skills, Education
+- Syntax highlighting for different resume sections
+- Live editing capability
+- Download as PDF/text
+
+### StepIndicator Component
+
+**Purpose:** Show progress through multi-step workflow
+
+**Props:**
+```typescript
+interface StepIndicatorProps {
+  steps: string[];
+  currentStep: number;
+  completed: number[];
+}
+```
+
+**Features:**
+- Visual progress bar
+- Step titles & descriptions
+- Completed/current/pending states
+- Click to jump to step (if enabled)
+
+### LoadingState Component
+
+**Purpose:** Display loading indicator while async operations complete
+
+**Props:**
+```typescript
+interface LoadingStateProps {
+  loading: boolean;
+  error?: Error | null;
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}
+```
+
+**Features:**
+- Skeleton loader screen
+- Loading spinner animation
+- Error boundary
+- Retry button
+
+### WorkflowSteps Component
+
+**Purpose:** Orchestrate multi-agent workflow with step-by-step UI
+
+**Features:**
+- Step selection interface
+- Agent routing logic
+- Response rendering (varies by agent type)
+- History view of all agent interactions
+
+### ReportHeader Component
+
+**Purpose:** Display metadata and confidence scores for analysis results
+
+**Props:**
+```typescript
+interface ReportHeaderProps {
+  agent: string;
+  confidence_score: number;
+  timestamp: string;
+  needs_review: boolean;
+}
+```
+
+**Features:**
+- Agent name display
+- Confidence score visualization (0-100%)
+- Timestamp
+- Review escalation badge
+
+---
+
+## 7. API Integration
+
+### Backend Service (backendService.ts)
+
+**Main Functions:**
+
+```typescript
+// Chat with agents
+const chatWithAgent = async (
+  intent: Intent,
+  resumeData: Resume,
+  jobDescription: string,
+  messageHistory?: InterviewMessage[]
+): Promise<ChatApiResponse>
+
+// List available agents
+const getAvailableAgents = async (): Promise<AgentInfo[]>
+
+// Health check
+const getSystemHealth = async (): Promise<HealthStatus>
+
+// Resume normalization
+const normalizeResume = async (text: string): Promise<Resume>
+```
+
+**Error Handling:**
+
+```typescript
+// Automatic retry with exponential backoff
+const makeRequestWithRetry = async (
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3
+): Promise<Response> => {
+  // Exponential backoff: 1s, 2s, 4s
+  // On final failure: return mock response
+}
+```
+
+**Response Transformation:**
+
+```typescript
+// Type-safe response mapping
+const transformApiResponse = (raw: any): ChatApiResponse => {
+  return {
+    agent: raw.agent,
+    payload: parseJSON(raw.payload),
+    confidence_score: raw.confidence_score || 0,
+    needs_review: raw.needs_review || false,
+    decision_trace: raw.decision_trace || []
+  };
+}
+```
+
+### Configuration
+
+**Environment Variables:**
+
+```bash
+# .env.local
+
+# Required
+VITE_API_BASE_URL=http://localhost:8000
+
+# Optional
+VITE_MOCK_MODE=false              # Use mock responses
+VITE_API_TIMEOUT=30000             # Milliseconds
+VITE_RETRY_MAX_ATTEMPTS=3
+
+# Debugging
+VITE_DEBUG_MODE=false              # Enable debug logs
+```
+
+---
+
+## 8. State Management
+
+### React Context Approach
+
+**Rationale:** Small to medium application doesn't require Redux/Zustand; React Context sufficient for session state, loading states, and user preferences.
+
+**Contexts:**
+
+1. **LoadingContext** - Global async operation state
+2. **SessionContext** - Session ID, resume data, history
+3. **Local Component State** - Form inputs, UI toggles
+
+### Example: Interview Coach State
+
+```typescript
+// Component state for multi-turn interview
+const [interviews State, setInterviewState] = useState({
+  currentQuestion: 1,
+  totalQuestions: 5,
+  questionHistory: [],
+  scores: [],
+  feedback: [],
+  canProceed: false
+});
+
+// Session persistence
+useEffect(() => {
+  const saved = localStorage.getItem(`interview_${sessionId}`);
+  if (saved) setInterviewState(JSON.parse(saved));
+}, [sessionId]);
+
+useEffect(() => {
+  localStorage.setItem(`interview_${sessionId}`, JSON.stringify(interviewState));
+}, [interviewState, sessionId]);
+```
+
+---
+
+## 9. Security Considerations
+
+### Frontend Security Controls
+
+**1. Input Validation**
+```typescript
+// Validate resume file size & type
+if (file.size > MAX_FILE_SIZE) {
+  throw new Error("File too large (max 10MB)");
+}
+if (file.type !== "application/pdf") {
+  throw new Error("Only PDF files accepted");
+}
+```
+
+**2. XSS Prevention**
+```typescript
+// React automatically escapes JSX by default
+// Avoid using dangerouslySetInnerHTML
+❌ <div dangerouslySetInnerHTML={{ __html: response }} />
+✅ <div>{response}</div>  // Automatically escaped
+```
+
+**3. API Key Security**
+```typescript
+// Never expose API keys in frontend code
+// Backend API key passed via environment secrets (GitHub Actions)
+❌ VITE_GEMINI_API_KEY=sk-...  // WRONG
+✅ Backend handles all authenticated API calls
+
+// Frontend only needs backend URL
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+**4. Session Security**
+```typescript
+// Use sessionStorage for sensitive data (cleared on browser close)
+sessionStorage.setItem("interviewHistory", JSON.stringify(data));
+
+// HTTPS only in production
+// Cookie flags: Secure, HttpOnly, SameSite
+```
+
+**5. CORS Protection**
+```typescript
+// Backend enforces CORS headers
+// Frontend respects same-origin policy
+// Credentials not sent in CORS requests (unless explicitly configured)
+```
+
+### Content Security Policy (CSP)
+
+**Recommended CSP headers** (configure in `nginx.conf` or server):
+```nginx
+Content-Security-Policy: 
+  default-src 'self';
+  script-src 'self' 'inline';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: https:;
+  connect-src 'self' http://localhost:8000;
+```
+
+---
+
+## 10. Testing
+
+### Unit Tests with Vitest
+
+**Test Files:**
+```bash
+tests/
+├── backendService.test.js    # API client tests
+├── App.test.tsx             # (To add) Main component tests
+├── components/              # (To add) Component tests
+└── utils/                   # (To add) Utility tests
+```
+
+**Running Tests:**
+```bash
+# Run all tests
+npm run test
+
+# Run with coverage
+npm run test:coverage
+
+# Watch mode
+npm run test:watch
+```
+
+**Example Test:**
+```typescript
+// tests/backendService.test.js
+import { chatWithAgent } from '../backendService';
+
+describe('backendService', () => {
+  it('should call /api/v1/chat with correct payload', async () => {
+    const result = await chatWithAgent(
+      'RESUME_CRITIC',
+      mockResume,
+      mockJobDescription
+    );
+    expect(result.agent).toBe('ResumeCriticAgent');
+    expect(result.confidence_score).toBeGreaterThan(0);
+  });
+});
+```
+
+---
+
+## 11. Deployment
+
+### Build for Production
+
+```bash
+npm run build
+# Output: dist/ directory with static assets
+```
+
+### Docker Deployment
+
+**2-stage Dockerfile:**
+```dockerfile
+# Stage 1: Build
+FROM node:18 AS builder
+WORKDIR /app
+COPY package*.json .
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: Runtime (nginx)
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 3000
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**Build & run:**
+```bash
+docker build -t interviewready-frontend:latest .
+docker run -p 3000:3000 interviewready-frontend:latest
+```
+
+### Cloud Deployment (Google Cloud Run)
+
+**Deployment via GitHub Actions:**
+```yaml
+# .github/workflows/deploy.yml
+- name: Deploy Frontend to Cloud Run
+  run: |
+    gcloud run deploy interviewready-frontend \
+      --image gcr.io/${{ env.GCP_PROJECT_ID }}/interviewready-frontend \
+      --region asia-southeast1 \
+      --allow-unauthenticated \
+      --set-env-vars VITE_API_BASE_URL=${{ secrets.BACKEND_URL }}
+```
+
+See **[DEPLOYMENT.md](../DEPLOYMENT.md)** for full infrastructure setup.
+
+---
+
+## 12. Performance Optimization
+
+### Build Optimization
+
+**Vite Production Build:**
+```bash
+npm run build
+# Automatically:
+# - Minifies JavaScript & CSS
+# - Tree-shakes unused code
+# - Creates source maps
+# - Splits code into chunks
+```
+
+**Bundle Analysis:**
+```bash
+npm run build -- --analyze
+```
+
+### Runtime Optimization
+
+**1. Code Splitting**
+```typescript
+// Lazy load components
+import { lazy, Suspense } from 'react';
+
+const InterviewCoach = lazy(() => import('./components/InterviewCoach'));
+
+<Suspense fallback={<LoadingSpinner />}>
+  <InterviewCoach />
+</Suspense>
+```
+
+**2. Memoization**
+```typescript
+// Prevent unnecessary re-renders
+import { memo, useMemo, useCallback } from 'react';
+
+const ResumePreview = memo(({ resume }: Props) => {
+  const memoizedContent = useMemo(() => renderResume(resume), [resume]);
+  return <div>{memoizedContent}</div>;
+});
+```
+
+**3. Image Optimization**
+```typescript
+// Use next-gen image formats
+<img src="resume.webp" alt="Resume preview" loading="lazy" />
+```
+
+### Caching Strategy
+
+**HTTP Cache Headers** (via nginx):
+```nginx
+location ~* \.(js|css)$ {
+  expires 1y;  # Cache static assets for 1 year
+}
+
+location / {
+  expires 1h;  # Cache HTML for 1 hour
+}
+```
+
+**Service Worker** (optional, for PWA):
+```typescript
+// Implemented in vite.config.ts with @vitejs/plugin-pwa
+```
+
+---
+
+## Additional Resources
+
+- **[Main README](../README.md)** — Project overview
+- **[Backend README](../backend/README.md)** — API documentation
+- **[Deployment Guide](../DEPLOYMENT.md)** — Cloud infrastructure
+- **[React Documentation](https://react.dev/)** — React concepts
+- **[Vite Documentation](https://vitejs.dev/)** — Build tool guide
+- **[TailwindCSS Documentation](https://tailwindcss.com/)** — CSS framework
+- **[TypeScript Handbook](https://www.typescriptlang.org/docs/)** — Type system
+
+---
+
+**Last Updated:** March 2026  
+**Version:** 1.0  
+**Maintainers:** InterviewReady Development Team
 ├── index.tsx               # Application entry point
 ├── vite.config.ts          # Vite configuration
 └── package.json            # Dependencies and scripts
