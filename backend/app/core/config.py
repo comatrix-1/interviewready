@@ -52,21 +52,6 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: Optional[str] = "https://cloud.langfuse.com"
     LANGFUSE_LLM_AS_A_JUDGE_ENABLED: bool = True
 
-    # Governance thresholds
-    GOVERNANCE_CONFIDENCE_THRESHOLD: float = 0.3
-    GOVERNANCE_HALLUCINATION_RISK_THRESHOLD: float = 0.7
-    GOVERNANCE_QUANTIFIABLE_PATTERNS: List[str] = [
-        r"\d+%",
-        r"\$\d+",
-        r"\d+\s*(years?|months?|weeks?)",
-        r"\d+\s*(people|team members|employees)",
-        r"\d+\s*(projects?|clients?|customers?)",
-        r"increased?\s+by\s+\d+",
-        r"reduced?\s+by\s+\d+",
-        r"saved\s+\d+",
-        r"improved\s+.*\d+",
-    ]
-
     # Optional judge cost estimation (USD per 1K tokens)
     JUDGE_PROMPT_COST_PER_1K_USD: Optional[float] = None
     JUDGE_COMPLETION_COST_PER_1K_USD: Optional[float] = None

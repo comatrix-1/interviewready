@@ -6,38 +6,12 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
-try:
-    from langfuse import Langfuse, observe, propagate_attributes
-except ImportError:  # pragma: no cover
-    from typing import Any, Callable
-
-    class _NoopSpan:
-        def start_as_current_observation(self, *args: Any, **kwargs: Any) -> "_NoopSpan":
-            return self
-
-        def __enter__(self) -> "_NoopSpan":
-            return self
-
-        def __exit__(self, *args: Any) -> None:
-            return None
-
-        def update(self, *args: Any, **kwargs: Any) -> None:
-            pass
-
-    def observe(*args: Any, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-            return fn
-        return decorator
-
-    def propagate_attributes(*args: Any, **kwargs: Any) -> _NoopSpan:
-        return _NoopSpan()
-
-    Langfuse = lambda *args: _NoopSpan()  # type: ignore
+from langfuse import Langfuse, observe, propagate_attributes
 
 from app.agents.base import BaseAgentProtocol
 from app.core.config import settings
 from app.core.logging import logger
-from app.governance import FairnessService, SharpGovernanceService
+from app.governance.sharp_governance_service import SharpGovernanceService
 from app.models.agent import (
     ActionPlan,
     AnalysisArtifact,
@@ -77,11 +51,9 @@ class OrchestrationAgent:
         self,
         agent_list: list[BaseAgentProtocol],
         governance: SharpGovernanceService,
-        fairness_service: FairnessService | None = None,
     ):
         self.agent_list = {a.get_name(): a for a in agent_list}
         self.governance = governance
-        self.fairness_service = fairness_service
         self.workflow = self._build_workflow()
 
     def get_agents(self) -> dict[str, BaseAgentProtocol]:
@@ -174,10 +146,6 @@ class OrchestrationAgent:
         )
 
         audited = self.governance.audit(response, input_text)
-        if self.fairness_service is not None:
-            fairness_metadata = self.fairness_service.scan(state.input, audited)
-            audited.sharp_metadata = audited.sharp_metadata or {}
-            audited.sharp_metadata["fairness"] = fairness_metadata
         self._update_context(context, audited, agent_name)
 
         state.response = audited

@@ -1,327 +1,89 @@
-"""SHARP governance service ported from Java implementation.
-
-Now integrated with AI-based bias detection, hallucination evaluation,
-and explainability services for more robust governance.
-"""
+"""SHARP governance service ported from Java implementation."""
 
 from __future__ import annotations
 
 import json
 import re
 import time
-from typing import Any, Callable
+from typing import Any
 
-try:
-    from langfuse import Langfuse
-except ImportError:  # pragma: no cover
-    class _NoopLangfuse:
-        def update_current_span(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-    Langfuse = _NoopLangfuse
-
-from app.core.config import settings
 from app.models.agent import AgentResponse
-from app.governance.bias_detection_service import BiasDetectionService
-from app.governance.hallucination_evaluation_service import (
-    HallucinationEvaluationService,
-)
-from app.governance.explainability_service import ExplainabilityService
-
-langfuse = Langfuse()
-
-
-class GovernanceFieldNames:
-    GOVERNANCE = "governance"
-    AUDIT = "governance_audit"
-    TIMESTAMP = "audit_timestamp"
-    AUDIT_FLAGS = "audit_flags"
-    HALLUCINATION_CHECK_PASSED = "hallucination_check_passed"
-    CONFIDENCE_CHECK_PASSED = "confidence_check_passed"
-    HALLUCINATION_RISK = "hallucinationRisk"
-    UNFAITHFUL_SUGGESTIONS = "unfaithful_suggestions"
-    TOTAL_SUGGESTIONS = "total_suggestions"
-    HAS_QUANTIFIED_ACHIEVEMENTS = "has_quantified_achievements"
-    HIGH_EVIDENCE_SKILLS_COUNT = "high_evidence_skills_count"
-    CONTENT_PARSE_ERROR = "content_parse_error"
-    VALIDATION_ERROR = "validation_error"
-
-
-class GovernanceAuditStatus:
-    PASSED = "passed"
-    FLAGGED = "flagged"
-
-
-class GovernanceFlags:
-    LOW_CONFIDENCE = "low_confidence"
-    HALLUCINATION_RISK = "hallucination_risk"
-    UNFAITHFUL_SUGGESTIONS = "unfaithful_suggestions"
-    SENSITIVE_INTERVIEW_CONTENT = "sensitive_interview_content"
-    PROMPT_INJECTION_ATTEMPT = "prompt_injection_attempt"
-    BIAS_REVIEW_REQUIRED = "bias_review_required"
-    REQUIRES_HUMAN_REVIEW = "requires_human_review"
 
 
 class SharpGovernanceService:
-    """Audit and risk evaluation service for agent responses.
+    """Audit and risk evaluation service for agent responses."""
 
-    Now integrated with AI-based services for more robust bias detection,
-    hallucination evaluation, and explainability.
-    """
-
-    def __init__(self) -> None:
-        self._agent_validators: dict[
-            str,
-            Callable[[AgentResponse, dict[str, Any], str | None], None],
-        ] = {
-            "ContentStrengthAgent": self._validate_content_strength_agent,
-            "InterviewCoachAgent": self._validate_interview_coach_agent,
-        }
-        # Initialize AI-based governance services
-        self.bias_detector = BiasDetectionService()
-        self.hallucination_evaluator = HallucinationEvaluationService()
-        self.explainability_service = ExplainabilityService()
+    CONFIDENCE_THRESHOLD = 0.3
+    HALLUCINATION_RISK_THRESHOLD = 0.7
+    QUANTIFIABLE_PATTERNS = (
+        r"\d+%",
+        r"\$\d+",
+        r"\d+\s*(years?|months?|weeks?)",
+        r"\d+\s*(people|team members|employees)",
+        r"\d+\s*(projects?|clients?|customers?)",
+        r"increased?\s+by\s+\d+",
+        r"reduced?\s+by\s+\d+",
+        r"saved\s+\d+",
+        r"improved\s+.*\d+",
+    )
 
     def audit(
         self,
         response: AgentResponse,
         original_input: str | None = None,
     ) -> AgentResponse:
-        """Audit response and attach governance metadata using AI services."""
-        metadata = dict(response.sharp_metadata or {})
-        self._ensure_governance_container(metadata)
+        """Audit response and attach governance metadata."""
+        metadata: dict[str, Any] = dict(response.sharp_metadata or {})
+        metadata["governance_audit"] = "passed"
+        metadata["audit_timestamp"] = int(time.time() * 1000)
 
-        self._set_governance_field(
-            metadata,
-            GovernanceFieldNames.AUDIT,
-            GovernanceAuditStatus.PASSED,
-        )
-        self._set_governance_field(
-            metadata,
-            GovernanceFieldNames.TIMESTAMP,
-            int(time.time() * 1000),
-        )
-
-        # Use AI-based hallucination evaluation
         hallucination_check = self._check_hallucination(response, original_input)
-        self._set_governance_field(
-            metadata,
-            GovernanceFieldNames.HALLUCINATION_CHECK_PASSED,
-            hallucination_check,
-        )
-
-        # Use AI-based bias detection
-        bias_result = self._check_bias(response, original_input)
-        metadata["bias_check"] = bias_result
+        metadata["hallucination_check_passed"] = hallucination_check
 
         confidence_check = self._check_confidence_threshold(response)
-        self._set_governance_field(
-            metadata,
-            GovernanceFieldNames.CONFIDENCE_CHECK_PASSED,
-            confidence_check,
-        )
+        metadata["confidence_check_passed"] = confidence_check
 
-        # Generate explainability insights
-        explanation = self._generate_decision_explanation(response, original_input)
-        metadata["explainability"] = explanation
-
-        validator = self._agent_validators.get(response.agent_name or "")
-        if validator:
-            validator(response, metadata, original_input)
+        if response.agent_name == "ContentStrengthAgent":
+            self._validate_content_strength_agent(response, metadata, original_input)
+        elif response.agent_name == "InterviewCoachAgent":
+            self._validate_interview_coach_agent(metadata)
 
         flags: list[str] = []
         if not hallucination_check:
-            flags.append(GovernanceFlags.HALLUCINATION_RISK)
+            flags.append("hallucination_risk")
         if not confidence_check:
-            flags.append(GovernanceFlags.LOW_CONFIDENCE)
-        if bias_result.get("risk_score", 0.0) > 0.6:
-            flags.append(GovernanceFlags.BIAS_REVIEW_REQUIRED)
+            flags.append("low_confidence")
 
         if flags:
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.AUDIT,
-                GovernanceAuditStatus.FLAGGED,
-            )
+            metadata["governance_audit"] = "flagged"
             for flag in flags:
                 self._append_flag(metadata, flag)
 
         response.sharp_metadata = metadata
-        self._publish_governance_trace(metadata)
         return response
 
-    def _ensure_governance_container(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        container = metadata.get(GovernanceFieldNames.GOVERNANCE)
-        if not isinstance(container, dict):
-            container = {}
-            metadata[GovernanceFieldNames.GOVERNANCE] = container
-        return container
-
-    def _set_governance_field(
-        self,
-        metadata: dict[str, Any],
-        field_name: str,
-        value: Any,
-    ) -> None:
-        metadata[field_name] = value
-        container = self._ensure_governance_container(metadata)
-        container[field_name] = value
-
     def _append_flag(self, metadata: dict[str, Any], flag: str) -> None:
-        flags = list(metadata.get(GovernanceFieldNames.AUDIT_FLAGS, []))
+        flags = list(metadata.get("audit_flags", []))
         if flag not in flags:
             flags.append(flag)
-        self._set_governance_field(metadata, GovernanceFieldNames.AUDIT_FLAGS, flags)
+        metadata["audit_flags"] = flags
 
-    def _publish_governance_trace(self, metadata: dict[str, Any]) -> None:
-        try:
-            langfuse.update_current_span(
-                metadata={
-                    GovernanceFieldNames.GOVERNANCE: metadata[
-                        GovernanceFieldNames.GOVERNANCE
-                    ]
-                }
-            )
-        except Exception:
-            pass
-
-    def _check_bias(
-        self,
-        response: AgentResponse,
-        original_input: str | None,
-    ) -> dict[str, Any]:
-        """Check for bias signals using AI-based detection."""
-        if not response.content:
-            return {"risk_score": 0.0, "bias_signals": []}
-
-        # Scan response content for bias
-        response_bias = self.bias_detector.scan(response.content or "", context="response")
-
-        # If we have original input (e.g., job description), also scan that
-        input_bias = {}
-        if original_input:
-            input_bias = self.bias_detector.scan(original_input, context="input")
-
-        # Combine results
-        result = {
-            "response_bias": response_bias,
-            "input_bias": input_bias,
-            "risk_score": max(
-                response_bias.get("risk_score", 0.0),
-                input_bias.get("risk_score", 0.0),
-            ),
-            "protected_attributes": list(
-                set(
-                    response_bias.get("protected_attributes_found", [])
-                    + input_bias.get("protected_attributes_found", [])
-                )
-            ),
-            "bias_signals": list(
-                set(
-                    response_bias.get("bias_signals_detected", [])
-                    + input_bias.get("bias_signals_detected", [])
-                )
-            ),
-        }
-        return result
-
-    def _generate_decision_explanation(
-        self,
-        response: AgentResponse,
-        original_input: str | None,
-    ) -> dict[str, Any]:
-        """Generate explainability insights for the decision."""
-        context = {}
-        if original_input:
-            context["input"] = original_input[:500]  # Truncate for safety
-        if response.reasoning:
-            context["reasoning"] = response.reasoning
-
-        # Use explainability service to attribute decision
-        explanation = self.explainability_service.attribute_decision(
-            decision_output=response.content or "",
-            input_context=context,
-            agent_name=response.agent_name,
-        )
-
-        # Also generate a human-readable explanation
-        readable_explanation = self.explainability_service.generate_explanation(
-            decision=response.content or "",
-            attributions=explanation.get("attributions", []),
-            agent_name=response.agent_name,
-            audience="reviewer",
-        )
-
-        return {
-            "attribution": explanation,
-            "explanation": readable_explanation,
-            "transparency_score": explanation.get("transparency_score", 0.0),
-        }
-
-    def _publish_governance_trace(self, metadata: dict[str, Any]) -> None:
-        try:
-            langfuse.update_current_span(
-                metadata={
-                    GovernanceFieldNames.GOVERNANCE: metadata[
-                        GovernanceFieldNames.GOVERNANCE
-                    ]
-                }
-            )
-        except Exception:
-            pass
-
-    def _validate_interview_coach_agent(
-        self,
-        response: AgentResponse,
-        metadata: dict[str, Any],
-        original_input: str | None = None,
-    ) -> None:
+    def _validate_interview_coach_agent(self, metadata: dict[str, Any]) -> None:
         """Apply interview-specific responsible AI governance checks."""
         if metadata.get("sensitive_input_detected"):
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.AUDIT,
-                GovernanceAuditStatus.FLAGGED,
-            )
-            self._append_flag(
-                metadata,
-                GovernanceFlags.SENSITIVE_INTERVIEW_CONTENT,
-            )
-            self._append_flag(metadata, GovernanceFlags.REQUIRES_HUMAN_REVIEW)
+            metadata["governance_audit"] = "flagged"
+            self._append_flag(metadata, "sensitive_interview_content")
+            self._append_flag(metadata, "requires_human_review")
 
         if metadata.get("prompt_injection_blocked"):
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.AUDIT,
-                GovernanceAuditStatus.FLAGGED,
-            )
-            self._append_flag(
-                metadata,
-                GovernanceFlags.PROMPT_INJECTION_ATTEMPT,
-            )
-            self._append_flag(metadata, GovernanceFlags.REQUIRES_HUMAN_REVIEW)
+            metadata["governance_audit"] = "flagged"
+            self._append_flag(metadata, "prompt_injection_attempt")
+            self._append_flag(metadata, "requires_human_review")
 
         if metadata.get("bias_review_required"):
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.AUDIT,
-                GovernanceAuditStatus.FLAGGED,
-            )
-            self._append_flag(metadata, GovernanceFlags.BIAS_REVIEW_REQUIRED)
-            self._append_flag(metadata, GovernanceFlags.REQUIRES_HUMAN_REVIEW)
-
-        # Use AI-based bias detection on interview context if available
-        if original_input:
-            bias_check = self.bias_detector.scan(original_input, context="interview")
-            if bias_check.get("risk_score", 0.0) > 0.5:
-                self._set_governance_field(
-                    metadata,
-                    GovernanceFieldNames.AUDIT,
-                    GovernanceAuditStatus.FLAGGED,
-                )
-                self._append_flag(metadata, GovernanceFlags.BIAS_REVIEW_REQUIRED)
-                self._append_flag(metadata, GovernanceFlags.REQUIRES_HUMAN_REVIEW)
-                metadata["ai_bias_detection"] = bias_check
+            metadata["governance_audit"] = "flagged"
+            self._append_flag(metadata, "bias_review_required")
+            self._append_flag(metadata, "requires_human_review")
 
     def contains_quantifiable_claim(self, text: str | None) -> bool:
         """Return true when text contains measurable claims."""
@@ -329,7 +91,7 @@ class SharpGovernanceService:
             return False
         return any(
             re.search(pattern, text, flags=re.IGNORECASE)
-            for pattern in settings.GOVERNANCE_QUANTIFIABLE_PATTERNS
+            for pattern in self.QUANTIFIABLE_PATTERNS
         )
 
     def calculate_hallucination_risk(
@@ -363,31 +125,21 @@ class SharpGovernanceService:
         response: AgentResponse,
         original_input: str | None,
     ) -> bool:
-        """Check hallucination risk using AI-based semantic evaluation."""
         if not original_input:
             return True
 
-        # Use AI-based hallucination evaluation
-        result = self.hallucination_evaluator.evaluate_hallucination_risk(
-            source=original_input,
-            generated=response.content,
-        )
-
-        # Store hallucination risk in metadata for audit
         sharp_metadata = response.sharp_metadata or {}
-        sharp_metadata[GovernanceFieldNames.HALLUCINATION_RISK] = result.get(
-            "hallucination_risk", 0.0
-        )
-        response.sharp_metadata = sharp_metadata
+        if "hallucinationRisk" in sharp_metadata:
+            risk = float(sharp_metadata["hallucinationRisk"])
+            return risk < self.HALLUCINATION_RISK_THRESHOLD
 
-        # Pass if risk below threshold
-        return result.get("hallucination_risk", 0.0) < settings.GOVERNANCE_HALLUCINATION_RISK_THRESHOLD
+        return True
 
     def _check_confidence_threshold(self, response: AgentResponse) -> bool:
         score = response.confidence_score
         if score is None:
             return False
-        return score >= settings.GOVERNANCE_CONFIDENCE_THRESHOLD
+        return score >= self.CONFIDENCE_THRESHOLD
 
     def _validate_content_strength_agent(
         self,
@@ -398,26 +150,13 @@ class SharpGovernanceService:
         try:
             content = self._parse_content_json(response.content)
             if content is None:
-                self._set_governance_field(
-                    metadata,
-                    GovernanceFieldNames.CONTENT_PARSE_ERROR,
-                    True,
-                )
+                metadata["content_parse_error"] = True
                 return
 
-            hallucination_risk = self._get_double_or_zero(
-                content,
-                GovernanceFieldNames.HALLUCINATION_RISK,
-            )
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.HALLUCINATION_RISK,
-                hallucination_risk,
-            )
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.HALLUCINATION_CHECK_PASSED,
-                hallucination_risk < settings.GOVERNANCE_HALLUCINATION_RISK_THRESHOLD,
+            hallucination_risk = self._get_double_or_zero(content, "hallucinationRisk")
+            metadata["hallucinationRisk"] = hallucination_risk
+            metadata["hallucination_check_passed"] = (
+                hallucination_risk < self.HALLUCINATION_RISK_THRESHOLD
             )
 
             suggestions = content.get("suggestions")
@@ -425,56 +164,31 @@ class SharpGovernanceService:
                 unfaithful_count = sum(
                     1 for suggestion in suggestions if suggestion.get("faithful") is False
                 )
-                self._set_governance_field(
-                    metadata,
-                    GovernanceFieldNames.UNFAITHFUL_SUGGESTIONS,
-                    unfaithful_count,
-                )
-                self._set_governance_field(
-                    metadata,
-                    GovernanceFieldNames.TOTAL_SUGGESTIONS,
-                    len(suggestions),
-                )
+                metadata["unfaithful_suggestions"] = unfaithful_count
+                metadata["total_suggestions"] = len(suggestions)
                 if unfaithful_count > 0:
-                    self._set_governance_field(
-                        metadata,
-                        GovernanceFieldNames.AUDIT,
-                        GovernanceAuditStatus.FLAGGED,
-                    )
-                    self._append_flag(
-                        metadata,
-                        GovernanceFlags.UNFAITHFUL_SUGGESTIONS,
-                    )
-                    self._append_flag(metadata, GovernanceFlags.REQUIRES_HUMAN_REVIEW)
+                    metadata["governance_audit"] = "flagged"
+                    metadata["audit_flags"] = [
+                        "unfaithful_suggestions",
+                        "requires_human_review",
+                    ]
 
             achievements = content.get("achievements")
             if isinstance(achievements, list):
-                self._set_governance_field(
-                    metadata,
-                    GovernanceFieldNames.HAS_QUANTIFIED_ACHIEVEMENTS,
-                    any(
-                        achievement.get("quantifiable") is True
-                        for achievement in achievements
-                    ),
+                metadata["has_quantified_achievements"] = any(
+                    achievement.get("quantifiable") is True
+                    for achievement in achievements
                 )
 
             skills = content.get("skills")
             if isinstance(skills, list):
-                self._set_governance_field(
-                    metadata,
-                    GovernanceFieldNames.HIGH_EVIDENCE_SKILLS_COUNT,
-                    sum(
-                        1
-                        for skill in skills
-                        if str(skill.get("evidenceStrength", "")).upper() == "HIGH"
-                    ),
+                metadata["high_evidence_skills_count"] = sum(
+                    1
+                    for skill in skills
+                    if str(skill.get("evidenceStrength", "")).upper() == "HIGH"
                 )
         except Exception as exc:  # noqa: BLE001
-            self._set_governance_field(
-                metadata,
-                GovernanceFieldNames.VALIDATION_ERROR,
-                str(exc),
-            )
+            metadata["validation_error"] = str(exc)
 
     def _parse_content_json(self, content: str | None) -> dict[str, Any] | None:
         if not content:
@@ -484,7 +198,7 @@ class SharpGovernanceService:
             if match:
                 return json.loads(match.group())
             return json.loads(content)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     @staticmethod
