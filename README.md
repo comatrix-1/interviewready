@@ -24,7 +24,8 @@ For a comprehensive architectural overview, design decisions, technology justifi
 
 - **Multi-Agent System**: Specialized agents for resume analysis, alignment scoring, and interview coaching
 - **Orchestration Engine**: LangGraph-based workflow with stateful session management
-- **Governance Framework**: SHARP compliance layer for fairness, bias detection, and transparency
+- **AI-Powered Governance**: Semantic intelligence services for bias detection, hallucination evaluation, explainability
+- **SHARP Compliance Layer**: Fairness detection, transparency scoring, confidence validation
 - **Structured Tracing**: Langfuse integration with complete audit trails
 - **FastAPI Backend**: Async, type-safe REST API with automatic documentation
 
@@ -66,9 +67,12 @@ For a comprehensive architectural overview, design decisions, technology justifi
 
 ## 📊 Key Features
 
+✅ **AI-Powered Semantic Governance** — Bias detection, hallucination evaluation, explainability with ML embeddings  
 ✅ **Multi-Turn Interview Coaching** — Stateful interview sessions with answer evaluation  
 ✅ **Explainable Scoring** — Every decision traced with decision_trace & reasoning fields  
-✅ **Bias Detection** — Protected attribute recognition & fairness flag generation  
+✅ **Semantic Bias Detection** — Protected attribute recognition & fairness flag generation  
+✅ **Hallucination Safeguards** — Faithfulness evaluation & contradiction detection  
+✅ **Decision Attribution** — Transparent factor analysis showing what influenced decisions  
 ✅ **Security First** — Prompt injection defense, PII redaction, output sanitization  
 ✅ **Full Auditability** — Langfuse tracing + JSON structured logging + governance metadata  
 ✅ **Graceful Fallbacks** — Mock response fallback when API unavailable  
@@ -77,10 +81,11 @@ For a comprehensive architectural overview, design decisions, technology justifi
 ## 📚 Documentation
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Detailed design, rationale, tech stack & governance
+- **[COMPREHENSIVE_TEST_REPORT.md](COMPREHENSIVE_TEST_REPORT.md)** — AI governance refactor validation & test results
 - **[backend/README.md](backend/README.md)** — Backend API setup & configuration
 - **[frontend/README.md](frontend/README.md)** — Frontend build & integration
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — Container, Cloud Run, K8s deployment
-- **[GOVERNANCE.md](GOVERNANCE.md)** — SHARP governance framework details
+- **[GOVERNANCE.md](GOVERNANCE.md)** — SHARP governance framework & AI services
 - **[INTERVIEW_COACH_MODIFICATION.md](INTERVIEW_COACH_MODIFICATION.md)** — Interview coach customization
 
 ## 🧪 Evaluations
@@ -123,14 +128,36 @@ uv run python -m evals.run_evals --langfuse-dataset interviewready_cases --max-c
 
 ## 🔐 Security & Compliance
 
-- ✅ **Prompt Injection Defense** — LLM Guard input scanning
-- ✅ **Output Sanitization** — Hallucination & leakage detection
-- ✅ **PII Redaction** — GDPR-compliant data masking
-- ✅ **Bias Detection** — Protected attribute recognition & fairness flags
-- ✅ **Auditable Decisions** — Complete trace of reasoning & changes
-- ✅ **Governance Checks** — Confidence thresholds & hallucination risk assessment
+### Security Controls
+- ✅ **Prompt Injection Defense** — LLM Guard input scanning + system prompt hardening
+- ✅ **Output Sanitization** — Hallucination & leakage detection + contradiction checking
+- ✅ **PII Redaction** — GDPR-compliant data masking before LLM calls
+- ✅ **Auditable Decisions** — Complete trace of reasoning & changes in decision_trace
+- ✅ **Rate Limiting** — Planned per-session quotas to prevent abuse
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md#security--risk-mitigation) for comprehensive security controls and risk mitigation strategies.
+### AI Governance Services (Production-Ready)
+- ✅ **BiasDetectionService** — Semantic bias detection with keyword fallback
+  - Detects protected attributes: gender, age, race, religion, disability, family status, sexual orientation
+  - Identifies bias signals: gendered language, ageist language, ability-based language
+  - Risk scoring (0.0-1.0) with fairness concerns & recommendations
+
+- ✅ **HallucinationEvaluationService** — Semantic faithfulness evaluation
+  - Sentence-level semantic alignment
+  - Per-claim contradiction detection
+  - Self-consistency checking
+  - Hallucination risk assessment (0.0-1.0)
+
+- ✅ **ExplainabilityService** — Decision attribution & transparency
+  - Factor influence detection
+  - Transparency scoring (0.0-1.0)
+  - Human-readable explanations (user/reviewer/auditor audiences)
+  - Quality checklist generation
+
+- ✅ **Governance Checks** — Confidence thresholds, hallucination risk assessment, IMDA compliance
+
+**All services include graceful fallback modes** when sentence-transformers embeddings unavailable (works without GPU/internet).
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md#security--risk-mitigation) and [COMPREHENSIVE_TEST_REPORT.md](COMPREHENSIVE_TEST_REPORT.md) for comprehensive security controls, governance framework, and validation results.
 
 ## 🏃 Development Workflow
 
@@ -165,11 +192,17 @@ cd backend
 # All tests
 uv run pytest
 
+# Governance tests (new AI-powered services)
+uv run pytest tests/test_orchestration_governance.py -v
+
 # Unit tests only
 uv run pytest backend/tests/ -k "not integration"
 
 # Security tests
 uv run pytest backend/tests/ -k "security or injection or sanitiz"
+
+# Fallback mode validation
+python test_fallback_modes.py
 
 # With coverage
 uv run pytest --cov=app
@@ -203,8 +236,7 @@ See [AGENTS.md](./.agents/README.md) for agent customization guidelines and roam
 | Frontend | React 18 + TypeScript + Tailwind CSS |
 | Backend | FastAPI + Uvicorn + Pydantic v2 |
 | LLM | Google Gemini API 2.5 Flash |
-| Orchestration | LangGraph |
-| Security | LLM Guard Scanner + Output Sanitizer |
+| Orchestration | LangGraph || AI Governance | sentence-transformers (all-MiniLM-L6-v2) + scikit-learn + numpy || Security | LLM Guard Scanner + Output Sanitizer |
 | Observability | Langfuse + Structured JSON Logging |
 | Testing | pytest + pytest-asyncio |
 | Deployment | Docker + Cloud Run / K8s |
