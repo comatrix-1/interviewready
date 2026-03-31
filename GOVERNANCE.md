@@ -44,33 +44,64 @@ Response back to user [with decision trail in Langfuse]
 ### What safeguards are in place?
 
 **1. Governance Audit Service** (`app/governance/sharp_governance_service.py`)
-- **Hallucination Detection**: Flags responses that make unsupported claims
+- **Hallucination Detection**: Now uses semantic similarity (embeddings) to detect unsupported claims, rather than just surface-level pattern matching
 - **Confidence Thresholds**: Only accepts decisions above minimum confidence (default: 0.3)
 - **Quantifiable Pattern Validation**: Ensures claims with numbers are supported
 - **Content Strength Validation**: Agent-specific quality checks
+- **AI-Powered Decision Flow**: Integrates three specialized AI services (see below)
 
-**2. Bias Mitigation**
-- **NLI (Natural Language Inference)** in `app/utils/`: Validates logic consistency
-- **SHAP Analysis**: Feature importance analysis to detect skewed decision factors
-- **Prompt Versioning**: All prompts tracked in Langfuse (`create_prompt()`) so drift is detectable
+**2. AI-Based Bias Detection** (`app/governance/bias_detection_service.py`) — NEW
+- **Semantic Embeddings**: Uses sentence-transformers to detect protected attributes (gender, age, race, religion, disability, family status, sexual orientation) beyond simple keyword matching
+- **Bias Signal Detection**: Identifies gendered language ("rockstar", "ninja"), ageist language, ability bias, and exclusionary language
+- **Fairness Concern Evaluation**: Semantic analysis of job descriptions for potential exclusionary patterns
+- **Risk Scoring**: Aggregates findings into 0.0-1.0 fairness risk scores
+- **Dataset Metrics**: Can aggregate fairness metrics across collections of job descriptions
+- **Recommendations**: Provides actionable suggestions for improving fairness
+
+**3. Hallucination Evaluation** (`app/governance/hallucination_evaluation_service.py`) — NEW
+- **Semantic Faithfulness**: Compares source and generated text at sentence level using embeddings
+- **Contradiction Detection**: Identifies logical contradictions (e.g., "always" vs "never")
+- **Claim-Level Scoring**: Per-claim faithfulness evaluation
+- **Self-Consistency Checks**: Detects internal contradictions within a single response
+- **Semantic Alignment Metrics**: Measures how well generated text aligns with source material
+
+**4. Explainability Service** (`app/governance/explainability_service.py`) — NEW
+- **Decision Attribution**: Shows which input factors influenced each decision using semantic similarity attribution
+- **Transparency Scoring**: Quantifies how explainable a decision is
+- **Human-Readable Explanations**: Generates explanations tailored for different audiences (user, reviewer, auditor)
+- **Quality Checklist**: Ensures responses meet explainability standards (reasoning, confidence, trace, metadata)
+
+**5. Fairness Service** (`app/governance/fairness_service.py`)
+- Protected attribute and bias pattern detection
+- NLI consistency checking
+- Dataset-level bias aggregation
+
+**6. Bias Mitigation**
+- **AI-Based Detection**: `BiasDetectionService` scans all text for protected attributes and bias signals
+- **SHAP Analysis** (future): Feature importance analysis available for model decisions
+- **Prompt Versioning**: All prompts tracked in Langfuse so drift is detectable
 - **Multi-Agent Consensus**: Different agents evaluate same input; disagreements flagged
 
-**3. Accountability**
+**7. Accountability**
 - **Session Tracking**: Every decision linked to `session_id` for traceability
 - **Audit Timestamps**: Every decision timestamped for accountability
 - **Error Logging**: Failures recorded with full context
 - **Environment Tagging**: `production` vs `staging` clearly marked
+- **Governance Span Enrichment**: All governance checks stored in Langfuse traces with rich metadata
 
-**4. Trust**
+**8. Trust**
 - **Confidence Scoring**: Responses include confidence levels
+- **Decision Attribution**: `ExplainabilityService` identifies which factors influenced each decision
 - **Reasoning Capture**: Agent reasoning steps recorded in spans
 - **Metadata Transparency**: All input/output stored in Langfuse for verification
 - **Versioning**: `APP_VERSION` and `environment` tracked per trace
+- **AI Service Confidence**: Each governance service returns confidence/risk scores
 
-**5. Assurance**
+**9. Assurance**
 - **Pre-Deployment Tests**: Golden set E2E tests with known good/bad cases
 - **Production Monitoring**: Real-time Langfuse dashboards for anomaly detection
-- **Automated Guardrails**: SHARP governance service blocks low-confidence responses
+- **Automated Guardrails**: Multi-service governance pipeline blocks problematic responses
+- **Semantic Regression Testing**: Tests verify fairness, hallucination risk, and explainability across edge cases
 
 ---
 
@@ -121,17 +152,29 @@ Response back to user [with decision trail in Langfuse]
 - **Integration**: Agents built on LangChain utilities
 - **Tracing**: Compatible with Langfuse via SDK integration
 
-**3. Pydantic v2** (`app/models/`)
+**3. Sentence Transformers** (sentence-transformers)
+- **Purpose**: Semantic embeddings for AI-based governance decisions
+- **Usage**: Bias detection, hallucination evaluation, decision attribution
+- **Model**: all-MiniLM-L6-v2 (fast, lightweight, suitable for governance)
+
+**4. Pydantic v2** (`app/models/`)
 - **Purpose**: Schema validation and serialization
 - **Usage**: Type-safe agent requests/responses
 - **Tracing**: Automatic metadata extraction from models
 
-**4. FastAPI** (`app/api/`)
+**5. FastAPI** (`app/api/`)
 - **Purpose**: HTTP API layer
 - **Tracing**: Wrapped endpoints with `langfuse.propagate_attributes(session_id=...)`
 - **Benefit**: Clean async/await support for agent calls
 
-**5. Custom Utilities**
+**6. Custom Governance Services** — NEW
+- **BiasDetectionService**: Semantic bias and protected attribute detection
+- **HallucinationEvaluationService**: Semantic faithfulness evaluation
+- **ExplainabilityService**: Decision attribution and transparency
+- **FairnessService**: Protected attribute and bias pattern detection
+- **SharpGovernanceService**: Orchestrates above services plus traditional checks
+
+**7. Custom Utilities**
 - **NLI Service** (`app/utils/`): Natural Language Inference for consistency checking
 - **PDF Parser** (`app/utils/pdf_parser.py`): Resume extraction
 - **JSON Parser** (`app/utils/json_parser.py`): Response parsing

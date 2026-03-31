@@ -7,7 +7,26 @@ from abc import ABC, abstractmethod
 from typing import Protocol, Optional, Dict, Any, Union, List, TypeVar, Type
 
 from app.utils.json_parser import parse_json_object
-from langfuse import Langfuse, propagate_attributes
+try:
+    from langfuse import Langfuse, propagate_attributes
+except ImportError:  # pragma: no cover
+    class _NoopSpan:
+        def start_as_current_observation(self, *args: Any, **kwargs: Any) -> "_NoopSpan":
+            return self
+
+        def update(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "_NoopSpan":
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+    def propagate_attributes(*args: Any, **kwargs: Any) -> _NoopSpan:
+        return _NoopSpan()
+
+    Langfuse = lambda *args, **kwargs: _NoopSpan()  # type: ignore
 
 langfuse = Langfuse()
 from pydantic import BaseModel, ValidationError
