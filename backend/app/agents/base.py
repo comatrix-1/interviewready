@@ -261,7 +261,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                             )
                             response = self.mock_service.generate_response(
                                 system_prompt=self.system_prompt,
-                                user_input=input_text,
+                                user_input=sanitized_input,
                                 tools=wrapped_tools,
                             )
                         else:
@@ -273,7 +273,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                             )
                             response = self.gemini_service.generate_response(
                                 system_prompt=self.system_prompt,
-                                user_input=input_text,
+                                user_input=sanitized_input,
                                 tools=wrapped_tools,
                             )
 
@@ -638,7 +638,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                             )
                             response = self.mock_service.generate_response(
                                 system_prompt=self.system_prompt,
-                                user_input=input_text,
+                                user_input=sanitized_input,
                                 tools=wrapped_tools,
                             )
                         else:
@@ -650,7 +650,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                             )
                             response = self.gemini_service.generate_response(
                                 system_prompt=self.system_prompt,
-                                user_input=input_text,
+                                user_input=sanitized_input,
                                 tools=wrapped_tools,
                             )
 
