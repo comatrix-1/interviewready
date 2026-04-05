@@ -322,7 +322,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                         # Sanitize output with OutputSanitizer (defense in depth)
                         sanitizer = get_output_sanitizer()
                         is_safe, sanitized_response, issues = sanitizer.sanitize(
-                            llm_guard_output
+                            response
                         )
 
 
@@ -699,7 +699,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                         # Sanitize output with OutputSanitizer (defense in depth)
                         sanitizer = get_output_sanitizer()
                         is_safe, sanitized_response, issues = sanitizer.sanitize(
-                            llm_guard_output
+                            response
                         )
 
 
