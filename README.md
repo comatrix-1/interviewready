@@ -369,7 +369,7 @@ Automation reduces development effort in these ways:
 | LLM-as-a-judge evaluation pipeline | ✅ Complete |
 | Comprehensive test suite (42+ tests) | ✅ Complete |
 | CI/CD pipeline (GCP Cloud Run) | ✅ Complete |
-| Documentation (5 detailed docs + 3 READMEs) | ✅ Complete |
+| Documentation (6 detailed docs + 3 READMEs) | ✅ Complete |
 
 The implementation scope is comfortably within project guidelines. Governance, security, and evaluation features were built incrementally alongside core functionality, keeping each increment well within expected effort bounds.
 
@@ -1171,15 +1171,21 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for detailed infrastructure setup and ope
 
 ---
 
-## Additional Documentation
+## Documentation
 
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Comprehensive technical architecture & design rationale
-- **[GOVERNANCE.md](./GOVERNANCE.md)** — SHARP governance framework & decision tracing
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Cloud Run, Docker, Kubernetes deployment options
-- **[Backend README](backend/README.md)** — API documentation & backend configuration
-- **[Frontend README](frontend/README.md)** — React build & integration guide
-- **[Responsible AI](docs/interview-agent-responsible-ai.md)** — IMDA alignment & security mitigations
-- **[Interview Coach Modifications](INTERVIEW_COACH_MODIFICATION.md)** — Customization guide
+Comprehensive project documentation is available in the [`docs/`](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [`docs/LOGICAL_DIAGRAM.md`](docs/LOGICAL_DIAGRAM.md) | **Full logical architecture diagram** — 8-layer diagram, component interaction, 3 data-flow paths (REST / WebSocket / Eval), session state schema, and per-layer design justification |
+| [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) | Physical/infrastructure architecture, GCP deployment topology, CI/CD pipeline, integration points, and technology stack rationale |
+| [`docs/AGENT_DESIGN.md`](docs/AGENT_DESIGN.md) | Internal logic, reasoning patterns, memory mechanisms, prompt design, and inter-agent communication for each of the 5 agents |
+| [`docs/RESPONSIBLE_AI.md`](docs/RESPONSIBLE_AI.md) | Fairness, bias mitigation, explainability, HITL escalation, PII protection, and SHARP governance framework (IMDA alignment) |
+| [`docs/SECURITY_RISK_REGISTER.md`](docs/SECURITY_RISK_REGISTER.md) | AI security risk register: prompt injection, hallucination, PII leakage, bias injection, supply chain — with per-risk severity and mitigation |
+| [`docs/MLSECOPS_PIPELINE.md`](docs/MLSECOPS_PIPELINE.md) | MLSecOps / LLMSecOps pipeline: CI/CD automation, security scanning, model versioning, evaluation, monitoring |
+
+- **[Backend Setup](backend/README.md)** — Python server, agent configuration, API reference
+- **[Frontend Setup](frontend/README.md)** — React application setup and API integration
 
 ---
 
