@@ -7,14 +7,15 @@ An intelligent multi-agent AI system for comprehensive resume optimization and i
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [System Architecture](#system-architecture)
-3. [Agent System Design](#agent-system-design)
-4. [Explainable & Responsible AI Practices](#explainable--responsible-ai-practices)
-5. [AI Security Risk Register](#ai-security-risk-register)
-6. [MLSecOps/LLMSecOps Pipeline](#mlsecopsllmsecops-pipeline)
-7. [Testing Summary](#testing-summary)
-8. [Quick Start Guide](#quick-start-guide)
-9. [Deployment & Operations](#deployment--operations)
+2. [Strategic Context & Design Rationale](#strategic-context--design-rationale)
+3. [System Architecture](#system-architecture)
+4. [Agent System Design](#agent-system-design)
+5. [Explainable & Responsible AI Practices](#explainable--responsible-ai-practices)
+6. [AI Security Risk Register](#ai-security-risk-register)
+7. [MLSecOps/LLMSecOps Pipeline](#mlsecopsllmsecops-pipeline)
+8. [Testing Summary](#testing-summary)
+9. [Quick Start Guide](#quick-start-guide)
+10. [Deployment & Operations](#deployment--operations)
 
 ---
 
@@ -46,6 +47,15 @@ InterviewReady implements a **Multi-Agent Orchestration** architecture with spec
 │                    User Request                             │
 │  (Resume Data/File + Intent + Job Description)             │
 └────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+        ┌──────────────────────────┐
+        │   Resume Extraction      │
+        │   (ExtractorAgent)       │
+        │  - PDF parsing           │
+        │  - Structured data       │
+        │  - Confidence scoring    │
+        └────────────┬─────────────┘
                      │
                      ▼
         ┌──────────────────────────┐
@@ -94,7 +104,278 @@ InterviewReady implements a **Multi-Agent Orchestration** architecture with spec
 
 ---
 
-## 2. System Architecture
+## 2. Strategic Context & Design Rationale
+
+This section answers the key architectural, stakeholder, governance, and lifecycle questions that justify the multi-agent approach taken by InterviewReady.
+
+### 2.1 Key Pain Points Addressed by Multi-Agent AI
+
+**Current workflow gaps in job preparation:**
+
+| Pain Point | How InterviewReady Addresses It |
+|------------|--------------------------------|
+| Resume quality varies widely; candidates cannot self-audit ATS compatibility | `ResumeCriticAgent` provides objective, rubric-based structural analysis with scoring |
+| Content lacks quantifiable evidence; weak achievement framing | `ContentStrengthAgent` identifies evidence gaps and suggests specific improvements |
+| Misalignment between resume content and job description is invisible until rejection | `JobAlignmentAgent` performs semantic gap analysis with prioritized missing-skill recommendations |
+| Interview preparation is isolated from resume context | `InterviewCoachAgent` generates role-specific questions rooted in resume evidence and JD requirements |
+| No feedback loop between analysis stages | Shared session state preserves findings across all agents, enabling cumulative insight |
+| Human bias in resume screening is pervasive | Governance layer enforces protected-attribute non-inference and bias-flag propagation |
+
+**Additional value beyond gap-filling (proactive intelligence):**
+
+Even without explicit user requests, the system proactively:
+- **Detects hallucination risk** in resume content before it reaches the interviewer (confidence threshold gate)
+- **Surfaces hidden skill gaps** by cross-referencing job description semantics against resume evidence, not just keyword matching
+- **Flags interview-ready risk** when answer quality drops below rubric thresholds (LLM-as-a-judge scoring)
+- **Identifies PII exposure** in user inputs and redacts it before any LLM call, protecting candidates from inadvertent data leakage
+- **Escalates edge cases** (low-confidence extraction, ambiguous job requirements, sensitive content) to human review automatically
+
+### 2.2 Pros and Cons of Agentic AI Adoption
+
+**Pros:**
+
+| Dimension | Benefit |
+|-----------|---------|
+| **Specialisation** | Each agent is an expert in its task—prompts, output schemas, and validation logic are optimised for a single concern |
+| **Modularity** | Agents can be updated, replaced, or extended independently without touching other components |
+| **Explainability** | Every decision includes `decision_trace`, `reasoning`, and `confidence_score`—monolithic LLMs cannot offer this granularity |
+| **Governance** | SHARP Governance Service applies consistent audit rules to all agents from a single, auditable location |
+| **Scalability** | Agents are stateless (except InterviewCoach) and can scale horizontally on Cloud Run independently |
+| **Resilience** | Mock fallback per-agent means a single API failure does not bring down the entire system |
+| **Testing** | Each agent can be unit-tested in isolation; security tests target specific agent vulnerabilities |
+| **Proactive intelligence** | Agents can detect hidden risks (hallucination, bias, PII) that a simple chatbot would silently propagate |
+
+**Cons / Trade-offs:**
+
+| Dimension | Challenge & Mitigation |
+|-----------|------------------------|
+| **Latency** | Multi-agent orchestration adds overhead. Mitigated via LangGraph parallel dispatch and mock fallback for non-critical paths |
+| **Complexity** | More moving parts than a single chatbot. Mitigated by strict interface contracts (`BaseAgent`, `AgentResponse`) and comprehensive test coverage |
+| **LLM costs** | Multiple Gemini calls per request. Mitigated by per-agent mock mode (dev/CI) and cost tracking via Langfuse |
+| **Coordination failures** | State inconsistency if one agent fails mid-flow. Mitigated by LangGraph checkpoint recovery and session state isolation |
+| **Governance overhead** | SHARP audit adds processing time per response. Mitigated by non-blocking, in-process governance checks |
+| **Prompt maintenance** | More prompts to maintain across agents. Mitigated by BaseAgent mixin, shared directives, and version-tracked system prompts |
+
+### 2.3 Key Stakeholders
+
+| Stakeholder | Role | Primary Concern |
+|-------------|------|-----------------|
+| **Job Seekers (primary users)** | Interact with all agents to optimise resume and prepare for interviews | Quality, privacy, fairness of feedback |
+| **HR / Hiring Managers** | Indirect beneficiaries; receive better-prepared candidates | Candidate quality; no adverse selection |
+| **Platform Developers / MLEs** | Build and maintain agents, orchestration, governance | Code quality, test coverage, security |
+| **AI Governance / Ethics Reviewers** | Review SHARP audit trails, bias flags, escalation rates | Fairness, explainability, IMDA compliance |
+| **Security Team** | Review LLM Guard outputs, Langfuse traces, CI security scans | Prompt injection, PII leakage, hallucination |
+| **Product / Project Owner** | Scope, roadmap, stakeholder reporting | Feature completeness, demo readiness |
+| **Cloud / DevOps** | Manage GCP Cloud Run, CI/CD pipeline, secret management | Reliability, cost, deployment velocity |
+| **Regulators / Compliance** | PDPA (Singapore), IMDA AI Governance Framework alignment | Data handling, fairness, accountability trail |
+
+### 2.4 Agent Coordination for Seamless User Experience
+
+Agents coordinate through a **shared session state** managed by the LangGraph Orchestration Engine:
+
+```
+User request (intent + resume + JD)
+  │
+  ▼
+OrchestrationAgent (LangGraph state machine)
+  ├─ Reads: session_id → retrieves prior context
+  ├─ Routes: intent → target agent(s)
+  ├─ Passes: resume_data (normalised by ExtractorAgent if PDF)
+  ├─ Passes: job_description (shared across all agents)
+  ├─ Passes: message_history (for InterviewCoach multi-turn state)
+  │
+  ├─ ResumeCriticAgent (stateless)     ← returns critique + decision_trace
+  ├─ ContentStrengthAgent (stateless)  ← returns skills analysis + confidence
+  ├─ JobAlignmentAgent (stateless)     ← returns alignment score + gaps
+  └─ InterviewCoachAgent (stateful)    ← reads/writes question history, scores
+        │
+        ▼
+  SHARP Governance Audit (all agents)
+        │
+        ▼
+  Response aggregated with decision_trace + governance metadata
+        │
+        ▼
+  Session state updated (Langfuse span committed)
+        │
+        ▼
+  Client renders unified response
+```
+
+**Coordination mechanisms:**
+- **Shared resume context:** All agents receive normalised `Resume` Pydantic model; ExtractorAgent enriches it if PDF is provided
+- **Session persistence:** `SessionContext` carries prior analysis results so InterviewCoach can reference ResumeCritic findings without redundant LLM calls
+- **Governance as shared service:** A single `SharpGovernanceService` instance audits every agent response uniformly
+- **Decision trace aggregation:** Each agent appends to the same `decision_trace` array, giving users a complete reasoning chain
+- **Error isolation:** LangGraph routes around failed agents; mock fallback prevents cascading failures
+
+### 2.5 Modular Agentic vs. Monolithic Chatbot
+
+| Attribute | Monolithic Chatbot | InterviewReady Multi-Agent |
+|-----------|--------------------|---------------------------|
+| **Workload reduction** | Single prompt must cover all tasks | Each agent has a focused, optimised prompt with purpose-built validation |
+| **User guidance quality** | Generic advice | Resume-evidence-anchored, JD-specific, rubric-scored guidance |
+| **Flexibility** | Changing behaviour requires modifying the monolith | Add/replace one agent without touching others |
+| **Explainability** | Black box—no traceable decision path | `decision_trace` + `reasoning` + `confidence_score` per response |
+| **Traceability** | Difficult to audit individual decisions | Langfuse distributed traces; per-agent governance metadata |
+| **Failure isolation** | One bad prompt degrades whole system | Agent failures caught; mock fallback maintains service |
+| **Security surface** | Entire system is one target | Per-agent LLM Guard + governance; attack surfaces isolated |
+| **Testing** | Integration tests only | Unit tests per agent + governance + security + structural + eval tests |
+
+### 2.6 Demo Scenarios Showing Agentic Value
+
+| Scenario | What to Demonstrate | Expected Observable Behaviour |
+|----------|--------------------|-----------------------------|
+| **Resume critique flow** | ResumeCriticAgent on a weak ATS resume | Score < 70, structured issues list, `decision_trace` shows section-by-section evaluation |
+| **Content strength uplift** | Before/after ContentStrength on a resume with no metrics | `hallucinationRisk` drops when user adds quantified achievements |
+| **Job alignment gap detection** | JobAlignmentAgent on a misaligned resume | `missingSkills` with criticality ranking; `fitScore` below 50% |
+| **Multi-turn interview coach** | 5-question session with weak answer on Q2 | `can_proceed: false` → coach re-asks; `score` increases on Q2 retry |
+| **Bias flag escalation** | Job description with age-biased language | `bias_review_required: true` in governance metadata; `requires_human_review` flag visible |
+| **Prompt injection defence** | User embeds "ignore previous instructions" in resume text | LLM Guard blocks input; `decision_trace` records security event; no LLM call made |
+| **PDF extraction confidence gate** | Ambiguous PDF with missing fields | `needs_review: true`, `low_confidence_fields` list shown to user |
+| **Langfuse trace audit** | Show Langfuse dashboard after a session | Full span tree: orchestration → agent → governance → response, with cost and latency |
+
+### 2.7 Scale & Scalability
+
+**Design target:** 50–200 concurrent user sessions with < 5 second p95 latency per agent response.
+
+**Scalability characteristics:**
+
+| Dimension | Mechanism | Justification |
+|-----------|-----------|---------------|
+| **Horizontal scaling** | Google Cloud Run auto-scales replicas based on concurrency | Each backend container handles ~10–20 concurrent requests; Cloud Run spins up new instances within seconds |
+| **Stateless agents** | ResumeCritic, ContentStrength, JobAlignment are fully stateless | Can scale to any number of replicas without shared memory |
+| **Rate limiting** | `slowapi` rate limiter on all API endpoints | Prevents quota exhaustion and ensures fair resource distribution |
+| **Async processing** | FastAPI + asyncio; all Gemini calls are async | Maximises I/O throughput per container instance |
+| **Mock fallback** | Instant mock responses when Gemini API is unavailable | Maintains UX under API quota limits or outages |
+
+**Demonstrating/justifying scalability:**
+- Cloud Run console shows auto-scaling events and replica count under load
+- `GET /api/v1/health` endpoint reports `status`, service health, and version
+- Langfuse traces show per-agent latency distribution across sessions
+- Load tests against `/api/v1/chat` demonstrate concurrency handling
+
+### 2.8 Explainability & Traceability of Agent Decisions
+
+Every `AgentResponse` includes four explainability artefacts:
+
+| Field | Content | Consumer |
+|-------|---------|---------|
+| `decision_trace` | Ordered list of reasoning steps | End users, auditors |
+| `reasoning` | Agent narrative explanation of approach | End users, governance reviewers |
+| `confidence_score` | 0.0–1.0 certainty metric; < 0.3 triggers `requires_human_review` | Governance layer, HITL escalation |
+| `sharp_metadata` | Structured governance audit output: `governance_audit`, `audit_flags`, `hallucination_check_passed`, `audit_timestamp` | Security, compliance, AI ethics reviewers |
+
+Additionally:
+- **Langfuse distributed tracing** records every LLM call correlated by `session_id`
+- **Structured JSON logs** carry `session_id`, `agent_name`, `intent`, and timing
+- **LLM-as-a-judge evaluation** scores agent output quality on curated datasets post-deployment
+
+### 2.9 Safeguards for Bias, Fairness, Accountability & Trust
+
+| Safeguard | Implementation | Evidence |
+|-----------|---------------|---------|
+| **Protected attribute non-inference** | System prompts explicitly forbid agents from inferring age, gender, ethnicity, nationality | `ANTI_JAILBREAK_DIRECTIVE` in InterviewCoachAgent |
+| **Bias pattern detection** | `BIAS_PATTERNS` regex set scans job descriptions and agent outputs | `governance/sharp_governance_service.py` |
+| **Confidence threshold gate** | Responses with `confidence_score < 0.3` flagged for human review | `SharpGovernanceService._validate_confidence()` |
+| **Hallucination risk assessment** | NLI-based consistency check between suggestion and source text | `SharpGovernanceService.hallucination_risk_assessment()` |
+| **Prompt injection defence** | LLM Guard scans all user inputs before any LLM call | `BaseAgent._scan_input()` |
+| **PII redaction** | `SENSITIVE_PATTERNS` redact SSN, email, phone before prompt construction | `InterviewCoachAgent.SENSITIVE_PATTERNS` |
+| **Governance audit trail** | `sharp_metadata` preserved in every response and Langfuse trace | `SharpGovernanceService.audit()` |
+| **Human-in-the-loop escalation** | `requires_human_review` flag surfaced to UI when governance fails | `AgentResponse.needs_review` field |
+| **Evaluation pipeline** | LLM-as-a-judge scores responses on bias, hallucination, and quality dimensions | `evals/run_evals.py` + Langfuse datasets |
+
+### 2.10 Common Services & Shared Infrastructure
+
+| Shared Service | Technology | Role |
+|---------------|-----------|------|
+| **Session state** | `SessionContext` (Pydantic) + LangGraph checkpoints | Shared memory across all agents within a session |
+| **Structured logging** | Python `logging` with JSON formatter | Centralised log stream; all agents emit to same logger |
+| **Distributed tracing** | Langfuse SDK | Session-correlated traces across all agent spans |
+| **LLM API gateway** | `GeminiService` singleton | All agents share one configured client; mock mode toggle |
+| **Governance service** | `SharpGovernanceService` singleton | Applied to every agent response after orchestration |
+| **Input security** | LLM Guard scanner (in-process) | Shared across all agents via `BaseAgent` mixin |
+| **Output sanitization** | Output sanitizer (in-process) | Shared across all agents via `BaseAgent` mixin |
+| **Rate limiter** | `slowapi` (`app/core/limiter.py`) | Applied at API layer; protects all endpoints |
+| **Configuration** | `pydantic_settings.BaseSettings` | Single `.env` / `config.py` for all components |
+
+### 2.11 Reusable Libraries & Frameworks
+
+| Category | Library/Framework | Usage |
+|----------|------------------|-------|
+| **Agent orchestration** | LangGraph | Stateful multi-agent workflow with checkpointing, conditional routing, error recovery |
+| **LLM integration** | LangChain | LLM chain utilities, function calling, prompt templates |
+| **LLM input security** | LLM Guard | Prompt injection detection; output scanning |
+| **LLM observability** | Langfuse | Distributed tracing, dataset evaluations, cost tracking |
+| **Data validation** | Pydantic V2 | Type-safe input/output schemas for all agents and API |
+| **Web framework** | FastAPI | Async REST API, OpenAPI docs, dependency injection |
+| **Rate limiting** | slowapi | Token bucket rate limiting on all endpoints |
+| **Testing** | pytest + pytest-asyncio | Unit, integration, security, governance tests |
+| **Frontend** | React 18 + TypeScript | Type-safe SPA with concurrent rendering |
+| **Frontend build** | Vite 5 | Fast HMR, optimised production bundles |
+
+### 2.12 AI-Specific Security Risks & Mitigations
+
+| Risk | Category | Severity | Mitigation |
+|------|----------|----------|-----------|
+| **Prompt injection** | Input attack | HIGH | LLM Guard scanning on all inputs; `PROMPT_INJECTION_PATTERNS` regex; strict schema output |
+| **Hallucination** | Output quality | MEDIUM | Confidence threshold gate; NLI-based hallucination risk score; `hallucination_check_passed` flag |
+| **PII exposure** | Privacy | HIGH | `SENSITIVE_PATTERNS` redaction before LLM calls; Langfuse trace filtering |
+| **Bias injection via JD** | Fairness | MEDIUM | `BIAS_PATTERNS` scan; protected-attribute non-inference directive; governance flag |
+| **Jailbreak / adversarial prompts** | Input attack | HIGH | `ANTI_JAILBREAK_DIRECTIVE` in all system prompts; `PROMPT_INJECTION_PATTERNS` in InterviewCoach |
+| **API key leakage** | Secrets | CRITICAL | Environment variable injection; GitHub Secrets; no key logging |
+| **Supply chain attacks** | Infrastructure | MEDIUM | Trivy container scans; pinned dependency versions; Dependabot alerts |
+
+**Safe behaviour under malicious/unexpected inputs:**
+1. LLM Guard blocks input before any LLM call is made — malicious input never reaches the model
+2. If LLM Guard passes but governance detects anomaly → `governance_audit: flagged`; `requires_human_review: true`
+3. If agent returns malformed JSON → schema validator raises `ValidationError`; mock fallback activates
+4. If Gemini API fails → mock response activates; structured error logged; no crash
+5. Rate limiter rejects flood attacks before they reach the agent layer
+
+### 2.13 AI Lifecycle Automation
+
+| Lifecycle Phase | Automated Step | Tool / Location |
+|----------------|---------------|-----------------|
+| **Development** | Type checking, lint, format | mypy, black, eslint (pre-commit hooks) |
+| **Testing** | Unit, integration, security, governance tests | pytest CI; `test_agents.py`, `test_security.py`, `test_interview_coach.py` |
+| **Security scanning** | Container vulnerability scan, SAST, secret detection | Trivy, Bandit, GitGuardian (CI) |
+| **Build** | Docker image build (multi-stage, non-root) | `Dockerfile` in backend & frontend |
+| **Registry** | Push versioned images with vulnerability report | GCP Artifact Registry; Trivy on push |
+| **Deployment** | Cloud Run deployment on merge to main | `.github/workflows/gcp-deploy.yaml` |
+| **Evaluation** | LLM-as-a-judge scoring on curated datasets | `evals/run_evals.py`; `eval-runner.yml` (manual dispatch) |
+| **Monitoring** | Trace aggregation, cost, confidence trends | Langfuse dashboard; structured log pipeline |
+| **Governance drift** | Governance test suite run weekly | GitHub Actions scheduled run |
+
+Automation reduces development effort in these ways:
+- Security and governance tests run on every PR — no manual audit needed before merge
+- Mock mode eliminates real API dependency in CI, reducing cost and flakiness
+- LLM-as-a-judge evaluation replaces laborious human review of every model response
+- Structured logging and Langfuse tracing make debugging significantly faster
+
+### 2.14 Implementation Effort Assessment
+
+**Scope completed within project guidelines:**
+
+| Component | Status |
+|-----------|--------|
+| 5 specialised agents (Extractor, ResumeCritic, ContentStrength, JobAlignment, InterviewCoach) | ✅ Complete |
+| LangGraph orchestration with session state | ✅ Complete |
+| SHARP Governance Service (bias, hallucination, confidence) | ✅ Complete |
+| LLM Guard + Output Sanitizer security layer | ✅ Complete |
+| FastAPI backend with rate limiting | ✅ Complete |
+| React + TypeScript frontend | ✅ Complete |
+| Langfuse distributed tracing | ✅ Complete |
+| LLM-as-a-judge evaluation pipeline | ✅ Complete |
+| Comprehensive test suite (42+ tests) | ✅ Complete |
+| CI/CD pipeline (GCP Cloud Run) | ✅ Complete |
+| Documentation (6 detailed docs + 3 READMEs) | ✅ Complete |
+
+The implementation scope is comfortably within project guidelines. Governance, security, and evaluation features were built incrementally alongside core functionality, keeping each increment well within expected effort bounds.
+
+---
+
+## 3. System Architecture
 
 ### 2.1 Logical Architecture Diagram
 
@@ -132,7 +413,7 @@ InterviewReady implements a **Multi-Agent Orchestration** architecture with spec
 │  │ResumeCritic  │  │ContentStrength   │  │JobAlignment  │    │
 │  └──────────────┘  └──────────────────┘  └──────────────┘    │
 │  ┌──────────────────────────┐  ┌──────────────────────────┐   │
-│  │InterviewCoach (Stateful) │  │Extractor (Normalization)│   │
+│  │InterviewCoach (Stateful) │  │ExtractorAgent            │   │
 │  └──────────────────────────┘  └──────────────────────────┘   │
 │                                                                 │
 └──────────────────────────────┬──────────────────────────────────┘
@@ -318,9 +599,36 @@ Frontend Response & Rendering
 
 ---
 
-## 3. Agent System Design
+## 4. Agent System Design
 
-### 3.1 ResumeCriticAgent
+### 3.1 ExtractorAgent
+
+**Purpose & Responsibilities:**
+- Converts resume PDF files into structured JSON Resume model data using LLM-powered extraction
+- Parses PDF text content and maps it to standardized resume sections (work, education, skills, projects, awards, certificates)
+- Validates extracted data for URL format, date structure, and field completeness
+- Calculates confidence scores and identifies low-confidence fields requiring human review
+
+**Planning/Reasoning:**
+- Extracts text from PDF base64 payload using PDF parsing utilities
+- Applies structured LLM prompting with strict JSON output requirements
+- Validates URLs against source text to prevent hallucination
+- Scores confidence based on completeness, uncertainty, validation errors, and structure quality
+- Flags fields needing human review based on confidence thresholds
+
+**Memory Mechanisms:**
+- Session context preserves extracted resume data and confidence metrics
+- Decision trace records extraction decisions and validation outcomes
+- Langfuse traces maintain extraction audit trail with confidence scoring
+
+**Tools Used:**
+- Gemini LLM for intelligent text-to-structured-data extraction
+- PDF parsing utilities for text extraction from base64 content
+- JSON parser for structured output validation
+- Validation utilities for URL, date, and field integrity checks
+- Confidence scoring algorithm for quality assessment
+
+### 3.2 ResumeCriticAgent
 
 **Purpose & Responsibilities:**
 - Analyzes resume structure and ATS (Applicant Tracking System) readability
@@ -344,7 +652,7 @@ Frontend Response & Rendering
 - Text parsing utilities for resume section extraction
 - Governance Service for confidence validation
 
-### 3.2 ContentStrengthAgent
+### 3.3 ContentStrengthAgent
 
 **Purpose & Responsibilities:**
 - Evaluates skills, achievements, and content effectiveness
@@ -368,7 +676,7 @@ Frontend Response & Rendering
 - NLI (Natural Language Inference) utilities for logic consistency
 - JSON parser for structured output handling
 
-### 3.3 JobAlignmentAgent
+### 3.4 JobAlignmentAgent
 
 **Purpose & Responsibilities:**
 - Performs semantic matching between resume and job description
@@ -392,7 +700,7 @@ Frontend Response & Rendering
 - Text embedding and similarity utilities
 - Governance Service for confidence threshold validation
 
-### 3.4 InterviewCoachAgent (Stateful)
+### 3.5 InterviewCoachAgent (Stateful)
 
 **Purpose & Responsibilities:**
 - Simulates role-specific interview via multi-turn conversation
@@ -424,7 +732,7 @@ Frontend Response & Rendering
 
 ---
 
-## 4. Explainable & Responsible AI Practices
+## 5. Explainable & Responsible AI Practices
 
 ### 4.1 Development & Deployment Alignment
 
@@ -494,7 +802,7 @@ InterviewReady aligns with IMDA's Model AI Governance Framework across four pill
 
 ---
 
-## 5. AI Security Risk Register
+## 6. AI Security Risk Register
 
 ### 5.1 Identified Risks & Mitigation Strategies
 
@@ -556,7 +864,7 @@ if governance_audit.requires_review:
 
 ---
 
-## 6. MLSecOps/LLMSecOps Pipeline
+## 7. MLSecOps/LLMSecOps Pipeline
 
 ### 6.1 Pipeline Diagram
 
@@ -701,7 +1009,7 @@ The pipeline integrates LLM-specific security checks throughout the software dev
 
 ---
 
-## 7. Testing Summary
+## 8. Testing Summary
 
 ### 7.1 Types of Tests Performed
 
@@ -766,80 +1074,6 @@ test_orchestration_governance.py::test_confidence_thresholds ✓
 test_api_endpoints.py::test_chat_api_intent_routing ✓
 test_api_endpoints.py::test_session_state_persistence ✓
 
-================================ PASSED: 42/42 ================================
-```
-
----
-
-## 8. Quick Start Guide
-
-For detailed setup instructions, see:
-- **[Backend Setup](backend/README.md)**  
-- **[Frontend Setup](frontend/README.md)**  
-- **[Deployment Guide](DEPLOYMENT.md)**
-
-### Prerequisites
-
-- **Backend:** Python 3.11+, uv package manager, Google Gemini API key
-- **Frontend:** Node.js 18+, npm or yarn
-- **Docker:** (Optional) For containerized development
-- **GCP Project:** (Optional) For cloud deployment
-
-### Local Development
-
-**1. Backend:**
-```bash
-cd backend
-uv sync
-cp .env.example .env
-# Edit .env with your GEMINI_API_KEY
-uv run python -m app.main
-# http://localhost:8000/docs
-```
-
-**2. Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev
-# http://localhost:5173
-```
-
-**3. Run Tests:**
-```bash
-cd backend
-uv run pytest tests/ -v
-```
-
----
-
-## 9. Deployment & Operations
-
-### Deployment Strategy
-
-InterviewReady deploys as containerized microservices on Google Cloud Run:
-
-**Stages:**
-1. **Local Development** - Docker Compose with mock responses
-2. **Staging** - Cloud Run with real Gemini API, Langfuse tracing
-3. **Production** - Cloud Run with auto-scaling, monitoring, PII redaction
-
-**Setup:**
-```bash
-# Set GitHub Secrets
-GCP_PROJECT_ID          # Your GCP project
-GCP_SA_KEY              # Service account JSON key
-GOOGLE_AI_API_KEY       # Gemini API key
-LANGFUSE_PUBLIC_KEY     # Langfuse credentials (optional)
-```
-
-**Deploy:**
-```bash
-git push origin main
-# GitHub Actions triggers automatic deployment
-# Logs visible in GitHub Actions tab
-```
-
 ### Operations & Monitoring
 
 **Monitoring Tools:**
@@ -863,15 +1097,21 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for detailed infrastructure setup and ope
 
 ---
 
-## Additional Documentation
+## Documentation
 
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Comprehensive technical architecture & design rationale
-- **[GOVERNANCE.md](./GOVERNANCE.md)** — SHARP governance framework & decision tracing
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Cloud Run, Docker, Kubernetes deployment options
-- **[Backend README](backend/README.md)** — API documentation & backend configuration
-- **[Frontend README](frontend/README.md)** — React build & integration guide
-- **[Responsible AI](docs/interview-agent-responsible-ai.md)** — IMDA alignment & security mitigations
-- **[Interview Coach Modifications](INTERVIEW_COACH_MODIFICATION.md)** — Customization guide
+Comprehensive project documentation is available in the [`docs/`](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [`docs/LOGICAL_DIAGRAM.md`](docs/LOGICAL_DIAGRAM.md) | **Full logical architecture diagram** — 8-layer diagram, component interaction, 3 data-flow paths (REST / WebSocket / Eval), session state schema, and per-layer design justification |
+| [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) | Physical/infrastructure architecture, GCP deployment topology, CI/CD pipeline, integration points, and technology stack rationale |
+| [`docs/AGENT_DESIGN.md`](docs/AGENT_DESIGN.md) | Internal logic, reasoning patterns, memory mechanisms, prompt design, and inter-agent communication for each of the 5 agents |
+| [`docs/RESPONSIBLE_AI.md`](docs/RESPONSIBLE_AI.md) | Fairness, bias mitigation, explainability, HITL escalation, PII protection, and SHARP governance framework (IMDA alignment) |
+| [`docs/SECURITY_RISK_REGISTER.md`](docs/SECURITY_RISK_REGISTER.md) | AI security risk register: prompt injection, hallucination, PII leakage, bias injection, supply chain — with per-risk severity and mitigation |
+| [`docs/MLSECOPS_PIPELINE.md`](docs/MLSECOPS_PIPELINE.md) | MLSecOps / LLMSecOps pipeline: CI/CD automation, security scanning, model versioning, evaluation, monitoring |
+
+- **[Backend Setup](backend/README.md)** — Python server, agent configuration, API reference
+- **[Frontend Setup](frontend/README.md)** — React application setup and API integration
 
 ---
 
