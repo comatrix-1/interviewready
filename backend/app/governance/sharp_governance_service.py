@@ -44,7 +44,7 @@ class SharpGovernanceService:
         metadata["confidence_check_passed"] = confidence_check
 
         if response.agent_name == "ContentStrengthAgent":
-            self._validate_content_strength_agent(response, metadata, original_input)
+            self._validate_content_strength_agent(response, metadata)
         elif response.agent_name == "InterviewCoachAgent":
             self._validate_interview_coach_agent(metadata)
 
@@ -144,8 +144,7 @@ class SharpGovernanceService:
     def _validate_content_strength_agent(
         self,
         response: AgentResponse,
-        metadata: dict[str, Any],
-        original_input: str | None,  # noqa: ARG002
+        metadata: dict[str, Any]
     ) -> None:
         try:
             content = self._parse_content_json(response.content)

@@ -9,6 +9,8 @@ import uuid
 
 Base = declarative_base()
 
+CASCADE_DELETE_ORPHAN = "all, delete-orphan"
+RESUMES_ID_FK = "resumes.id"
 
 class ResumeModel(Base):
     """SQLAlchemy Resume model."""
@@ -19,11 +21,11 @@ class ResumeModel(Base):
     skills = Column(JSON)  # List[str]
     
     # Relationships
-    experiences = relationship("ExperienceModel", back_populates="resume", cascade="all, delete-orphan")
-    educations = relationship("EducationModel", back_populates="resume", cascade="all, delete-orphan")
-    projects = relationship("ProjectModel", back_populates="resume", cascade="all, delete-orphan")
-    certifications = relationship("CertificationModel", back_populates="resume", cascade="all, delete-orphan")
-    awards = relationship("AwardModel", back_populates="resume", cascade="all, delete-orphan")
+    experiences = relationship("ExperienceModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    educations = relationship("EducationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    projects = relationship("ProjectModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    certifications = relationship("CertificationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    awards = relationship("AwardModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
 
 
 class ExperienceModel(Base):
@@ -32,7 +34,7 @@ class ExperienceModel(Base):
     __tablename__ = "resume_experiences"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    resume_id = Column(String, ForeignKey("resumes.id"))
+    resume_id = Column(String, ForeignKey(RESUMES_ID_FK))
     title = Column(String)
     company = Column(String)
     start_date = Column(Date)
@@ -49,7 +51,7 @@ class EducationModel(Base):
     __tablename__ = "resume_educations"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    resume_id = Column(String, ForeignKey("resumes.id"))
+    resume_id = Column(String, ForeignKey(RESUMES_ID_FK))
     school = Column(String)
     degree = Column(String)
     start_date = Column(Date)
@@ -68,7 +70,7 @@ class ProjectModel(Base):
     __tablename__ = "resume_projects"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    resume_id = Column(String, ForeignKey("resumes.id"))
+    resume_id = Column(String, ForeignKey(RESUMES_ID_FK))
     title = Column(String)
     description = Column(Text)
     technologies = Column(JSON)  # List[str]
@@ -86,7 +88,7 @@ class CertificationModel(Base):
     __tablename__ = "resume_certifications"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    resume_id = Column(String, ForeignKey("resumes.id"))
+    resume_id = Column(String, ForeignKey(RESUMES_ID_FK))
     name = Column(String)
     issuer = Column(String)
     issue_date = Column(Date)
@@ -104,7 +106,7 @@ class AwardModel(Base):
     __tablename__ = "resume_awards"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    resume_id = Column(String, ForeignKey("resumes.id"))
+    resume_id = Column(String, ForeignKey(RESUMES_ID_FK))
     title = Column(String)
     issuer = Column(String)
     date = Column(Date)

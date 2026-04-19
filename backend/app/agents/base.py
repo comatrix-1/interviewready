@@ -307,7 +307,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
 
 
                         # Scan output with LLM Guard
-                        output_safe, llm_guard_output, output_issues = (
+                        output_safe, _, output_issues = (
                             llm_guard.scan_output(response)
                         )
                         if not output_safe:
@@ -684,7 +684,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
 
 
                         # Scan output with LLM Guard
-                        output_safe, llm_guard_output, output_issues = (
+                        output_safe, _, output_issues = (
                             llm_guard.scan_output(response)
                         )
                         if not output_safe:

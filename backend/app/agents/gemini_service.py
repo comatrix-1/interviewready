@@ -127,67 +127,104 @@ class GeminiService:
         if response is None:
             return None
 
+        # Try direct text extraction first
+        text = self._extract_direct_text(response)
+        if text:
+            return text
+
+        # Try extracting from candidates
+        return self._extract_text_from_candidates(response)
+
+    def _extract_direct_text(self, response: Any) -> Optional[str]:
         text = getattr(response, "text", None)
         if isinstance(text, str) and text.strip():
             return text
-
-        candidates = getattr(response, "candidates", None)
-        if candidates:
-            parts_text: List[str] = []
-            for candidate in candidates:
-                content = getattr(candidate, "content", None)
-                parts = getattr(content, "parts", None) if content else None
-                if not parts:
-                    continue
-                for part in parts:
-                    part_text = getattr(part, "text", None)
-                    if isinstance(part_text, str) and part_text.strip():
-                        parts_text.append(part_text)
-            if parts_text:
-                return "".join(parts_text)
-
-        if isinstance(text, str):
-            return text
         return None
 
+    def _extract_text_from_candidates(self, response: Any) -> Optional[str]:
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return getattr(response, "text", None) if isinstance(getattr(response, "text", None), str) else None
+
+        parts_text = self._collect_parts_from_candidates(candidates)
+        return "".join(parts_text) if parts_text else None
+
+    def _collect_parts_from_candidates(self, candidates: Any) -> List[str]:
+        parts_text: List[str] = []
+        for candidate in candidates:
+            candidate_parts = self._extract_candidate_parts(candidate)
+            parts_text.extend(candidate_parts)
+        return parts_text
+
+    def _extract_candidate_parts(self, candidate: Any) -> List[str]:
+        content = getattr(candidate, "content", None)
+        if not content:
+            return []
+        
+        parts = getattr(content, "parts", None)
+        if not parts:
+            return []
+        
+        return self._extract_valid_parts(parts)
+
+    def _extract_valid_parts(self, parts: Any) -> List[str]:
+        valid_parts = []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if isinstance(part_text, str) and part_text.strip():
+                valid_parts.append(part_text)
+        return valid_parts
+
     def _extract_usage(self, response: Any) -> Optional[Dict[str, int]]:
-        usage = getattr(response, "usage_metadata", None) or getattr(
-            response, "usage", None
-        )
+        usage = self._get_usage_metadata(response)
         if usage is None:
             return None
 
-        def _get_value(keys: List[str]) -> Optional[int]:
-            for key in keys:
-                if isinstance(usage, dict) and key in usage:
-                    return _to_int(usage.get(key))
-                if hasattr(usage, key):
-                    return _to_int(getattr(usage, key))
+        token_counts = self._extract_token_counts(usage)
+        return self._build_usage_dict(token_counts)
+
+    def _get_usage_metadata(self, response: Any) -> Any:
+        return getattr(response, "usage_metadata", None) or getattr(response, "usage", None)
+
+    def _extract_token_counts(self, usage: Any) -> Dict[str, Optional[int]]:
+        return {
+            "prompt_tokens": self._find_token_value(usage, ["prompt_token_count", "prompt_tokens", "input_tokens"]),
+            "completion_tokens": self._find_token_value(usage, ["candidates_token_count", "completion_tokens", "output_tokens"]),
+            "total_tokens": self._find_token_value(usage, ["total_token_count", "total_tokens"]),
+        }
+
+    def _find_token_value(self, usage: Any, keys: List[str]) -> Optional[int]:
+        for key in keys:
+            value = self._extract_value_from_usage(usage, key)
+            if value is not None:
+                return self._to_int(value)
+        return None
+
+    def _extract_value_from_usage(self, usage: Any, key: str) -> Any:
+        if isinstance(usage, dict) and key in usage:
+            return usage.get(key)
+        if hasattr(usage, key):
+            return getattr(usage, key)
+        return None
+
+    def _to_int(self, value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
             return None
 
-        def _to_int(value: Any) -> Optional[int]:
-            if value is None:
-                return None
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return None
+    def _build_usage_dict(self, token_counts: Dict[str, Optional[int]]) -> Optional[Dict[str, int]]:
+        prompt_tokens = token_counts["prompt_tokens"]
+        completion_tokens = token_counts["completion_tokens"]
+        total_tokens = token_counts["total_tokens"]
 
-        prompt_tokens = _get_value(
-            ["prompt_token_count", "prompt_tokens", "input_tokens"]
-        )
-        completion_tokens = _get_value(
-            ["candidates_token_count", "completion_tokens", "output_tokens"]
-        )
-        total_tokens = _get_value(["total_token_count", "total_tokens"])
-        if (
-            total_tokens is None
-            and prompt_tokens is not None
-            and completion_tokens is not None
-        ):
+        # Calculate total if missing
+        if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
             total_tokens = prompt_tokens + completion_tokens
 
-        usage_details: Dict[str, int] = {}
+        usage_details = {}
         if prompt_tokens is not None:
             usage_details["prompt_tokens"] = prompt_tokens
         if completion_tokens is not None:
@@ -354,7 +391,7 @@ class GeminiLiveService:
             self.connected = True
         except Exception as e:
             self.connected = False
-            raise Exception(f"Failed to connect to Gemini Live: {str(e)}")
+            raise ConnectionError(f"Failed to connect to Gemini Live: {str(e)}")
 
     def send_audio_and_wait_response(
         self,
@@ -362,7 +399,6 @@ class GeminiLiveService:
         system_prompt: str,
         mime_type: str = "audio/wav",
         text_prompt: str = "",
-        timeout_ms: int = 10000,
     ) -> Optional[str]:
         """Send audio data and wait for response using Gemini API.
 
@@ -399,15 +435,14 @@ class GeminiLiveService:
         except Exception as e:
             return f"Error in Gemini Audio: {str(e)}"
 
-    def send_textAndWaitResponse(
-        self, text: str, system_prompt: str = "", timeout_ms: int = 10000
+    def send_text_and_wait_response(
+        self, text: str, system_prompt: str = ""
     ) -> Optional[str]:
         """Send text and wait for response using Gemini API.
 
         Args:
             text: Text to send
             system_prompt: System prompt
-            timeout_ms: Timeout in milliseconds
 
         Returns:
             Response text or None if timeout/error

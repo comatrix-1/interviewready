@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -240,69 +240,13 @@ class OrchestrationAgent:
         request = state.request
         context = state.context
 
-        resume = None
-        resume_doc = None
-        resume_text = None
-        confidence_score = None
-        low_confidence_fields: list[str] = []
-        validation_errors: list[str] = []
-        needs_review = False
+        resume_result = self._process_resume_input(request, context)
+        if isinstance(resume_result, AgentResponse):
+            state.response = resume_result
+            state.halt = True
+            return state
 
-        if request.resumeData and self._has_content(request.resumeData):
-            resume = request.resumeData
-            resume_doc = self._build_resume_doc(resume, "resumeData")
-            resume_text = self._serialize_resume(resume)
-            validation_errors = self._validate_resume_data(resume)
-            confidence_score = 1.0
-            needs_review = bool(validation_errors)
-        elif request.resumeFile:
-            extractor = self._get_agent("ExtractorAgent")
-            try:
-                response = extractor.process(
-                    json.dumps(request.resumeFile.model_dump()), context
-                )
-                parsed = json.loads(response.content or "{}")
-                resume = Resume.model_validate(parsed)
-                resume_doc = self._build_resume_doc(resume, "resumeFile")
-                resume_text = self._serialize_resume(resume)
-                confidence_score = response.confidence_score or 0.0
-                low_confidence_fields = response.low_confidence_fields or []
-                sharp_metadata = response.sharp_metadata or {}
-                if isinstance(sharp_metadata, dict):
-                    validation_errors = list(
-                        sharp_metadata.get("validation_errors", [])
-                    )
-                needs_review = bool(response.needs_review) or bool(validation_errors)
-            except Exception as exc:
-                state.response = self._failure(
-                    "Failed to parse resume file.",
-                    str(exc),
-                    context,
-                    needs_review=True,
-                )
-                state.halt = True
-                return state
-        else:
-            parsed_from_context = None
-            if context.resume_data:
-                parsed_from_context = self._parse_resume_data(context.resume_data)
-            if parsed_from_context and self._has_content(parsed_from_context):
-                resume = parsed_from_context
-                resume_doc = state.resume_document or self._build_resume_doc(
-                    resume, "resumeData"
-                )
-                resume_text = context.resume_data
-                validation_errors = self._validate_resume_data(resume)
-                confidence_score = 1.0
-                needs_review = bool(validation_errors)
-            else:
-                state.response = self._failure(
-                    "No resume provided.",
-                    "Upload resume or provide resumeData.",
-                    context,
-                )
-                state.halt = True
-                return state
+        resume, resume_doc, resume_text, confidence_score, low_confidence_fields, validation_errors, needs_review = resume_result
 
         if resume is None:
             state.response = self._failure(
@@ -314,20 +258,13 @@ class OrchestrationAgent:
             state.halt = True
             return state
 
-        if resume_doc is None:
-            resume_doc = self._build_resume_doc(resume, "resumeData")
-        if resume_text is None:
-            resume_text = self._serialize_resume(resume)
+        resume_doc = resume_doc or self._build_resume_doc(resume, "resumeData")
+        resume_text = resume_text or self._serialize_resume(resume)
         context.resume_data = resume_text
 
-        review_payload = None
-        if needs_review:
-            review_payload = {
-                "extracted_data": resume.model_dump(exclude_none=True),
-                "validation_errors": validation_errors,
-                "confidence_score": confidence_score,
-                "fields_requiring_attention": low_confidence_fields,
-            }
+        review_payload = self._build_review_payload(
+            needs_review, resume, confidence_score, low_confidence_fields, validation_errors
+        )
 
         state.resume_document = resume_doc
         state.needs_review = needs_review
@@ -348,6 +285,109 @@ class OrchestrationAgent:
         if needs_review:
             state.response = self._build_review_response(state)
         return state
+
+    def _process_resume_input(
+        self, request: ChatRequest, context: SessionContext
+    ) -> Union[
+        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool],
+        AgentResponse,
+    ]:
+        if request.resumeData and self._has_content(request.resumeData):
+            return self._process_resume_data(request.resumeData, "resumeData", context)
+        
+        if request.resumeFile:
+            return self._process_resume_file(request, context)
+        
+        return self._process_context_resume(context)
+
+    def _process_resume_data(
+        self, resume: Resume, source: str, context: SessionContext
+    ) -> tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]:
+        resume_doc = self._build_resume_doc(resume, source)
+        resume_text = self._serialize_resume(resume)
+        validation_errors = self._validate_resume_data(resume)
+        confidence_score = 1.0
+        needs_review = bool(validation_errors)
+        
+        return resume, resume_doc, resume_text, confidence_score, [], validation_errors, needs_review
+
+    def _process_resume_file(
+        self, request: ChatRequest, context: SessionContext
+    ) -> Union[
+        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool],
+        AgentResponse,
+    ]:
+        extractor = self._get_agent("ExtractorAgent")
+        try:
+            response = extractor.process(
+                json.dumps(request.resumeFile.model_dump()), context
+            )
+            parsed = json.loads(response.content or "{}")
+            resume = Resume.model_validate(parsed)
+            resume_doc = self._build_resume_doc(resume, "resumeFile")
+            resume_text = self._serialize_resume(resume)
+            confidence_score = response.confidence_score or 0.0
+            low_confidence_fields = response.low_confidence_fields or []
+            
+            sharp_metadata = response.sharp_metadata or {}
+            validation_errors = []
+            if isinstance(sharp_metadata, dict):
+                validation_errors = list(sharp_metadata.get("validation_errors", []))
+            
+            needs_review = bool(response.needs_review) or bool(validation_errors)
+            
+            return resume, resume_doc, resume_text, confidence_score, low_confidence_fields, validation_errors, needs_review
+        except Exception as exc:
+            return self._failure(
+                "Failed to parse resume file.",
+                str(exc),
+                context,
+                needs_review=True,
+            )
+
+    def _process_context_resume(
+        self, context: SessionContext
+    ) -> Union[
+        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool],
+        AgentResponse,
+    ]:
+        parsed_from_context = None
+        if context.resume_data:
+            parsed_from_context = self._parse_resume_data(context.resume_data)
+        
+        if parsed_from_context and self._has_content(parsed_from_context):
+            resume = parsed_from_context
+            resume_doc = self._build_resume_doc(resume, "resumeData")
+            resume_text = context.resume_data
+            validation_errors = self._validate_resume_data(resume)
+            confidence_score = 1.0
+            needs_review = bool(validation_errors)
+            
+            return resume, resume_doc, resume_text, confidence_score, [], validation_errors, needs_review
+        else:
+            return self._failure(
+                "No resume provided.",
+                "Upload resume or provide resumeData.",
+                context,
+            )
+
+    def _build_review_payload(
+        self,
+        needs_review: bool,
+        resume: Resume,
+        confidence_score: float,
+        low_confidence_fields: list[str],
+        validation_errors: list[str],
+    ) -> Optional[dict[str, Any]]:
+        if not needs_review:
+            return None
+        
+        return {
+            "extracted_data": resume.model_dump(exclude_none=True),
+            "validation_errors": validation_errors,
+            "confidence_score": confidence_score,
+            "fields_requiring_attention": low_confidence_fields,
+        }
 
     def _hitl_review(self, state: OrchestrationState) -> OrchestrationState:
         if state.response is None:
@@ -473,18 +513,39 @@ class OrchestrationAgent:
     def _validate_resume_data(self, resume: Resume) -> list[str]:
         errors: list[str] = []
         list_fields = ["work", "education", "certificates", "projects", "awards"]
-        date_fields = ["startDate", "endDate", "date"]
 
         for field in list_fields:
             items = getattr(resume, field, []) or []
-            for item in items:
-                url_value = getattr(item, "url", None)
-                if url_value and not is_valid_url(url_value):
-                    errors.append(f"{field}: url='{url_value}' (invalid)")
-                for attr_name in date_fields:
-                    attr_value = getattr(item, attr_name, None)
-                    if attr_value is not None and not is_valid_date(attr_value):
-                        errors.append(f"{field}: {attr_name}='{attr_value}'")
+            field_errors = self._validate_resume_field_items(items, field)
+            errors.extend(field_errors)
+        return errors
+
+    def _validate_resume_field_items(self, items: list, field_name: str) -> list[str]:
+        errors: list[str] = []
+        date_fields = ["startDate", "endDate", "date"]
+
+        for item in items:
+            url_error = self._validate_item_url(item, field_name)
+            if url_error:
+                errors.append(url_error)
+            
+            date_errors = self._validate_item_dates(item, field_name, date_fields)
+            errors.extend(date_errors)
+        
+        return errors
+
+    def _validate_item_url(self, item: Any, field_name: str) -> Optional[str]:
+        url_value = getattr(item, "url", None)
+        if url_value and not is_valid_url(url_value):
+            return f"{field_name}: url='{url_value}' (invalid)"
+        return None
+
+    def _validate_item_dates(self, item: Any, field_name: str, date_fields: list[str]) -> list[str]:
+        errors: list[str] = []
+        for attr_name in date_fields:
+            attr_value = getattr(item, attr_name, None)
+            if attr_value is not None and not is_valid_date(attr_value):
+                errors.append(f"{field_name}: {attr_name}='{attr_value}'")
         return errors
     def _normalize_or_fail(
         self, request: ChatRequest, context: SessionContext

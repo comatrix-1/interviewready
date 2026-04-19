@@ -31,7 +31,7 @@ class OutputSanitizer:
         self.system_patterns = [
             re.compile(p, re.DOTALL) for p in self.SYSTEM_PROMPT_PATTERNS
         ]
-        self.dangerous_patterns = [
+        self.dangerous_execution_patterns = [
             re.compile(p, re.DOTALL) for p in self.DANGEROUS_PATTERNS
         ]
 
@@ -59,7 +59,7 @@ class OutputSanitizer:
                     }
                 )
 
-        for i, pattern in enumerate(self.dangerous_patterns):
+        for i, pattern in enumerate(self.dangerous_execution_patterns):
             matches = pattern.findall(sanitized)
             if matches:
                 issues.append(

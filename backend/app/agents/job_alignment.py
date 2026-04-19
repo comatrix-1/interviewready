@@ -183,7 +183,7 @@ class JobAlignmentAgent(BaseAgent):
 
             raw_result = raw_result or self.call_gemini(input_text, context)
 
-            raw_payload = parse_json_object(raw_result) or {}
+            parse_json_object(raw_result) or {}
             structured_result = self.parse_and_validate(
                 raw_result, AlignmentReport
             ).model_dump()
