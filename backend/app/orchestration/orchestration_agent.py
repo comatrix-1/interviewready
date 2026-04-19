@@ -3,29 +3,31 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
+from langfuse import Langfuse, observe, propagate_attributes
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
-from langfuse import Langfuse, observe, propagate_attributes
 
-from app.agents.base import BaseAgentProtocol
-from app.core.config import settings
 from app.core.logging import logger
-from app.governance.sharp_governance_service import SharpGovernanceService
 from app.models.agent import (
     ActionPlan,
-    AnalysisArtifact,
+    AgentInput,
     AgentResponse,
+    AnalysisArtifact,
     ChatRequest,
+    Intent,
     ResumeDocument,
 )
-from app.models.agent import AgentInput, Intent
 from app.models.resume import Resume
-from app.models.session import SessionContext
 from app.orchestration.persistence import get_checkpoint_store
 from app.utils.json_parser import parse_json_payload
 from app.utils.validators import is_valid_date, is_valid_url
+
+if TYPE_CHECKING:
+    from app.agents.base import BaseAgentProtocol
+    from app.governance.sharp_governance_service import SharpGovernanceService
+    from app.models.session import SessionContext
 
 langfuse = Langfuse()
 
@@ -43,19 +45,20 @@ class OrchestrationState:
     context: SessionContext
     agent_sequence: list[str]
     artifacts: list[AnalysisArtifact] = field(default_factory=list)
-    input: Optional[AgentInput] = None
-    resume_document: Optional[ResumeDocument] = None
+    input: AgentInput | None = None
+    resume_document: ResumeDocument | None = None
     needs_review: bool = False
-    review_payload: Optional[dict[str, Any]] = None
+    review_payload: dict[str, Any] | None = None
     shared_memory: dict[str, Any] = field(default_factory=dict)
-    checkpoint_key: Optional[str] = None
+    checkpoint_key: str | None = None
     halt: bool = False
     review_attempts: int = 0
     index: int = 0
-    response: Optional[AgentResponse] = None
+    response: AgentResponse | None = None
 
 
 # ---------- Orchestrator ----------
+
 
 class OrchestrationAgent:
     def __init__(
@@ -75,14 +78,15 @@ class OrchestrationAgent:
     # ---------- Public API ----------
 
     @observe(name="orchestration_execution")
-    def orchestrate(self, request: ChatRequest, context: SessionContext) -> AgentResponse:
+    def orchestrate(
+        self, request: ChatRequest, context: SessionContext
+    ) -> AgentResponse:
         start = time.time()
         session_id = getattr(context, "session_id", "unknown")
         user_id = getattr(context, "user_id", None)
 
         with langfuse.start_as_current_observation(name="orchestration_execution"):
             with propagate_attributes(user_id=user_id, session_id=session_id):
-
                 intent = self._parse_intent(request.intent)
                 if request.jobDescription:
                     context.job_description = request.jobDescription
@@ -99,7 +103,8 @@ class OrchestrationAgent:
                 )
 
                 if not response:
-                    raise RuntimeError("No response produced")
+                    msg = "No response produced"
+                    raise RuntimeError(msg)
 
                 checkpoint_id = (
                     final_state.checkpoint_key
@@ -134,10 +139,12 @@ class OrchestrationAgent:
 
         if control == "rewind":
             if not checkpoint_id:
-                raise ValueError("checkpointId is required for rewind control")
+                msg = "checkpointId is required for rewind control"
+                raise ValueError(msg)
             record = self.checkpoints.rewind(session_id, checkpoint_id)
             if record is None:
-                raise ValueError("Invalid checkpointId for rewind")
+                msg = "Invalid checkpointId for rewind"
+                raise ValueError(msg)
             state = record.state
             state.request = request
             state.context = context
@@ -156,7 +163,8 @@ class OrchestrationAgent:
             else:
                 record = self.checkpoints.latest(session_id)
             if record is None:
-                raise ValueError("No checkpoint available to resume")
+                msg = "No checkpoint available to resume"
+                raise ValueError(msg)
             state = record.state
             state.request = request
             state.context = context
@@ -171,7 +179,8 @@ class OrchestrationAgent:
             return state
 
         if control:
-            raise ValueError(f"Unsupported control operation: {control}")
+            msg = f"Unsupported control operation: {control}"
+            raise ValueError(msg)
 
         return OrchestrationState(
             request=request,
@@ -246,7 +255,15 @@ class OrchestrationAgent:
             state.halt = True
             return state
 
-        resume, resume_doc, resume_text, confidence_score, low_confidence_fields, validation_errors, needs_review = resume_result
+        (
+            resume,
+            resume_doc,
+            resume_text,
+            confidence_score,
+            low_confidence_fields,
+            validation_errors,
+            needs_review,
+        ) = resume_result
 
         if resume is None:
             state.response = self._failure(
@@ -263,7 +280,11 @@ class OrchestrationAgent:
         context.resume_data = resume_text
 
         review_payload = self._build_review_payload(
-            needs_review, resume, confidence_score, low_confidence_fields, validation_errors
+            needs_review,
+            resume,
+            confidence_score,
+            low_confidence_fields,
+            validation_errors,
         )
 
         state.resume_document = resume_doc
@@ -288,16 +309,16 @@ class OrchestrationAgent:
 
     def _process_resume_input(
         self, request: ChatRequest, context: SessionContext
-    ) -> Union[
-        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool],
-        AgentResponse,
-    ]:
+    ) -> (
+        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]
+        | AgentResponse
+    ):
         if request.resumeData and self._has_content(request.resumeData):
             return self._process_resume_data(request.resumeData, "resumeData", context)
-        
+
         if request.resumeFile:
             return self._process_resume_file(request, context)
-        
+
         return self._process_context_resume(context)
 
     def _process_resume_data(
@@ -308,15 +329,23 @@ class OrchestrationAgent:
         validation_errors = self._validate_resume_data(resume)
         confidence_score = 1.0
         needs_review = bool(validation_errors)
-        
-        return resume, resume_doc, resume_text, confidence_score, [], validation_errors, needs_review
+
+        return (
+            resume,
+            resume_doc,
+            resume_text,
+            confidence_score,
+            [],
+            validation_errors,
+            needs_review,
+        )
 
     def _process_resume_file(
         self, request: ChatRequest, context: SessionContext
-    ) -> Union[
-        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool],
-        AgentResponse,
-    ]:
+    ) -> (
+        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]
+        | AgentResponse
+    ):
         extractor = self._get_agent("ExtractorAgent")
         try:
             response = extractor.process(
@@ -328,15 +357,23 @@ class OrchestrationAgent:
             resume_text = self._serialize_resume(resume)
             confidence_score = response.confidence_score or 0.0
             low_confidence_fields = response.low_confidence_fields or []
-            
+
             sharp_metadata = response.sharp_metadata or {}
             validation_errors = []
             if isinstance(sharp_metadata, dict):
                 validation_errors = list(sharp_metadata.get("validation_errors", []))
-            
+
             needs_review = bool(response.needs_review) or bool(validation_errors)
-            
-            return resume, resume_doc, resume_text, confidence_score, low_confidence_fields, validation_errors, needs_review
+
+            return (
+                resume,
+                resume_doc,
+                resume_text,
+                confidence_score,
+                low_confidence_fields,
+                validation_errors,
+                needs_review,
+            )
         except Exception as exc:
             return self._failure(
                 "Failed to parse resume file.",
@@ -347,14 +384,14 @@ class OrchestrationAgent:
 
     def _process_context_resume(
         self, context: SessionContext
-    ) -> Union[
-        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool],
-        AgentResponse,
-    ]:
+    ) -> (
+        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]
+        | AgentResponse
+    ):
         parsed_from_context = None
         if context.resume_data:
             parsed_from_context = self._parse_resume_data(context.resume_data)
-        
+
         if parsed_from_context and self._has_content(parsed_from_context):
             resume = parsed_from_context
             resume_doc = self._build_resume_doc(resume, "resumeData")
@@ -362,14 +399,21 @@ class OrchestrationAgent:
             validation_errors = self._validate_resume_data(resume)
             confidence_score = 1.0
             needs_review = bool(validation_errors)
-            
-            return resume, resume_doc, resume_text, confidence_score, [], validation_errors, needs_review
-        else:
-            return self._failure(
-                "No resume provided.",
-                "Upload resume or provide resumeData.",
-                context,
+
+            return (
+                resume,
+                resume_doc,
+                resume_text,
+                confidence_score,
+                [],
+                validation_errors,
+                needs_review,
             )
+        return self._failure(
+            "No resume provided.",
+            "Upload resume or provide resumeData.",
+            context,
+        )
 
     def _build_review_payload(
         self,
@@ -378,10 +422,10 @@ class OrchestrationAgent:
         confidence_score: float,
         low_confidence_fields: list[str],
         validation_errors: list[str],
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         if not needs_review:
             return None
-        
+
         return {
             "extracted_data": resume.model_dump(exclude_none=True),
             "validation_errors": validation_errors,
@@ -439,11 +483,13 @@ class OrchestrationAgent:
         try:
             return Intent(raw)
         except ValueError:
-            raise ValueError(f"Unsupported intent: {raw}")
+            msg = f"Unsupported intent: {raw}"
+            raise ValueError(msg)
 
     def _get_agent(self, name: str) -> BaseAgentProtocol:
         if name not in self.agent_list:
-            raise RuntimeError(f"Missing agent: {name}")
+            msg = f"Missing agent: {name}"
+            raise RuntimeError(msg)
         return self.agent_list[name]
 
     def _build_agent_input(self, state: OrchestrationState) -> AgentInput:
@@ -466,8 +512,8 @@ class OrchestrationAgent:
     def _attach_checkpoint_metadata(
         self,
         response: AgentResponse,
-        checkpoint_id: Optional[str],
-        review_payload: Optional[dict[str, Any]],
+        checkpoint_id: str | None,
+        review_payload: dict[str, Any] | None,
     ) -> None:
         if response.sharp_metadata is None:
             response.sharp_metadata = {}
@@ -514,9 +560,9 @@ class OrchestrationAgent:
         errors: list[str] = []
         list_fields = ["work", "education", "certificates", "projects", "awards"]
 
-        for field in list_fields:
-            items = getattr(resume, field, []) or []
-            field_errors = self._validate_resume_field_items(items, field)
+        for list_field in list_fields:
+            items = getattr(resume, list_field, []) or []
+            field_errors = self._validate_resume_field_items(items, list_field)
             errors.extend(field_errors)
         return errors
 
@@ -528,25 +574,28 @@ class OrchestrationAgent:
             url_error = self._validate_item_url(item, field_name)
             if url_error:
                 errors.append(url_error)
-            
+
             date_errors = self._validate_item_dates(item, field_name, date_fields)
             errors.extend(date_errors)
-        
+
         return errors
 
-    def _validate_item_url(self, item: Any, field_name: str) -> Optional[str]:
+    def _validate_item_url(self, item: Any, field_name: str) -> str | None:
         url_value = getattr(item, "url", None)
         if url_value and not is_valid_url(url_value):
             return f"{field_name}: url='{url_value}' (invalid)"
         return None
 
-    def _validate_item_dates(self, item: Any, field_name: str, date_fields: list[str]) -> list[str]:
+    def _validate_item_dates(
+        self, item: Any, field_name: str, date_fields: list[str]
+    ) -> list[str]:
         errors: list[str] = []
         for attr_name in date_fields:
             attr_value = getattr(item, attr_name, None)
             if attr_value is not None and not is_valid_date(attr_value):
                 errors.append(f"{field_name}: {attr_name}='{attr_value}'")
         return errors
+
     def _normalize_or_fail(
         self, request: ChatRequest, context: SessionContext
     ) -> tuple[Resume, ResumeDocument] | AgentResponse:
@@ -588,17 +637,14 @@ class OrchestrationAgent:
 
                 if response.needs_review:
                     return self._failure(
-                    "Failed to extract meaningful information from resume file.",
-                    "Failed to extract meaningful information from resume file.",
-                    context,
-                    needs_review=True
-                )
+                        "Failed to extract meaningful information from resume file.",
+                        "Failed to extract meaningful information from resume file.",
+                        context,
+                        needs_review=True,
+                    )
             except Exception as e:
                 return self._failure(
-                    "Failed to parse resume file.",
-                    str(e),
-                    context,
-                    needs_review=True
+                    "Failed to parse resume file.", str(e), context, needs_review=True
                 )
 
             doc = self._build_resume_doc(resume, "resumeFile")
@@ -620,11 +666,7 @@ class OrchestrationAgent:
     ):
         metadata = {}
         if needs_review:
-            metadata.update(
-                {
-                    "needs_review": True
-                }
-            )
+            metadata.update({"needs_review": True})
         plan = ActionPlan(
             summary="Resume normalization failed.",
             actions=[details],
@@ -672,7 +714,7 @@ class OrchestrationAgent:
     def _serialize_resume(self, resume: Resume) -> str:
         return json.dumps(resume.model_dump(exclude_none=True), indent=2)
 
-    def _parse_resume_data(self, resume_data: str) -> Optional[Resume]:
+    def _parse_resume_data(self, resume_data: str) -> Resume | None:
         if not resume_data or not isinstance(resume_data, str):
             return None
         try:
@@ -684,7 +726,7 @@ class OrchestrationAgent:
         except Exception:
             return None
 
-    def _resume_from_state(self, state: OrchestrationState) -> Optional[Resume]:
+    def _resume_from_state(self, state: OrchestrationState) -> Resume | None:
         context = state.context
         if context.resume_data:
             parsed = self._parse_resume_data(context.resume_data)

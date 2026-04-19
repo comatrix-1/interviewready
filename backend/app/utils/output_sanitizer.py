@@ -1,8 +1,9 @@
 """Output sanitizer for detecting and removing system prompt leakage."""
 
 import re
-from typing import Tuple, List, Dict, Any
-from ..core.logging import logger
+from typing import Any
+
+from app.core.logging import logger
 
 
 class OutputSanitizer:
@@ -35,7 +36,7 @@ class OutputSanitizer:
             re.compile(p, re.DOTALL) for p in self.DANGEROUS_PATTERNS
         ]
 
-    def sanitize(self, output: str) -> Tuple[bool, str, List[Dict[str, Any]]]:
+    def sanitize(self, output: str) -> tuple[bool, str, list[dict[str, Any]]]:
         """Sanitize output and detect system prompt leakage.
 
         Args:
@@ -91,10 +92,7 @@ class OutputSanitizer:
         Returns:
             True if no obvious issues detected
         """
-        for pattern in self.system_patterns[:5]:
-            if pattern.search(output):
-                return False
-        return True
+        return all(not pattern.search(output) for pattern in self.system_patterns[:5])
 
 
 _output_sanitizer = None

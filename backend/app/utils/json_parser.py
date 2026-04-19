@@ -93,9 +93,9 @@ def _handle_string_char(ch: str, escape: bool) -> tuple[bool, bool]:
     """Handle character within string context. Returns (in_string, escape)."""
     if escape:
         return True, False
-    elif ch == "\\":
+    if ch == "\\":
         return True, True
-    elif ch == '"':
+    if ch == '"':
         return False, False
     return True, False
 
@@ -104,7 +104,7 @@ def _handle_bracket(ch: str, stack: list[str]) -> str | None:
     """Handle bracket matching. Returns extracted text if complete, None otherwise."""
     if ch == "{":
         stack.append("}")
-    elif ch == '[':
+    elif ch == "[":
         stack.append("]")
     elif ch in ("}", "]"):
         if not stack or ch != stack[-1]:
@@ -134,7 +134,7 @@ def _extract_from_start(text: str, start: int) -> str | None:
         result = _handle_bracket(ch, stack)
         if result == "complete":
             return text[start : idx + 1]
-        elif result is None:
+        if result is None:
             continue
 
     return None

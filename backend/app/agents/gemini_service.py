@@ -1,13 +1,15 @@
 """Gemini API service for agent interactions."""
 
-import os
 import json
 import re
-from typing import Optional, Dict, Any, List, Tuple, Callable
+from collections.abc import Callable
+from typing import Any
+
 from google import genai
 from google.genai import types
-from ..core.config import settings
-from ..core.logging import logger
+
+from app.core.config import settings
+from app.core.logging import logger
 
 MAX_OUTPUT_TOKENS = 8192
 
@@ -16,7 +18,7 @@ class GeminiService:
     """Service for interacting with Google Gemini API."""
 
     def __init__(
-        self, api_key: Optional[str] = None, model_name: str = "gemini-2.5-flash"
+        self, api_key: str | None = None, model_name: str = "gemini-2.5-flash"
     ):
         """Initialize Gemini service.
 
@@ -40,8 +42,8 @@ class GeminiService:
         self,
         system_prompt: str,
         user_input: str,
-        temperature: Optional[float] = None,
-        tools: Optional[List[Callable]] = None,
+        temperature: float | None = None,
+        tools: list[Callable] | None = None,
     ) -> str:
         """Generate response from Gemini.
 
@@ -66,9 +68,9 @@ class GeminiService:
         self,
         system_prompt: str,
         user_input: str,
-        temperature: Optional[float] = None,
-        tools: Optional[List[Callable]] = None,
-    ) -> Tuple[str, Optional[Dict[str, int]]]:
+        temperature: float | None = None,
+        tools: list[Callable] | None = None,
+    ) -> tuple[str, dict[str, int] | None]:
         """Generate response from Gemini and return usage if available.
 
         Args:
@@ -92,19 +94,20 @@ class GeminiService:
             )
             response_text = self._extract_text(response)
             if response_text is None:
-                raise ValueError("Gemini response contained no text")
+                msg = "Gemini response contained no text"
+                raise ValueError(msg)
             usage = self._extract_usage(response)
             return response_text, usage
         except Exception as e:
-            logger.error(f"Gemini API call failed: {str(e)}")
-            return f"Error calling Gemini API: {str(e)}", None
+            logger.error(f"Gemini API call failed: {e!s}")
+            return f"Error calling Gemini API: {e!s}", None
 
     def _generate_content(
         self,
         system_prompt: str,
         user_input: str,
-        temperature: Optional[float] = None,
-        tools: Optional[List[Callable]] = None,
+        temperature: float | None = None,
+        tools: list[Callable] | None = None,
     ) -> Any:
         config_kwargs = {
             "system_instruction": system_prompt,
@@ -123,7 +126,7 @@ class GeminiService:
             config=types.GenerateContentConfig(**config_kwargs),
         )
 
-    def _extract_text(self, response: Any) -> Optional[str]:
+    def _extract_text(self, response: Any) -> str | None:
         if response is None:
             return None
 
@@ -135,39 +138,43 @@ class GeminiService:
         # Try extracting from candidates
         return self._extract_text_from_candidates(response)
 
-    def _extract_direct_text(self, response: Any) -> Optional[str]:
+    def _extract_direct_text(self, response: Any) -> str | None:
         text = getattr(response, "text", None)
         if isinstance(text, str) and text.strip():
             return text
         return None
 
-    def _extract_text_from_candidates(self, response: Any) -> Optional[str]:
+    def _extract_text_from_candidates(self, response: Any) -> str | None:
         candidates = getattr(response, "candidates", None)
         if not candidates:
-            return getattr(response, "text", None) if isinstance(getattr(response, "text", None), str) else None
+            return (
+                getattr(response, "text", None)
+                if isinstance(getattr(response, "text", None), str)
+                else None
+            )
 
         parts_text = self._collect_parts_from_candidates(candidates)
         return "".join(parts_text) if parts_text else None
 
-    def _collect_parts_from_candidates(self, candidates: Any) -> List[str]:
-        parts_text: List[str] = []
+    def _collect_parts_from_candidates(self, candidates: Any) -> list[str]:
+        parts_text: list[str] = []
         for candidate in candidates:
             candidate_parts = self._extract_candidate_parts(candidate)
             parts_text.extend(candidate_parts)
         return parts_text
 
-    def _extract_candidate_parts(self, candidate: Any) -> List[str]:
+    def _extract_candidate_parts(self, candidate: Any) -> list[str]:
         content = getattr(candidate, "content", None)
         if not content:
             return []
-        
+
         parts = getattr(content, "parts", None)
         if not parts:
             return []
-        
+
         return self._extract_valid_parts(parts)
 
-    def _extract_valid_parts(self, parts: Any) -> List[str]:
+    def _extract_valid_parts(self, parts: Any) -> list[str]:
         valid_parts = []
         for part in parts:
             part_text = getattr(part, "text", None)
@@ -175,7 +182,7 @@ class GeminiService:
                 valid_parts.append(part_text)
         return valid_parts
 
-    def _extract_usage(self, response: Any) -> Optional[Dict[str, int]]:
+    def _extract_usage(self, response: Any) -> dict[str, int] | None:
         usage = self._get_usage_metadata(response)
         if usage is None:
             return None
@@ -184,16 +191,24 @@ class GeminiService:
         return self._build_usage_dict(token_counts)
 
     def _get_usage_metadata(self, response: Any) -> Any:
-        return getattr(response, "usage_metadata", None) or getattr(response, "usage", None)
+        return getattr(response, "usage_metadata", None) or getattr(
+            response, "usage", None
+        )
 
-    def _extract_token_counts(self, usage: Any) -> Dict[str, Optional[int]]:
+    def _extract_token_counts(self, usage: Any) -> dict[str, int | None]:
         return {
-            "prompt_tokens": self._find_token_value(usage, ["prompt_token_count", "prompt_tokens", "input_tokens"]),
-            "completion_tokens": self._find_token_value(usage, ["candidates_token_count", "completion_tokens", "output_tokens"]),
-            "total_tokens": self._find_token_value(usage, ["total_token_count", "total_tokens"]),
+            "prompt_tokens": self._find_token_value(
+                usage, ["prompt_token_count", "prompt_tokens", "input_tokens"]
+            ),
+            "completion_tokens": self._find_token_value(
+                usage, ["candidates_token_count", "completion_tokens", "output_tokens"]
+            ),
+            "total_tokens": self._find_token_value(
+                usage, ["total_token_count", "total_tokens"]
+            ),
         }
 
-    def _find_token_value(self, usage: Any, keys: List[str]) -> Optional[int]:
+    def _find_token_value(self, usage: Any, keys: list[str]) -> int | None:
         for key in keys:
             value = self._extract_value_from_usage(usage, key)
             if value is not None:
@@ -207,7 +222,7 @@ class GeminiService:
             return getattr(usage, key)
         return None
 
-    def _to_int(self, value: Any) -> Optional[int]:
+    def _to_int(self, value: Any) -> int | None:
         if value is None:
             return None
         try:
@@ -215,13 +230,19 @@ class GeminiService:
         except (TypeError, ValueError):
             return None
 
-    def _build_usage_dict(self, token_counts: Dict[str, Optional[int]]) -> Optional[Dict[str, int]]:
+    def _build_usage_dict(
+        self, token_counts: dict[str, int | None]
+    ) -> dict[str, int] | None:
         prompt_tokens = token_counts["prompt_tokens"]
         completion_tokens = token_counts["completion_tokens"]
         total_tokens = token_counts["total_tokens"]
 
         # Calculate total if missing
-        if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
+        if (
+            total_tokens is None
+            and prompt_tokens is not None
+            and completion_tokens is not None
+        ):
             total_tokens = prompt_tokens + completion_tokens
 
         usage_details = {}
@@ -391,7 +412,8 @@ class GeminiLiveService:
             self.connected = True
         except Exception as e:
             self.connected = False
-            raise ConnectionError(f"Failed to connect to Gemini Live: {str(e)}")
+            msg = f"Failed to connect to Gemini Live: {e!s}"
+            raise ConnectionError(msg)
 
     def send_audio_and_wait_response(
         self,
@@ -399,7 +421,7 @@ class GeminiLiveService:
         system_prompt: str,
         mime_type: str = "audio/wav",
         text_prompt: str = "",
-    ) -> Optional[str]:
+    ) -> str | None:
         """Send audio data and wait for response using Gemini API.
 
         Args:
@@ -433,11 +455,11 @@ class GeminiLiveService:
             )
             return response.text
         except Exception as e:
-            return f"Error in Gemini Audio: {str(e)}"
+            return f"Error in Gemini Audio: {e!s}"
 
     def send_text_and_wait_response(
         self, text: str, system_prompt: str = ""
-    ) -> Optional[str]:
+    ) -> str | None:
         """Send text and wait for response using Gemini API.
 
         Args:
@@ -463,7 +485,7 @@ class GeminiLiveService:
             )
             return response.text
         except Exception as e:
-            return f"Error in Gemini: {str(e)}"
+            return f"Error in Gemini: {e!s}"
 
     def get_live_session(self, system_prompt: str):
         """Create a live session with Gemini Multimodal Live API.

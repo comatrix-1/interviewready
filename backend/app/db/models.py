@@ -1,6 +1,6 @@
 """SQLAlchemy database models."""
 
-from sqlalchemy import ARRAY, Boolean, Column, Date, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Column, Date, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -18,11 +18,21 @@ class ResumeModel(Base):
     id = Column(String, primary_key=True)
     skills = Column(ARRAY(String), nullable=True)
 
-    experiences = relationship("ExperienceModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
-    educations = relationship("EducationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
-    projects = relationship("ProjectModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
-    certifications = relationship("CertificationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
-    awards = relationship("AwardModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    experiences = relationship(
+        "ExperienceModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
+    )
+    educations = relationship(
+        "EducationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
+    )
+    projects = relationship(
+        "ProjectModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
+    )
+    certifications = relationship(
+        "CertificationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
+    )
+    awards = relationship(
+        "AwardModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
+    )
 
 
 class ExperienceModel(Base):
