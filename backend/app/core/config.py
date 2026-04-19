@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Langfuse
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_SECRET_KEY: str | None = None
-    LANGFUSE_HOST: str | None = "https://cloud.langfuse.com"
+    LANGFUSE_BASE_URL: str | None = "https://cloud.langfuse.com"
     LANGFUSE_LLM_AS_A_JUDGE_ENABLED: bool = True
 
     # Optional judge cost estimation (USD per 1K tokens)
