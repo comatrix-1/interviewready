@@ -20,6 +20,7 @@ from app.models.agent import (
     ResumeDocument,
 )
 from app.models.resume import Resume
+from app.models.session import SessionContext
 from app.orchestration.persistence import get_checkpoint_store
 from app.utils.json_parser import parse_json_payload
 from app.utils.validators import is_valid_date, is_valid_url
@@ -27,7 +28,6 @@ from app.utils.validators import is_valid_date, is_valid_url
 if TYPE_CHECKING:
     from app.agents.base import BaseAgentProtocol
     from app.governance.sharp_governance_service import SharpGovernanceService
-    from app.models.session import SessionContext
 
 langfuse = Langfuse()
 
