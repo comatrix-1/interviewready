@@ -56,7 +56,7 @@ const AppContent: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const initSession = async () => {
@@ -224,7 +224,6 @@ const WorkflowController: React.FC<{
   state: SharedState;
   setState: React.Dispatch<React.SetStateAction<SharedState>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
-  // FIX TS2322: widen to match useRef<HTMLDivElement | null>(null) return type
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }> = ({ state, setState, setError, chatEndRef }) => {
   const { startLoading, updateProgress, stopLoading } = useLoading();
@@ -335,6 +334,7 @@ const WorkflowController: React.FC<{
 
     try {
       updateProgress(50, 1);
+      if (!state.currentResume) throw new Error("Current resume is null");
       const report = await backendService.resumeCriticAgent(state.currentResume);
       updateProgress(100, 2);
 

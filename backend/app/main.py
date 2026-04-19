@@ -89,12 +89,8 @@ async def check_request_size(request, call_next):
 
 @app.middleware("http")
 async def log_requests(request, call_next):
-    import time
-
-    start_time = time.time()
     request.headers.get("origin")
     response = await call_next(request)
-    time.time() - start_time
     return response
 
 

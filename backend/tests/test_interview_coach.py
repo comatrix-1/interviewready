@@ -6,6 +6,7 @@ from app.agents.gemini_service import GeminiService
 from app.agents.interview_coach import InterviewCoachAgent
 from app.models.agent import AgentInput
 from app.models.session import SessionContext
+import pytest
 
 
 def _build_agent(monkeypatch) -> InterviewCoachAgent:
@@ -479,7 +480,7 @@ def test_interview_coach_evaluator_rejects_invalid_payload(monkeypatch) -> None:
         "nonsence",
     )
 
-    assert result["answer_score"] == 0.0
+    assert result["answer_score"] == pytest.approx(0.0, abs=1e-9)
     assert result["can_proceed"] is False
     assert "could not be evaluated" in result["feedback"].lower()
 

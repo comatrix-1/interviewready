@@ -564,7 +564,7 @@ class TestOrchestratorSecurityBoundaries:
 
         assert result is not None
         assert result.agent_name == "NormalizeStage"
-        assert result.confidence_score == 0.0
+        assert result.confidence_score == pytest.approx(0.0, abs=1e-9)
 
     def test_each_session_has_isolated_context(self) -> None:
         """Two concurrent sessions must not share state."""
@@ -638,12 +638,12 @@ class TestQuantifiableClaimDetection:
 
         risk = governance.calculate_hallucination_risk(text, text)
 
-        assert risk == 0.0
+        assert risk == pytest.approx(0.0, abs=1e-9)
 
     def test_hallucination_risk_none_inputs_return_max(self) -> None:
         """None inputs must return maximum risk (1.0) to trigger safety review."""
         governance = SharpGovernanceService()
 
-        assert governance.calculate_hallucination_risk(None, "some output") == 1.0
-        assert governance.calculate_hallucination_risk("some input", None) == 1.0
-        assert governance.calculate_hallucination_risk(None, None) == 1.0
+        assert governance.calculate_hallucination_risk(None, "some output") == pytest.approx(1.0, abs=1e-9)
+        assert governance.calculate_hallucination_risk("some input", None) == pytest.approx(1.0, abs=1e-9)
+        assert governance.calculate_hallucination_risk(None, None) == pytest.approx(1.0, abs=1e-9)

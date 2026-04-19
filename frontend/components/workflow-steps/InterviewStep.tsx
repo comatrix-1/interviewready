@@ -151,17 +151,17 @@ const markdownComponents = {
 };
 
 export const InterviewStep: React.FC<{ 
-  history: InterviewMessage[]; 
-  onSend: (msg: string) => void;
-  onSendAudio: (audio: Uint8Array) => void;
-  isLoading: boolean;
-  isComplete?: boolean;
-  chatEndRef: React.RefObject<HTMLDivElement>;
-  mode: InterviewMode;
-  sessionId: string;
-  onExit?: () => void;
-  onLiveEvent?: (event: { type: string; text?: string }) => void;
-}> = ({
+	  history: InterviewMessage[]; 
+	  onSend: (msg: string) => void;
+	  onSendAudio: (audio: Uint8Array) => void;
+	  isLoading: boolean;
+	  isComplete?: boolean;
+	  chatEndRef: React.RefObject<HTMLDivElement | null>;
+	  mode: InterviewMode;
+	  sessionId: string;
+	  onExit?: () => void;
+	  onLiveEvent?: (event: { type: string; text?: string }) => void;
+	}> = ({
   history,
   onSend,
   onSendAudio,
