@@ -202,24 +202,11 @@ This makes behavior:
 - LLM-based reasoning (Gemini/OpenAI-compatible abstraction)
 - Structured logging and trace capture
 
-## What this project demonstrates
-
-This project is designed to demonstrate applied AI engineering capabilities:
-
-- Designing multi-agent systems
-- Translating business workflows into technical architectures
-- Building structured LLM pipelines (not prompt demos)
-- Implementing governance layers for reliability
-- Producing observable and auditable AI systems
-- Thinking in systems, not features
-
-## Potential real-world applications
-
-- Candidate screening systems
-- Internal hiring pipelines
-- Structured performance evaluation tools
-- Compliance-heavy decision workflows
-- AI-assisted review systems
+## Demo
+![Step: upload](docs/images/step-upload.png)
+![Step: content strength](docs/images/step-content-strength.png)
+![Step: job alignment](docs/images/step-job-alignment.png)
+![Step: interview coach](docs/images/step-interview-coach.png)
 
 ## Future improvements
 
