@@ -1,54 +1,122 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This repository implements a production-grade multi-agent AI evaluation system built with FastAPI, LangGraph, and async SQLAlchemy.
+
+## Core Development Principles
+
+### Make Surgical Changes
+- Modify only code directly relevant to the task.
+- Do not refactor unrelated modules.
+- Preserve existing architecture and naming conventions.
+- Do not introduce new abstractions unless they remove clear duplication or complexity.
+
+### Prefer Simplicity
+- Implement the minimum viable change.
+- Avoid speculative configurability or extensibility.
+- Avoid creating wrappers/helpers for single call sites.
+- Match the repository’s existing patterns before introducing new ones.
+
+### Verify Changes
+Before completing work:
+- Run targeted tests first, then broader tests if needed.
+- Ensure linting and type checks pass for touched files.
+- Validate API contract compatibility.
+- Confirm imports and dead code introduced by changes are cleaned up.
+
+### Surface Uncertainty
+- State assumptions explicitly.
+- If requirements are ambiguous, ask clarifying questions before implementing.
+- If a requested approach conflicts with existing architecture, explain the tradeoff.
+
+### Security Constraints
+- Never bypass LLM Guard scanning.
+- Never bypass governance audit flows.
+- Never log raw sensitive user data.
+- Preserve PII redaction behavior.
+
+---
 
 ## Common Commands
 
-- **Install dependencies**: `uv sync`
-- **Run the backend**: `uv run python -m app.main`
-- **Run tests**: `uv run pytest`
-- **Run a single test**: `uv run pytest path/to/test_file.py::test_name`
-- **Lint / format**: `uv run ruff check . && uv run ruff format .`
-- **Type checking**: `uv run mypy .`
-- **Start API docs**: after running the app, open `http://localhost:8000/docs`
-- **Run with mock agents**: set env vars `MOCK_RESUME_CRITIC_AGENT=true` etc. before starting the app.
+- Install dependencies: `uv sync`
+- Run backend: `uv run python -m app.main`
+- Run tests: `uv run pytest`
+- Run single test:
+  `uv run pytest path/to/test_file.py::test_name`
+- Lint/format:
+  `uv run ruff check . && uv run ruff format .`
+- Type check:
+  `uv run mypy .`
 
-## High‑Level Architecture
+---
 
-The repository implements a production‑grade multi‑agent AI evaluation system built with FastAPI and LangGraph.
+## Architecture Overview
 
-- **FastAPI entry point** (`app/main.py`) runs the HTTP server.
-- **Orchestration layer** (`app/orchestration/orchestration_agent.py`) extracts intent, normalises inputs, and routes requests to the appropriate agent.
-- **Agent layer** (`app/agents/`) contains specialised agents (ResumeCritic, ContentStrength, JobAlignment, InterviewCoach). All agents inherit from `BaseAgent` which provides:
-  - LLM Guard input scanning for prompt‑injection safety.
-  - PII redaction on outputs.
-  - Structured logging and Langfuse tracing.
-  - Governance audit via the SHARP service.
-- **Governance layer** (`app/governance/sharp_governance_service.py`) validates confidence, detects hallucination and bias, and may flag a request for human review.
-- **Security layer** (`app/security/`) houses the LLM Guard scanner and output sanitiser.
-- **Configuration** (`app/core/config.py`) loads settings from `.env` using `pydantic-settings`.
-- **Observability** integrates Langfuse for end‑to‑end tracing of each agent’s processing steps.
-- **Database** uses SQLAlchemy async ORM for persisting session state and evaluation results.
+### Request Flow
+1. HTTP request hits `/api/v1/chat`
+2. Orchestration extracts intent and normalizes input
+3. Selected agent processes request
+4. Governance validates response
+5. Langfuse records trace
+6. Structured response returned
 
-### Data Flow (request → response)
-1. **HTTP request** hits `/api/v1/chat`.
-2. Orchestration extracts intent and normalises the resume.
-3. Selected agent processes the input (LLM Guard → Gemini call → output sanitisation).
-4. Governance audits the agent response.
-5. Langfuse records a trace of all steps.
-6. Response payload, confidence score, and decision trace are returned to the client.
+### Major Components
 
-## Important Files
-- `backend/app/main.py` – FastAPI app startup.
-- `backend/app/api/v1/endpoints/chat.py` – Chat endpoint definition.
-- `backend/app/agents/*` – Individual agent implementations.
-- `backend/app/governance/sharp_governance_service.py` – Governance logic.
-- `backend/app/security/llm_guard_scanner.py` – Prompt‑injection defense.
-- `backend/app/core/config.py` – Central configuration.
-- `backend/tests/` – Full test suite covering agents, orchestration, security, and API.
+#### API Layer
+- `backend/app/main.py`
+- `backend/app/api/v1/endpoints/chat.py`
 
-## Development Tips
-- Enable **mock mode** via the `MOCK_…` environment variables to avoid real LLM calls during local development.
-- Use **Langfuse** dashboards to inspect traces when debugging agent behaviour.
-- Security checks are enforced automatically by `BaseAgent`; do not bypass them.
-- The project follows a strict **structured‑output** contract for each agent – refer to the response format tables in the backend README when adding new agents.
+#### Agent Layer
+Located in `backend/app/agents/`
+
+All agents inherit from `BaseAgent`, which enforces:
+- Prompt injection scanning
+- Output sanitization
+- Structured logging
+- Langfuse tracing
+- Governance integration
+
+#### Governance Layer
+- `backend/app/governance/sharp_governance_service.py`
+
+Responsibilities:
+- Confidence validation
+- Hallucination detection
+- Bias detection
+- Human-review escalation
+
+#### Security Layer
+- `backend/app/security/`
+
+Contains:
+- LLM Guard scanner
+- Output sanitization
+- PII protection
+
+---
+
+## Development Guidance
+
+### Testing Expectations
+For bug fixes:
+1. Reproduce with a failing test
+2. Implement fix
+3. Verify test passes
+
+For new features:
+1. Add focused tests
+2. Avoid broad unrelated changes
+3. Preserve response contracts
+
+### Mock Development
+Use mock agents during local development:
+```bash
+export MOCK_RESUME_CRITIC_AGENT=true
+Observability
+
+Use Langfuse traces to debug orchestration and agent behavior.
+
+Structured Outputs
+
+Maintain strict structured-output contracts for all agents.
+Do not introduce free-form response schemas unless explicitly required.
