@@ -39,7 +39,7 @@ class OrchestrationResult(BaseModel):
     - details: list of small step/detail objects providing reasoning or checks
     """
 
-    decision: str
+    decision: str = Field(..., min_length=1)
     confidence: float = Field(..., ge=0.0, le=1.0)
     details: list[OrchestrationDetail] = Field(default_factory=list)
 
