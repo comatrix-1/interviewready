@@ -136,14 +136,55 @@ def remove_trailing_commas(text: str) -> str:
     """Remove trailing commas before a closing ']' or '}' in JSON-like text.
 
     This removes instances like '[1,2,]' -> '[1,2]' and '{"a":1,}' -> '{"a":1}'.
-    The operation is idempotent.
+    Tracks string literal boundaries so commas inside quoted strings are
+    never touched. The operation is idempotent.
     """
     if not text:
         return text
 
-    # Remove commas followed only by whitespace then a closing bracket/brace
-    new_text = re.sub(r",\s*(?=[\]}])", "", text)
-    return new_text
+    result: list[str] = []
+    in_string: Optional[str] = None
+    escape = False
+    i = 0
+    n = len(text)
+
+    while i < n:
+        ch = text[i]
+
+        # Track string boundaries
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == in_string:
+                in_string = None
+            result.append(ch)
+            i += 1
+            continue
+
+        # String start
+        if ch == '"' or ch == "'":
+            in_string = ch
+            result.append(ch)
+            i += 1
+            continue
+
+        # Comma followed by optional whitespace then } or ]
+        if ch == ",":
+            # Look ahead past whitespace for a closer
+            j = i + 1
+            while j < n and text[j] in (" ", "\t", "\n", "\r"):
+                j += 1
+            if j < n and text[j] in ("}", "]"):
+                # Skip this comma entirely (don't append it)
+                i = j
+                continue
+
+        result.append(ch)
+        i += 1
+
+    return "".join(result)
 
 
 def balance_brackets(text: str) -> str:

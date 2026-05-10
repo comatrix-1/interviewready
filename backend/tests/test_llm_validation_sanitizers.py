@@ -54,6 +54,31 @@ def test_remove_trailing_commas_in_array():
     assert remove_trailing_commas(text) == '[1,2,3]'
 
 
+def test_remove_trailing_commas_preserves_commas_in_string():
+    """Commas inside quoted strings must not be removed."""
+    text = '{"msg": "a,]", "other": [1,]}'
+    result = remove_trailing_commas(text)
+    assert result == '{"msg": "a,]", "other": [1]}'
+
+
+def test_remove_trailing_commas_inside_string_preserved():
+    """Comma followed by ] or } inside a string must be untouched."""
+    text = '{"prompt": "Continue,}"}'
+    result = remove_trailing_commas(text)
+    assert result == '{"prompt": "Continue,}"}'
+
+
+def test_remove_trailing_commas_whitespace_after_comma():
+    """Whitespace before the trailing comma is preserved in the output."""
+    text = '["a","b" ,]'
+    assert remove_trailing_commas(text) == '["a","b" ]'
+
+
+def test_remove_trailing_commas_nested():
+    text = '{"x":[1,2,], "y":{"a":1,}}'
+    assert remove_trailing_commas(text) == '{"x":[1,2], "y":{"a":1}}'
+
+
 def test_balance_brackets_appends_missing_closers():
     text = '{"a": [1,2'
     out = balance_brackets(text)
