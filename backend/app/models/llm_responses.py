@@ -14,12 +14,20 @@ from pydantic import BaseModel, Field
 
 
 class OrchestrationDetail(BaseModel):
-    """A single step/detail item in an orchestration result."""
+    """A single step/detail item in an orchestration result.
 
-    step: str
+    Example:
+        OrchestrationDetail(step="check-format", ok=True, note="ran ruff", metadata={"files": 3})
+    """
+
+    step: str = Field(..., min_length=1)
     ok: bool = True
     note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = {
+        "extra": "forbid"
+    }
 
 
 class OrchestrationResult(BaseModel):
@@ -34,6 +42,10 @@ class OrchestrationResult(BaseModel):
     decision: str
     confidence: float = Field(..., ge=0.0, le=1.0)
     details: list[OrchestrationDetail] = Field(default_factory=list)
+
+    model_config = {
+        "extra": "forbid"
+    }
 
 
 __all__ = ["OrchestrationResult", "OrchestrationDetail"]
