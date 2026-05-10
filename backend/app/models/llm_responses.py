@@ -48,4 +48,11 @@ class OrchestrationResult(BaseModel):
     }
 
 
+# Pydantic v2: when using postponed annotations (from __future__ import annotations),
+# call model_rebuild() after all related models are defined so forward
+# references and annotated types are resolved. This avoids PydanticUserError
+# about classes not being fully defined.
+OrchestrationDetail.model_rebuild()
+OrchestrationResult.model_rebuild()
+
 __all__ = ["OrchestrationResult", "OrchestrationDetail"]
