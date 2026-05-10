@@ -15,15 +15,15 @@ Core components
      - def validate_or_repair(raw: str | dict, schema: Type[BaseModel], hint: Optional[str] = None) -> Tuple[BaseModel, str]
        - Returns: (parsed_instance, status) where status in {"ok","repaired","default"}
    - Internal steps:
-     a) Normalization: if raw is dict-like, try direct parse with schema.parse_obj.
-     b) Strict parse: if raw is string, attempt parse using the schema (e.g., parse_raw or json.loads + parse_obj).
+     a) Normalization: if raw is dict-like, try schema.model_validate(raw).
+     b) Strict parse: if raw is string, attempt parse using the schema (e.g., model_validate_json or json.loads + model_validate).
      c) Sanitizers: heuristics applied only if strict parse fails. Examples:
         - Trim leading/trailing text before first/after last JSON marker
         - Extract first JSON-like substring via regex (\{.*\}|\[.*\]) with greedy balancing
         - Fix common issues: trailing commas, single quotes to double quotes, unescaped newlines in strings
         - Balance brackets: add missing closing braces/brackets when safe
      d) Reformat LLM call: if sanitizers fail, send a deterministic prompt to the LLM asking it to output strictly the serialized payload conforming to the schema (JSON only). Provide a compact example in the prompt and instruct to only return the payload, no explanation.
-     e) Fallback: if the reformat step fails or times out, return schema.construct(defaults) or a clearly documented safe default object.
+     e) Fallback: if the reformat step fails or times out, return schema.model_construct() or a clearly documented safe default object.
 
 3) Agent integration points
    - Each agent that previously parsed free-form text must call validate_or_repair before further processing.
