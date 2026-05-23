@@ -6,7 +6,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 from .resume import Resume
 
 
@@ -14,7 +17,11 @@ class AgentResponse(BaseModel):
     """Agent response model with SHARP compliance data."""
 
     agent_name: str | None = None
+<<<<<<< HEAD
     content: dict[str, Any] | list[Any] | None = None
+=======
+    content: str | None = None
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     reasoning: str | None = None  # Explainability
     confidence_score: float | None = None  # Confidence Indicator
     needs_review: bool | None = None
@@ -68,6 +75,10 @@ class ChatRequest(BaseModel):
     audioData: bytes | None = None
 
     @field_validator("audioData", mode="before")
+<<<<<<< HEAD
+=======
+    @classmethod
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     def decode_audio_data(cls, v):
         if isinstance(v, str):
             import base64
@@ -185,7 +196,10 @@ class ResumeCriticIssue(BaseModel):
     description: str
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 class ResumeCriticReport(BaseModel):
     """Resume critic analysis report."""
 

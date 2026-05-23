@@ -14,12 +14,18 @@ from app.models.agent import (
     ActionPlan,
     AgentInput,
     AgentResponse,
+<<<<<<< HEAD
     AgentInput,
     AgentResponse,
     AnalysisArtifact,
     ChatRequest,
     Intent,
     Intent,
+=======
+    AnalysisArtifact,
+    ChatRequest,
+    Intent,
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     ResumeDocument,
 )
 from app.models.resume import Resume
@@ -32,10 +38,13 @@ if TYPE_CHECKING:
     from app.agents.base import BaseAgentProtocol
     from app.governance.sharp_governance_service import SharpGovernanceService
 
+<<<<<<< HEAD
 if TYPE_CHECKING:
     from app.agents.base import BaseAgentProtocol
     from app.governance.sharp_governance_service import SharpGovernanceService
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 langfuse = Langfuse()
 
 INTENT_TO_AGENTS = {
@@ -54,6 +63,7 @@ class OrchestrationState:
     artifacts: list[AnalysisArtifact] = field(default_factory=list)
     input: AgentInput | None = None
     resume_document: ResumeDocument | None = None
+<<<<<<< HEAD
     input: AgentInput | None = None
     resume_document: ResumeDocument | None = None
     needs_review: bool = False
@@ -62,17 +72,29 @@ class OrchestrationState:
     shared_memory: dict[str, Any] = field(default_factory=dict)
     checkpoint_key: str | None = None
     checkpoint_key: str | None = None
+=======
+    needs_review: bool = False
+    review_payload: dict[str, Any] | None = None
+    shared_memory: dict[str, Any] = field(default_factory=dict)
+    checkpoint_key: str | None = None
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     halt: bool = False
     review_attempts: int = 0
     index: int = 0
     response: AgentResponse | None = None
+<<<<<<< HEAD
     response: AgentResponse | None = None
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
 
 # ---------- Orchestrator ----------
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 class OrchestrationAgent:
     def __init__(
         self,
@@ -118,8 +140,11 @@ class OrchestrationAgent:
                 if not response:
                     msg = "No response produced"
                     raise RuntimeError(msg)
+<<<<<<< HEAD
                     msg = "No response produced"
                     raise RuntimeError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
                 checkpoint_id = (
                     final_state.checkpoint_key
@@ -156,14 +181,20 @@ class OrchestrationAgent:
             if not checkpoint_id:
                 msg = "checkpointId is required for rewind control"
                 raise ValueError(msg)
+<<<<<<< HEAD
                 msg = "checkpointId is required for rewind control"
                 raise ValueError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
             record = self.checkpoints.rewind(session_id, checkpoint_id)
             if record is None:
                 msg = "Invalid checkpointId for rewind"
                 raise ValueError(msg)
+<<<<<<< HEAD
                 msg = "Invalid checkpointId for rewind"
                 raise ValueError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
             state = record.state
             state.request = request
             state.context = context
@@ -184,8 +215,11 @@ class OrchestrationAgent:
             if record is None:
                 msg = "No checkpoint available to resume"
                 raise ValueError(msg)
+<<<<<<< HEAD
                 msg = "No checkpoint available to resume"
                 raise ValueError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
             state = record.state
             state.request = request
             state.context = context
@@ -202,8 +236,11 @@ class OrchestrationAgent:
         if control:
             msg = f"Unsupported control operation: {control}"
             raise ValueError(msg)
+<<<<<<< HEAD
             msg = f"Unsupported control operation: {control}"
             raise ValueError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
         return OrchestrationState(
             request=request,
@@ -277,11 +314,14 @@ class OrchestrationAgent:
             state.response = resume_result
             state.halt = True
             return state
+<<<<<<< HEAD
         resume_result = self._process_resume_input(request, context)
         if isinstance(resume_result, AgentResponse):
             state.response = resume_result
             state.halt = True
             return state
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
         (
             resume,
@@ -292,6 +332,7 @@ class OrchestrationAgent:
             validation_errors,
             needs_review,
         ) = resume_result
+<<<<<<< HEAD
 
         (
             resume,
@@ -302,6 +343,8 @@ class OrchestrationAgent:
             validation_errors,
             needs_review,
         ) = resume_result
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
         if resume is None:
             state.response = self._failure(
@@ -315,8 +358,11 @@ class OrchestrationAgent:
 
         resume_doc = resume_doc or self._build_resume_doc(resume, "resumeData")
         resume_text = resume_text or self._serialize_resume(resume)
+<<<<<<< HEAD
         resume_doc = resume_doc or self._build_resume_doc(resume, "resumeData")
         resume_text = resume_text or self._serialize_resume(resume)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         context.resume_data = resume_text
 
         review_payload = self._build_review_payload(
@@ -326,6 +372,7 @@ class OrchestrationAgent:
             low_confidence_fields,
             validation_errors,
         )
+<<<<<<< HEAD
         review_payload = self._build_review_payload(
             needs_review,
             resume,
@@ -333,6 +380,8 @@ class OrchestrationAgent:
             low_confidence_fields,
             validation_errors,
         )
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
         state.resume_document = resume_doc
         state.needs_review = needs_review
@@ -398,7 +447,11 @@ class OrchestrationAgent:
             response = extractor.process(
                 json.dumps(request.resumeFile.model_dump()), context
             )
+<<<<<<< HEAD
             parsed = response.content or {}
+=======
+            parsed = json.loads(response.content or "{}")
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
             resume = Resume.model_validate(parsed)
             resume_doc = self._build_resume_doc(resume, "resumeFile")
             resume_text = self._serialize_resume(resume)
@@ -532,15 +585,21 @@ class OrchestrationAgent:
         except ValueError:
             msg = f"Unsupported intent: {raw}"
             raise ValueError(msg)
+<<<<<<< HEAD
             msg = f"Unsupported intent: {raw}"
             raise ValueError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
     def _get_agent(self, name: str) -> BaseAgentProtocol:
         if name not in self.agent_list:
             msg = f"Missing agent: {name}"
             raise RuntimeError(msg)
+<<<<<<< HEAD
             msg = f"Missing agent: {name}"
             raise RuntimeError(msg)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         return self.agent_list[name]
 
     def _build_agent_input(self, state: OrchestrationState) -> AgentInput:
@@ -619,6 +678,7 @@ class OrchestrationAgent:
 
     def _validate_resume_field_items(self, items: list, field_name: str) -> list[str]:
         errors: list[str] = []
+<<<<<<< HEAD
 
         for list_field in list_fields:
             items = getattr(resume, list_field, []) or []
@@ -628,6 +688,8 @@ class OrchestrationAgent:
 
     def _validate_resume_field_items(self, items: list, field_name: str) -> list[str]:
         errors: list[str] = []
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         date_fields = ["startDate", "endDate", "date"]
 
         for item in items:
@@ -654,6 +716,7 @@ class OrchestrationAgent:
             attr_value = getattr(item, attr_name, None)
             if attr_value is not None and not is_valid_date(attr_value):
                 errors.append(f"{field_name}: {attr_name}='{attr_value}'")
+<<<<<<< HEAD
         for item in items:
             url_error = self._validate_item_url(item, field_name)
             if url_error:
@@ -681,6 +744,10 @@ class OrchestrationAgent:
         return errors
 
 
+=======
+        return errors
+
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     def _normalize_or_fail(
         self, request: ChatRequest, context: SessionContext
     ) -> tuple[Resume, ResumeDocument] | AgentResponse:
@@ -752,7 +819,10 @@ class OrchestrationAgent:
         metadata = {}
         if needs_review:
             metadata.update({"needs_review": True})
+<<<<<<< HEAD
             metadata.update({"needs_review": True})
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         plan = ActionPlan(
             summary="Resume normalization failed.",
             actions=[details],

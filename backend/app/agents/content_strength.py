@@ -3,7 +3,6 @@
 import json
 import time
 from typing import Any
-from typing import Any
 
 from langfuse import observe
 
@@ -66,8 +65,6 @@ class ContentStrengthAgent(BaseAgent):
         """
         + RESUME_SCHEMA
         + ANTI_JAILBREAK_DIRECTIVE
-        + RESUME_SCHEMA
-        + ANTI_JAILBREAK_DIRECTIVE
     )
 
     _EVIDENCE_WEIGHTS = {"HIGH": 1.0, "MEDIUM": 0.65, "LOW": 0.3}
@@ -106,8 +103,6 @@ class ContentStrengthAgent(BaseAgent):
         if not isinstance(input_data, AgentInput):
             msg = "ContentStrengthAgent expects AgentInput."
             raise TypeError(msg)
-            msg = "ContentStrengthAgent expects AgentInput."
-            raise TypeError(msg)
 
         session_id = getattr(context, "session_id", "unknown")
         agent_name = self.get_name()
@@ -131,7 +126,6 @@ class ContentStrengthAgent(BaseAgent):
             )
             structured_result = validated.model_dump()
 
-            resume_payload: dict[str, Any] = {}
             resume_payload: dict[str, Any] = {}
             if input_data.resume is not None:
                 resume_payload = input_data.resume.model_dump(exclude_none=True)
@@ -248,8 +242,6 @@ class ContentStrengthAgent(BaseAgent):
             self._SUGGESTION_RISK.get(s.get("type", ""), 0.1)
             for s in suggestions
             if isinstance(s, dict)
-            for s in suggestions
-            if isinstance(s, dict)
         ]
         return round(max(risks, default=0.0), 3)
 
@@ -331,7 +323,6 @@ class ContentStrengthAgent(BaseAgent):
 
     @staticmethod
     def _build_prompt(input_data: AgentInput) -> str:
-        resume_data: dict[str, Any] = {}
         resume_data: dict[str, Any] = {}
         if input_data.resume is not None:
             resume_data = input_data.resume.model_dump(exclude_none=True)

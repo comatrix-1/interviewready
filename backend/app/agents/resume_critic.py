@@ -16,12 +16,18 @@ from app.utils.resume_location import resume_location_exists
 
 from .base import BaseAgent
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
 class ResumeCriticAgent(BaseAgent):
     """Agent for analyzing resume structure, ATS compatibility, and impact."""
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     USE_MOCK_RESPONSE = settings.MOCK_RESUME_CRITIC_AGENT
     MOCK_RESPONSE_KEY = "ResumeCriticAgent"
 
@@ -37,7 +43,10 @@ class ResumeCriticAgent(BaseAgent):
         - Do not infer today's date from resume content.
 
         LOCATION FORMAT:
+<<<<<<< HEAD
         LOCATION FORMAT:
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         - JSON path matching the resume schema
         - e.g. work[0].highlights[1], skills[2].keywords
         - Do not suggest new JSON paths
@@ -83,7 +92,10 @@ class ResumeCriticAgent(BaseAgent):
             name="ResumeCriticAgent",
         )
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
     @observe(name="resume_critic_process", as_type="agent")
     def process(self, input_data: AgentInput, context: SessionContext) -> AgentResponse:
         """Process resume text and provide critique.
@@ -96,7 +108,8 @@ class ResumeCriticAgent(BaseAgent):
             Agent response with critique and analysis
         """
         if not isinstance(input_data, AgentInput):
-            raise TypeError("ResumeCriticAgent expects AgentInput.")
+            msg = "ResumeCriticAgent expects AgentInput."
+            raise TypeError(msg)
 
         session_id = getattr(context, "session_id", "unknown")
         agent_name = self.get_name()
@@ -168,6 +181,15 @@ class ResumeCriticAgent(BaseAgent):
                 removed = 0
 
             processing_time = time.time() - processing_start_time
+<<<<<<< HEAD
+=======
+
+            logger.debug(
+                "ResumeCriticAgent processing completed",
+                session_id=session_id,
+                processing_time_ms=round(processing_time * 1000, 2),
+            )
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
             logger.debug(
                 "ResumeCriticAgent processing completed",
@@ -222,7 +244,13 @@ class ResumeCriticAgent(BaseAgent):
             raise
 
     def _parse_json(self, text: str) -> dict[str, Any]:
+<<<<<<< HEAD
         """Parse JSON from raw or fenced markdown text.
+=======
+        """Parse JSON from raw or fenced markdown text."""
+        if not text:
+            return {}
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
         Delegates to the shared parse_json_object utility.
         """
@@ -252,9 +280,15 @@ class ResumeCriticAgent(BaseAgent):
 
         severity_weights = {"HIGH": 1.0, "MEDIUM": 0.7, "LOW": 0.4}
         scores = [
+<<<<<<< HEAD
             severity_weights.get(issue.get("severity", "LOW"), 0.4)
             for issue in issues
             if isinstance(issue, dict)
+=======
+            severity_weights.get(i.get("severity", "LOW"), 0.4)
+            for i in issues
+            if isinstance(i, dict)
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         ]
         return int(min(sum(scores) / len(scores), 1.0) * 100)
 

@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models.agent import AgentResponse
+<<<<<<< HEAD
 if TYPE_CHECKING:
     from app.models.agent import AgentResponse
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
 
 class SharpGovernanceService:
@@ -48,7 +51,10 @@ class SharpGovernanceService:
 
         if response.agent_name == "ContentStrengthAgent":
             self._validate_content_strength_agent(response, metadata)
+<<<<<<< HEAD
             self._validate_content_strength_agent(response, metadata)
+=======
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
         elif response.agent_name == "InterviewCoachAgent":
             self._validate_interview_coach_agent(metadata)
 
@@ -193,10 +199,22 @@ class SharpGovernanceService:
         except Exception as exc:
             metadata["validation_error"] = str(exc)
 
+<<<<<<< HEAD
     def _parse_content_json(
         self, content: dict[str, Any] | list[Any] | None
     ) -> dict[str, Any] | None:
         if content is None:
+=======
+    def _parse_content_json(self, content: str | None) -> dict[str, Any] | None:
+        if not content:
+            return None
+        try:
+            match = re.search(r"\{[\s\S]*\}", content, flags=re.MULTILINE)
+            if match:
+                return json.loads(match.group())
+            return json.loads(content)
+        except Exception:
+>>>>>>> d4ad3a3680180078956713f7cb95169837622063
             return None
         if isinstance(content, dict):
             return content

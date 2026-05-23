@@ -4,28 +4,18 @@ import json
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from abc import ABC, abstractmethod
-from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
-from typing import Any, Protocol, TypeVar
 
 from langfuse import Langfuse, propagate_attributes
 from pydantic import BaseModel
-from langfuse import Langfuse, propagate_attributes
-from pydantic import BaseModel
 
-from app.core.logging import logger
-from app.models.agent import AgentInput, AgentResponse
-from app.models.session import SessionContext
-from app.security.llm_guard_scanner import get_llm_guard_scanner
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse
 from app.models.session import SessionContext
 from app.security.llm_guard_scanner import get_llm_guard_scanner
 from app.utils.json_parser import parse_json_object
-from app.utils.output_sanitizer import get_output_sanitizer
 from app.utils.output_sanitizer import get_output_sanitizer
 
 langfuse = Langfuse()
@@ -34,7 +24,6 @@ langfuse = Langfuse()
 class BaseAgentProtocol(Protocol):
     """Protocol defining the interface for all agents."""
 
-    def get_name(self) -> str: ...
     def get_name(self) -> str: ...
     def process(
         self, input_data: AgentInput | str | bytes, context: SessionContext
@@ -53,7 +42,6 @@ class BaseAgent(ABC, BaseAgentProtocol):
         self.gemini_service = gemini_service
         self.system_prompt = system_prompt
         self.name = name
-        self.mock_service = None
         self.mock_service = None
 
     def get_name(self) -> str:
@@ -99,6 +87,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
         return cls._mock_responses_cache
 
     def get_mock_response_by_key(self, key: str) -> str | None:
+    def get_mock_response_by_key(self, key: str) -> str | None:
         responses = self._load_mock_responses()
         value = responses.get(key)
         if isinstance(value, str):
@@ -111,6 +100,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
         self,
         input_text: str,
         context: SessionContext,
+        tools: list[Callable] | None = None,
         tools: list[Callable] | None = None,
     ) -> str:
         session_id = getattr(context, "session_id", "unknown")
@@ -148,30 +138,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
             return _wrapped
 
         wrapped_tools = [_wrap_tool(tool) for tool in tools] if tools else None
-        wrapped_tools = [_wrap_tool(tool) for tool in tools] if tools else None
 
-        with (
-            langfuse.start_as_current_observation(
-                as_type="span",
-                name=f"{agent_name}_llm_call",
-                metadata={"agent": agent_name, "prompt_length": len(input_text)},
-            ) as trace,
-            propagate_attributes(user_id=user_id, session_id=session_id),
-        ):
-            with trace.start_as_current_observation(
-                as_type="span",
-                name="call_gemini",
-                input={"prompt": input_text[:1000]},
-                metadata={"model": self.gemini_service.model_name},
-            ) as span:
-                logger.log_api_call(
-                    "gemini",
-                    "generate_response",
-                    session_id,
-                    agent_name=agent_name,
-                    system_prompt_length=len(self.system_prompt),
-                    input_length=len(input_text),
-                )
         with (
             langfuse.start_as_current_observation(
                 as_type="span",
@@ -196,26 +163,12 @@ class BaseAgent(ABC, BaseAgentProtocol):
                 )
 
                 api_start_time = time.time()
-                api_start_time = time.time()
 
                 llm_guard = get_llm_guard_scanner()
                 input_safe, sanitized_input, input_issues = llm_guard.scan_input(
                     input_text
                 )
-                llm_guard = get_llm_guard_scanner()
-                input_safe, sanitized_input, input_issues = llm_guard.scan_input(
-                    input_text
-                )
 
-                if not input_safe:
-                    logger.security_event(
-                        "input_blocked",
-                        agent_name=agent_name,
-                        session_id=session_id,
-                        issues=input_issues,
-                    )
-                    msg = "Input blocked due to potential prompt injection"
-                    raise ValueError(msg)
                 if not input_safe:
                     logger.security_event(
                         "input_blocked",
@@ -259,31 +212,10 @@ class BaseAgent(ABC, BaseAgentProtocol):
                         response = ""
                     elif not isinstance(response, str):
                         response = str(response)
-                    if response is None:
-                        logger.warning(
-                            "Gemini response was None",
-                            session_id=session_id,
-                            agent_name=agent_name,
-                        )
-                        response = ""
-                    elif not isinstance(response, str):
-                        response = str(response)
 
                     span.update(output=response)
                     api_execution_time = time.time() - api_start_time
-                    span.update(output=response)
-                    api_execution_time = time.time() - api_start_time
 
-                    logger.debug(
-                        "Gemini API call completed",
-                        session_id=session_id,
-                        agent_name=agent_name,
-                        execution_time_ms=round(api_execution_time * 1000, 2),
-                        response_length=len(response),
-                        response_preview=response[:100] + "..."
-                        if len(response) > 100
-                        else response,
-                    )
                     logger.debug(
                         "Gemini API call completed",
                         session_id=session_id,
@@ -303,17 +235,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                             session_id=session_id,
                             issues=output_issues,
                         )
-                    output_safe, _, output_issues = llm_guard.scan_output(response)
-                    if not output_safe:
-                        logger.security_event(
-                            "output_sensitive_detected",
-                            agent_name=agent_name,
-                            session_id=session_id,
-                            issues=output_issues,
-                        )
 
-                    sanitizer = get_output_sanitizer()
-                    is_safe, sanitized_response, issues = sanitizer.sanitize(response)
                     sanitizer = get_output_sanitizer()
                     is_safe, sanitized_response, issues = sanitizer.sanitize(response)
 
@@ -324,15 +246,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
                             session_id=session_id,
                             issues=issues,
                         )
-                    if not is_safe:
-                        logger.security_event(
-                            "output_sanitization_blocked",
-                            agent_name=agent_name,
-                            session_id=session_id,
-                            issues=issues,
-                        )
 
-                    return sanitized_response
                     return sanitized_response
 
                 except Exception as e:
