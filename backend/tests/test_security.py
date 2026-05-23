@@ -49,7 +49,7 @@ class StubAgent:
         return self.system_prompt
 
     def process(self, input_data, context: SessionContext) -> AgentResponse:
-        self.inputs.append(input_data)
+        self.inputs.append(input_data, context)
         return AgentResponse(
             agent_name=self._name,
             content=self._content,

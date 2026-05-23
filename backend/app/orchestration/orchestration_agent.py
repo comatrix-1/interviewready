@@ -14,8 +14,11 @@ from app.models.agent import (
     ActionPlan,
     AgentInput,
     AgentResponse,
+    AgentInput,
+    AgentResponse,
     AnalysisArtifact,
     ChatRequest,
+    Intent,
     Intent,
     ResumeDocument,
 )
@@ -24,6 +27,10 @@ from app.models.session import SessionContext
 from app.orchestration.persistence import get_checkpoint_store
 from app.utils.json_parser import parse_json_payload
 from app.utils.validators import is_valid_date, is_valid_url
+
+if TYPE_CHECKING:
+    from app.agents.base import BaseAgentProtocol
+    from app.governance.sharp_governance_service import SharpGovernanceService
 
 if TYPE_CHECKING:
     from app.agents.base import BaseAgentProtocol
@@ -47,17 +54,23 @@ class OrchestrationState:
     artifacts: list[AnalysisArtifact] = field(default_factory=list)
     input: AgentInput | None = None
     resume_document: ResumeDocument | None = None
+    input: AgentInput | None = None
+    resume_document: ResumeDocument | None = None
     needs_review: bool = False
     review_payload: dict[str, Any] | None = None
+    review_payload: dict[str, Any] | None = None
     shared_memory: dict[str, Any] = field(default_factory=dict)
+    checkpoint_key: str | None = None
     checkpoint_key: str | None = None
     halt: bool = False
     review_attempts: int = 0
     index: int = 0
     response: AgentResponse | None = None
+    response: AgentResponse | None = None
 
 
 # ---------- Orchestrator ----------
+
 
 
 class OrchestrationAgent:
@@ -105,6 +118,8 @@ class OrchestrationAgent:
                 if not response:
                     msg = "No response produced"
                     raise RuntimeError(msg)
+                    msg = "No response produced"
+                    raise RuntimeError(msg)
 
                 checkpoint_id = (
                     final_state.checkpoint_key
@@ -141,8 +156,12 @@ class OrchestrationAgent:
             if not checkpoint_id:
                 msg = "checkpointId is required for rewind control"
                 raise ValueError(msg)
+                msg = "checkpointId is required for rewind control"
+                raise ValueError(msg)
             record = self.checkpoints.rewind(session_id, checkpoint_id)
             if record is None:
+                msg = "Invalid checkpointId for rewind"
+                raise ValueError(msg)
                 msg = "Invalid checkpointId for rewind"
                 raise ValueError(msg)
             state = record.state
@@ -165,6 +184,8 @@ class OrchestrationAgent:
             if record is None:
                 msg = "No checkpoint available to resume"
                 raise ValueError(msg)
+                msg = "No checkpoint available to resume"
+                raise ValueError(msg)
             state = record.state
             state.request = request
             state.context = context
@@ -179,6 +200,8 @@ class OrchestrationAgent:
             return state
 
         if control:
+            msg = f"Unsupported control operation: {control}"
+            raise ValueError(msg)
             msg = f"Unsupported control operation: {control}"
             raise ValueError(msg)
 
@@ -254,6 +277,21 @@ class OrchestrationAgent:
             state.response = resume_result
             state.halt = True
             return state
+        resume_result = self._process_resume_input(request, context)
+        if isinstance(resume_result, AgentResponse):
+            state.response = resume_result
+            state.halt = True
+            return state
+
+        (
+            resume,
+            resume_doc,
+            resume_text,
+            confidence_score,
+            low_confidence_fields,
+            validation_errors,
+            needs_review,
+        ) = resume_result
 
         (
             resume,
@@ -277,8 +315,17 @@ class OrchestrationAgent:
 
         resume_doc = resume_doc or self._build_resume_doc(resume, "resumeData")
         resume_text = resume_text or self._serialize_resume(resume)
+        resume_doc = resume_doc or self._build_resume_doc(resume, "resumeData")
+        resume_text = resume_text or self._serialize_resume(resume)
         context.resume_data = resume_text
 
+        review_payload = self._build_review_payload(
+            needs_review,
+            resume,
+            confidence_score,
+            low_confidence_fields,
+            validation_errors,
+        )
         review_payload = self._build_review_payload(
             needs_review,
             resume,
@@ -485,9 +532,13 @@ class OrchestrationAgent:
         except ValueError:
             msg = f"Unsupported intent: {raw}"
             raise ValueError(msg)
+            msg = f"Unsupported intent: {raw}"
+            raise ValueError(msg)
 
     def _get_agent(self, name: str) -> BaseAgentProtocol:
         if name not in self.agent_list:
+            msg = f"Missing agent: {name}"
+            raise RuntimeError(msg)
             msg = f"Missing agent: {name}"
             raise RuntimeError(msg)
         return self.agent_list[name]
@@ -568,6 +619,15 @@ class OrchestrationAgent:
 
     def _validate_resume_field_items(self, items: list, field_name: str) -> list[str]:
         errors: list[str] = []
+
+        for list_field in list_fields:
+            items = getattr(resume, list_field, []) or []
+            field_errors = self._validate_resume_field_items(items, list_field)
+            errors.extend(field_errors)
+        return errors
+
+    def _validate_resume_field_items(self, items: list, field_name: str) -> list[str]:
+        errors: list[str] = []
         date_fields = ["startDate", "endDate", "date"]
 
         for item in items:
@@ -594,7 +654,32 @@ class OrchestrationAgent:
             attr_value = getattr(item, attr_name, None)
             if attr_value is not None and not is_valid_date(attr_value):
                 errors.append(f"{field_name}: {attr_name}='{attr_value}'")
+        for item in items:
+            url_error = self._validate_item_url(item, field_name)
+            if url_error:
+                errors.append(url_error)
+
+            date_errors = self._validate_item_dates(item, field_name, date_fields)
+            errors.extend(date_errors)
+
         return errors
+
+    def _validate_item_url(self, item: Any, field_name: str) -> str | None:
+        url_value = getattr(item, "url", None)
+        if url_value and not is_valid_url(url_value):
+            return f"{field_name}: url='{url_value}' (invalid)"
+        return None
+
+    def _validate_item_dates(
+        self, item: Any, field_name: str, date_fields: list[str]
+    ) -> list[str]:
+        errors: list[str] = []
+        for attr_name in date_fields:
+            attr_value = getattr(item, attr_name, None)
+            if attr_value is not None and not is_valid_date(attr_value):
+                errors.append(f"{field_name}: {attr_name}='{attr_value}'")
+        return errors
+
 
     def _normalize_or_fail(
         self, request: ChatRequest, context: SessionContext
@@ -666,6 +751,7 @@ class OrchestrationAgent:
     ):
         metadata = {}
         if needs_review:
+            metadata.update({"needs_review": True})
             metadata.update({"needs_review": True})
         plan = ActionPlan(
             summary="Resume normalization failed.",

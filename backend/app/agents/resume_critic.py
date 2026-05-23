@@ -17,8 +17,10 @@ from app.utils.resume_location import resume_location_exists
 from .base import BaseAgent
 
 
+
 class ResumeCriticAgent(BaseAgent):
     """Agent for analyzing resume structure, ATS compatibility, and impact."""
+
 
     USE_MOCK_RESPONSE = settings.MOCK_RESUME_CRITIC_AGENT
     MOCK_RESPONSE_KEY = "ResumeCriticAgent"
@@ -34,6 +36,7 @@ class ResumeCriticAgent(BaseAgent):
         - The tool returns the reference date as YYYY-MMM-DD.
         - Do not infer today's date from resume content.
 
+        LOCATION FORMAT:
         LOCATION FORMAT:
         - JSON path matching the resume schema
         - e.g. work[0].highlights[1], skills[2].keywords
@@ -80,6 +83,7 @@ class ResumeCriticAgent(BaseAgent):
             name="ResumeCriticAgent",
         )
 
+
     @observe(name="resume_critic_process", as_type="agent")
     def process(self, input_data: AgentInput, context: SessionContext) -> AgentResponse:
         """Process resume text and provide critique.
@@ -92,8 +96,7 @@ class ResumeCriticAgent(BaseAgent):
             Agent response with critique and analysis
         """
         if not isinstance(input_data, AgentInput):
-            msg = "ResumeCriticAgent expects AgentInput."
-            raise TypeError(msg)
+            raise TypeError("ResumeCriticAgent expects AgentInput.")
 
         session_id = getattr(context, "session_id", "unknown")
         agent_name = self.get_name()
@@ -249,9 +252,9 @@ class ResumeCriticAgent(BaseAgent):
 
         severity_weights = {"HIGH": 1.0, "MEDIUM": 0.7, "LOW": 0.4}
         scores = [
-            severity_weights.get(i.get("severity", "LOW"), 0.4)
-            for i in issues
-            if isinstance(i, dict)
+            severity_weights.get(issue.get("severity", "LOW"), 0.4)
+            for issue in issues
+            if isinstance(issue, dict)
         ]
         return int(min(sum(scores) / len(scores), 1.0) * 100)
 

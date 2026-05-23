@@ -7,10 +7,15 @@ from dotenv import load_dotenv
 from app.agents import (
     ContentStrengthAgent,
     GeminiService,
+    ContentStrengthAgent,
+    GeminiService,
     InterviewCoachAgent,
     JobAlignmentAgent,
     ResumeCriticAgent,
+    JobAlignmentAgent,
+    ResumeCriticAgent,
 )
+from app.core.config import settings
 from app.core.config import settings
 from app.models import AgentInput, Resume, Work
 from app.models.session import SessionContext
@@ -19,16 +24,20 @@ from app.models.session import SessionContext
 load_dotenv()
 
 
+
 def test_agents():
     """Test all agent implementations."""
+
 
     # Check if API key is available
     api_key = settings.GEMINI_API_KEY
     if not api_key:
         return
 
+
     # Initialize Gemini service
     gemini_service = GeminiService(api_key=api_key)
+
 
     # Initialize agents
     agents = {
@@ -36,12 +45,15 @@ def test_agents():
         "ContentStrengthAgent": ContentStrengthAgent(gemini_service),
         "JobAlignmentAgent": JobAlignmentAgent(gemini_service),
         "InterviewCoachAgent": InterviewCoachAgent(gemini_service),
+        "InterviewCoachAgent": InterviewCoachAgent(gemini_service),
     }
+
 
     # Test data
     sample_resume = """
     John Doe
     Software Engineer
+
 
     Experience:
     - Senior Software Engineer at Tech Corp (2020-Present)
@@ -49,9 +61,11 @@ def test_agents():
       * Improved system performance by 30%
       * Implemented microservices architecture
 
+
     - Software Developer at StartupXYZ (2018-2020)
       * Developed REST APIs using Python and Django
       * Worked on various projects to improve processes
+
 
     Skills:
     - Python, Java, JavaScript
@@ -59,8 +73,10 @@ def test_agents():
     - Agile, Scrum
     """
 
+
     sample_job_description = """
     Senior Software Engineer Position
+
 
     Requirements:
     - 5+ years of software development experience
@@ -70,11 +86,13 @@ def test_agents():
     - Excellent problem-solving skills
     """
 
+
     # Create session context
     context = SessionContext(
         session_id="test_session",
         user_id="test_user",
         resume_data=sample_resume,
+        job_description=sample_job_description,
         job_description=sample_job_description,
     )
 
@@ -99,7 +117,9 @@ def test_agents():
         "InterviewCoachAgent": "INTERVIEW_COACH",
     }
 
+
     # Test each agent
+
 
     for agent_name, agent in agents.items():
         try:

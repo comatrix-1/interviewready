@@ -6,6 +6,7 @@ from langfuse import get_client
 from pydantic import BaseModel
 
 from app.agents.eval_rubrics import JUDGE_TEMPERATURE, get_rubric
+from app.agents.eval_rubrics import JUDGE_TEMPERATURE, get_rubric
 from app.core.config import settings
 from app.core.logging import logger
 
@@ -61,6 +62,12 @@ Provide a JSON response with:
         session_id: str | None = None,
         message_history: list[Any] | None = None,
         run_name: str | None = None,
+        expected_output: str | None = None,
+        trace_id: str | None = None,
+        intent: str | None = None,
+        session_id: str | None = None,
+        message_history: list[Any] | None = None,
+        run_name: str | None = None,
     ) -> JudgeEvaluation:
         """Evaluate an agent's output using LLM-as-a-judge.
 
@@ -94,6 +101,7 @@ Provide a JSON response with:
         system_prompt = self._build_system_prompt(agent_name)
 
         try:
+            usage_details: dict[str, int] | None = None
             usage_details: dict[str, int] | None = None
             if hasattr(self.gemini_service, "generate_response_with_usage"):
                 response, usage_details = (
@@ -153,6 +161,7 @@ Provide a JSON response with:
                 accuracy_score=0.5,
                 helpfulness_score=0.5,
                 reasoning=f"Evaluation failed: {e!s}",
+                reasoning=f"Evaluation failed: {e!s}",
                 concerns=["Judge evaluation unavailable"],
             )
 
@@ -166,7 +175,9 @@ Provide a JSON response with:
         input_data: str,
         output: str,
         expected_output: str | None,
+        expected_output: str | None,
         *,
+        message_history: list[Any] | None = None,
         message_history: list[Any] | None = None,
     ) -> str:
         """Build the prompt for the judge LLM."""
@@ -225,11 +236,14 @@ Provide your evaluation as valid JSON."""
     def _build_cost_details(
         self, usage_details: dict[str, int]
     ) -> dict[str, float] | None:
+        self, usage_details: dict[str, int]
+    ) -> dict[str, float] | None:
         prompt_rate = settings.JUDGE_PROMPT_COST_PER_1K_USD
         completion_rate = settings.JUDGE_COMPLETION_COST_PER_1K_USD
         if prompt_rate is None and completion_rate is None:
             return None
 
+        cost_details: dict[str, float] = {}
         cost_details: dict[str, float] = {}
         total_cost = 0.0
 
@@ -277,9 +291,13 @@ Provide your evaluation as valid JSON."""
         trace_id: str,
         agent_name: str,
         usage_details: dict[str, int],
+        usage_details: dict[str, int],
         system_prompt: str,
         judge_input: str,
         response_text: str,
+        intent: str | None = None,
+        session_id: str | None = None,
+        run_name: str | None = None,
         intent: str | None = None,
         session_id: str | None = None,
         run_name: str | None = None,
@@ -365,6 +383,9 @@ Provide your evaluation as valid JSON."""
         trace_id: str,
         agent_name: str,
         evaluation: JudgeEvaluation,
+        intent: str | None = None,
+        session_id: str | None = None,
+        run_name: str | None = None,
         intent: str | None = None,
         session_id: str | None = None,
         run_name: str | None = None,

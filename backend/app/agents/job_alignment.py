@@ -8,12 +8,6 @@ from langfuse import observe
 
 from app.core.config import settings
 from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
-from app.core.logging import logger
-from app.models.agent import AgentInput, AgentResponse, AlignmentReport
-from app.models.session import SessionContext
-from app.utils.json_parser import parse_json_object
-from app.utils.resume_location import filter_locations
-
 from .base import BaseAgent
 
 

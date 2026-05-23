@@ -110,6 +110,7 @@ class LLMGuardScanner:
 
         except Exception as e:
             logger.exception(f"LLM Guard input scan failed: {e}")
+            logger.exception(f"LLM Guard input scan failed: {e}")
             return True, prompt, []
 
     def scan_output(self, output: str) -> tuple[bool, str, list[dict[str, Any]]]:
@@ -169,6 +170,7 @@ class LLMGuardScanner:
 
         except Exception as e:
             logger.exception(f"LLM Guard output scan failed: {e}")
+            logger.exception(f"LLM Guard output scan failed: {e}")
             return True, output, []
 
     def scan_both(
@@ -189,6 +191,7 @@ class LLMGuardScanner:
         return input_safe, output_safe, input_issues + output_issues
 
 
+_llm_guard_scanner: LLMGuardScanner | None = None
 _llm_guard_scanner: LLMGuardScanner | None = None
 
 

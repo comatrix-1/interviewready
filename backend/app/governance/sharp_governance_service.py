@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models.agent import AgentResponse
+if TYPE_CHECKING:
+    from app.models.agent import AgentResponse
 
 
 class SharpGovernanceService:
@@ -45,6 +47,7 @@ class SharpGovernanceService:
         metadata["confidence_check_passed"] = confidence_check
 
         if response.agent_name == "ContentStrengthAgent":
+            self._validate_content_strength_agent(response, metadata)
             self._validate_content_strength_agent(response, metadata)
         elif response.agent_name == "InterviewCoachAgent":
             self._validate_interview_coach_agent(metadata)

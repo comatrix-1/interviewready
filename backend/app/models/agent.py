@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+
 from .resume import Resume
 
 
@@ -67,7 +68,6 @@ class ChatRequest(BaseModel):
     audioData: bytes | None = None
 
     @field_validator("audioData", mode="before")
-    @classmethod
     def decode_audio_data(cls, v):
         if isinstance(v, str):
             import base64
@@ -183,6 +183,7 @@ class ResumeCriticIssue(BaseModel):
     type: Literal["ats", "structure", "impact", "readability"]
     severity: Literal["HIGH", "MEDIUM", "LOW"]
     description: str
+
 
 
 class ResumeCriticReport(BaseModel):

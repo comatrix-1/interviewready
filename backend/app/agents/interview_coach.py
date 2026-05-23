@@ -779,10 +779,6 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         processing_start_time = time.time()
         is_follow_up = False
         user_answer = ""
-        evaluation_result: dict | None = None
-        model_answer_score: float | None = None
-        model_can_proceed: bool | None = None
-        precomputed_result: str | None = None
         method_used = "uninitialized"
         state = self._get_interview_state(context)
         security_findings: list[str] = []
@@ -790,123 +786,6 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         prompt_injection_issues: list[str] = []
 
         # Extract input
-        (
-            input_text,
-            is_follow_up,
-            user_answer,
-            evaluation_result,
-            security_findings,
-            bias_flags,
-            prompt_injection_issues,
-            precomputed_result,
-            method_used,
-            model_answer_score,
-            model_can_proceed,
-        ) = self._process_input_data(
-            input_data, context, state, session_id, security_findings, bias_flags
-        )
-
-        input_type = "audio" if isinstance(input_text, bytes) else "text"
-
-        # Log processing start
-        logger.debug(
-            "InterviewCoachAgent processing started",
-            session_id=session_id,
-            input_type=input_type,
-            input_length=len(input_text),
-        )
-
-        try:
-            result, method_used = self._generate_response(
-                input_text,
-                context,
-                session_id,
-                state,
-                prompt_injection_issues,
-                precomputed_result,
-                is_follow_up,
-                model_can_proceed,
-            )
-
-            processing_time = time.time() - processing_start_time
-            logger.debug(
-                "InterviewCoachAgent processing completed",
-                session_id=session_id,
-                input_type=input_type,
-                processing_time_ms=round(processing_time * 1000, 2),
-                method_used=method_used,
-                result_length=len(result),
-                result_preview=result[:100] + "..." if len(result) > 100 else result,
-            )
-
-            # Parse the JSON response and handle progression logic
-            response_json, method_used = self._parse_and_validate_response(
-                result,
-                context,
-                session_id,
-                state,
-                is_follow_up,
-                model_can_proceed,
-                method_used,
-            )
-
-            # Handle interview progression and response formatting
-            response_json, result, model_answer_score, model_can_proceed, state = (
-                self._handle_interview_progression(
-                    response_json,
-                    input_data,
-                    is_follow_up,
-                    user_answer,
-                    evaluation_result,
-                    context,
-                    session_id,
-                    state,
-                    method_used,
-                )
-            )
-
-            # Build final response with metadata
-            return self._build_agent_response(
-                input_text,
-                context,
-                session_id,
-                method_used,
-                security_findings,
-                prompt_injection_issues,
-                bias_flags,
-                model_answer_score,
-                model_can_proceed,
-                response_json,
-            )
-
-        except Exception as e:
-            processing_time = time.time() - processing_start_time
-            logger.log_agent_error(agent_name, e, session_id)
-            logger.error(
-                "InterviewCoachAgent processing failed",
-                session_id=session_id,
-                processing_time_ms=round(processing_time * 1000, 2),
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-            raise
-
-    def _process_input_data(
-        self,
-        input_data: AgentInput | str | bytes,
-        context: SessionContext,
-        state: dict,
-        session_id: str,
-        security_findings: list[str],
-        bias_flags: list[str],
-    ) -> tuple:
-        """Process input data and extract relevant information.
-
-        Returns:
-            tuple: (input_text, is_follow_up, user_answer, evaluation_result,
-                   security_findings, bias_flags, prompt_injection_issues,
-                   precomputed_result, method_used, model_answer_score, model_can_proceed)
-        """
         if isinstance(input_data, AgentInput):
             if input_data.audio_data is not None:
                 return self._process_audio_input(input_data.audio_data)
@@ -1592,119 +1471,31 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                 ):
                     response_json.pop(hidden_field, None)
 
-        return response_json
+                if (
+                    response_json.get("question")
+                    and response_json.get("current_question_number", state["current_question_index"] + 1)
+                    == state["current_question_index"] + 1
+                    and model_can_proceed is not False
+                ):
+                    self._store_question_if_new(response_json["question"], context)
+                result = json.dumps(response_json)
+                if state["current_question_index"] >= state["total_questions"]:
+                    self._set_interview_complete(context)
 
-    def _store_question_if_appropriate(
-        self,
-        response_json: dict,
-        state: dict,
-        model_can_proceed: bool | None,
-        context: SessionContext,
-    ) -> None:
-        """Store question if it's new and appropriate."""
-        if (
-            response_json.get("question")
-            and response_json.get(
-                "current_question_number", state["current_question_index"] + 1
+            # Build decision trace for auditability
+            input_type = "audio" if isinstance(input_text, bytes) else "text"
+            state = self._get_interview_state(context)
+            current_question_number = min(
+                state["current_question_index"] + 1,
+                state["total_questions"],
             )
-            == state["current_question_index"] + 1
-            and model_can_proceed is not False
-        ):
-            self._store_question_if_new(response_json["question"], context)
-
-    def _build_agent_response(
-        self,
-        input_text: str | bytes,
-        context: SessionContext,
-        session_id: str,
-        method_used: str,
-        security_findings: list[str],
-        prompt_injection_issues: list[str],
-        bias_flags: list[str],
-        model_answer_score: float | None,
-        model_can_proceed: bool | None,
-        content: dict[str, Any] | list[Any],
-    ) -> AgentResponse:
-        """Build the final AgentResponse with decision trace and SHARP metadata."""
-        input_type = "audio" if isinstance(input_text, bytes) else "text"
-        state = self._get_interview_state(context)
-        current_question_number = min(
-            state["current_question_index"] + 1,
-            state["total_questions"],
-        )
-
-        decision_trace = self._build_decision_trace(
-            method_used,
-            input_type,
-            current_question_number,
-            state,
-            security_findings,
-            prompt_injection_issues,
-            bias_flags,
-        )
-
-        sharp_metadata = self._build_sharp_metadata(
-            input_type,
-            method_used,
-            current_question_number,
-            state,
-            security_findings,
-            prompt_injection_issues,
-            bias_flags,
-            model_answer_score,
-            model_can_proceed,
-        )
-
-        analysis_type = (
-            "interview_coaching_audio"
-            if input_type == "audio"
-            else "interview_coaching"
-        )
-
-        response = AgentResponse(
-            agent_name=self.get_name(),
-            content=content,
-            reasoning=(
-                "Generated interview coaching based on resume-job alignment and "
-                "answer-quality heuristics, with explainable score and progression metadata."
-            ),
-            confidence_score=self.CONFIDENCE_SCORE,
-            needs_review=bool(sharp_metadata.get("human_review_recommended")),
-            low_confidence_fields=[],
-            decision_trace=decision_trace,
-            sharp_metadata=sharp_metadata,
-        )
-
-        logger.debug(
-            "InterviewCoachAgent response created",
-            session_id=session_id,
-            input_type=input_type,
-            confidence_score=self.CONFIDENCE_SCORE,
-            analysis_type=analysis_type,
-            method_used=method_used,
-            question_number=current_question_number,
-        )
-
-        return response
-
-    def _build_decision_trace(
-        self,
-        method_used: str,
-        input_type: str,
-        current_question_number: int,
-        state: dict,
-        security_findings: list[str],
-        prompt_injection_issues: list[str],
-        bias_flags: list[str],
-    ) -> list[str]:
-        """Build decision trace for auditability."""
-        decision_trace = [
-            f"InterviewCoachAgent: Processing interview question {current_question_number} of {state['total_questions']}",
-            f"InterviewCoachAgent: Generated targeted interview question for {input_type} input",
-            f"InterviewCoachAgent: Used coaching model with confidence {self.CONFIDENCE_SCORE}",
-            f"InterviewCoachAgent: Method used: {method_used}",
-            "InterviewCoachAgent: Scoring factors include answer relevance, job alignment, detail depth, and STAR-style structure",
-        ]
+            decision_trace = [
+                f"InterviewCoachAgent: Processing interview question {current_question_number} of {state['total_questions']}",
+                f"InterviewCoachAgent: Generated targeted interview question for {input_type} input",
+                f"InterviewCoachAgent: Used coaching model with confidence {self.CONFIDENCE_SCORE}",
+                f"InterviewCoachAgent: Method used: {method_used}",
+                "InterviewCoachAgent: Scoring factors include answer relevance, job alignment, detail depth, and STAR-style structure",
+            ]
 
         # Add method used to trace
         if method_used == "gemini_live":
@@ -1737,51 +1528,114 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                 "InterviewCoachAgent: Detected potentially biased hiring-language signals and excluded them from coaching logic"
             )
 
-        return decision_trace
-
-    def _build_sharp_metadata(
-        self,
-        input_type: str,
-        method_used: str,
-        current_question_number: int,
-        state: dict,
-        security_findings: list[str],
-        prompt_injection_issues: list[str],
-        bias_flags: list[str],
-        model_answer_score: float | None,
-        model_can_proceed: bool | None,
-    ) -> dict:
-        """Build SHARP metadata for governance and auditability."""
-        sharp_metadata: dict[str, Any] = {
-            "analysis_type": (
-                "interview_coaching_audio" if input_type == "audio"
+            # Create SHARP metadata
+            analysis_type = (
+                "interview_coaching_audio"
+                if input_type == "audio"
                 else "interview_coaching"
-            ),
-            "confidence_score": self.CONFIDENCE_SCORE,
-            "gemini_live_available": method_used
-            in ("gemini_live", "gemini_live_audio"),
-            "method_used": method_used,
-            "input_type": input_type,
-            "current_question_number": current_question_number,
-            "total_questions": state["total_questions"],
-            "prompt_injection_blocked": bool(prompt_injection_issues),
-            "prompt_injection_signals": prompt_injection_issues,
-            "agent_security_risks": self._AGENT_SECURITY_RISKS,
-            "security_mitigations": self._SECURITY_MITIGATIONS,
-            "responsible_ai": self._RESPONSIBLE_AI,
-            "sensitive_input_detected": bool(security_findings),
-            "sensitive_input_types": sorted(set(security_findings)),
-            "bias_review_required": bool(bias_flags),
-            "bias_flags": sorted(set(bias_flags)),
-            "human_review_recommended": bool(
+            )
+            sharp_metadata = {
+                "analysis_type": analysis_type,
+                "confidence_score": self.CONFIDENCE_SCORE,
+                "gemini_live_available": (
+                    method_used in ["gemini_live", "gemini_live_audio"]
+                ),
+                "method_used": method_used,
+                "input_type": input_type,
+                "current_question_number": current_question_number,
+                "total_questions": state["total_questions"],
+                "prompt_injection_blocked": bool(prompt_injection_issues),
+                "prompt_injection_signals": prompt_injection_issues,
+                "agent_security_risks": [
+                    "prompt_injection_via_candidate_input",
+                    "pii_exposure_in_resume_or_answers",
+                    "biased_or_discriminatory_questioning",
+                    "unsafe_retention_of_sensitive_interview_content",
+                ],
+                "security_mitigations": {
+                    "code_level": [
+                        "BaseAgent prompt-injection scanning before model calls",
+                        "output sanitization for prompt leakage and dangerous content",
+                        "PII redaction before interview prompts and completion summaries",
+                    ],
+                    "workflow_level": [
+                        "governance audit after orchestration",
+                        "human review recommendation when bias or sensitive-content signals appear",
+                        "CI checks for interview security and governance tests",
+                    ],
+                },
+                "responsible_ai": {
+                    "development_alignment": [
+                        "schema-constrained JSON outputs for predictable behavior",
+                        "defense-in-depth scanning in the base agent",
+                        "auditable decision traces and structured metadata",
+                    ],
+                    "deployment_alignment": [
+                        "post-response governance audit",
+                        "deployment workflow includes security scanning and targeted backend tests",
+                        "Langfuse-compatible tracing for traceability",
+                    ],
+                    "explainability": {
+                        "decision_basis": [
+                            "resume-job alignment",
+                            "question relevance",
+                            "answer completeness",
+                            "STAR-method structure",
+                        ],
+                        "user_visible_fields": [
+                            "feedback",
+                            "answer_score",
+                            "can_proceed",
+                            "next_challenge",
+                        ],
+                    },
+                    "bias_mitigation": [
+                        "do not infer protected attributes",
+                        "detect biased job-description signals",
+                        "focus coaching on evidence and job-relevant behavior",
+                    ],
+                    "sensitive_content_handling": [
+                        "direct identifiers are redacted before model prompts",
+                        "redacted answers are used for completion summaries",
+                        "sensitive-content signals trigger governance review metadata",
+                    ],
+                    "governance_alignment": [
+                        "SHARP metadata attached to each response",
+                        "governance service can flag human review needs",
+                    ],
+                    "imda_model_ai_governance_framework_alignment": {
+                        "internal_governance_structures_and_measures": [
+                            "agent-specific risks and mitigations are attached as structured metadata",
+                            "security and governance tests are enforced in CI before deployment",
+                        ],
+                        "human_involvement_in_ai_augmented_decision_making": [
+                            "human review is recommended for sensitive or bias-related cases",
+                            "agent output is advisory coaching rather than autonomous hiring action",
+                        ],
+                        "operations_management": [
+                            "prompt-injection screening and output sanitization",
+                            "PII redaction before prompts and redacted summary generation",
+                            "governance audit after orchestration",
+                        ],
+                        "stakeholder_interaction_and_communication": [
+                            "reasoning, feedback, answer_score, and can_proceed expose decision basis",
+                            "decision_trace captures method path and safety interventions",
+                        ],
+                    },
+                },
+            }
+            sharp_metadata["sensitive_input_detected"] = bool(security_findings)
+            sharp_metadata["sensitive_input_types"] = sorted(set(security_findings))
+            sharp_metadata["bias_review_required"] = bool(bias_flags)
+            sharp_metadata["bias_flags"] = sorted(set(bias_flags))
+            sharp_metadata["human_review_recommended"] = bool(
                 security_findings or bias_flags or prompt_injection_issues
-            ),
-        }
+            )
+            if model_answer_score is not None:
+                sharp_metadata["answer_score"] = round(float(model_answer_score), 2)
 
-        if model_answer_score is not None:
-            sharp_metadata["answer_score"] = round(float(model_answer_score), 2)
-        if model_can_proceed is not None:
-            sharp_metadata["can_proceed"] = model_can_proceed
+            if model_can_proceed is not None:
+                sharp_metadata["can_proceed"] = model_can_proceed
 
         return sharp_metadata
 

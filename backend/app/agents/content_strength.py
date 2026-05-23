@@ -3,6 +3,7 @@
 import json
 import time
 from typing import Any
+from typing import Any
 
 from langfuse import observe
 
@@ -16,11 +17,13 @@ from app.utils.resume_location import resume_location_exists
 from .base import BaseAgent
 
 
+
 class ContentStrengthAgent(BaseAgent):
     """Agent for analyzing content strength, skills reasoning, and evidence evaluation."""
 
     USE_MOCK_RESPONSE = settings.MOCK_CONTENT_STRENGTH_AGENT
     MOCK_RESPONSE_KEY = "ContentStrengthAgent"
+
 
     SYSTEM_PROMPT = (
         """
@@ -63,6 +66,8 @@ class ContentStrengthAgent(BaseAgent):
         """
         + RESUME_SCHEMA
         + ANTI_JAILBREAK_DIRECTIVE
+        + RESUME_SCHEMA
+        + ANTI_JAILBREAK_DIRECTIVE
     )
 
     _EVIDENCE_WEIGHTS = {"HIGH": 1.0, "MEDIUM": 0.65, "LOW": 0.3}
@@ -72,6 +77,7 @@ class ContentStrengthAgent(BaseAgent):
         "structure": 0.05,
         "specificity": 0.2,
     }
+
 
     def __init__(self, gemini_service):
         """Initialize Content Strength Agent.
@@ -85,6 +91,7 @@ class ContentStrengthAgent(BaseAgent):
             name="ContentStrengthAgent",
         )
 
+
     @observe(name="content_strength_process", as_type="agent")
     def process(self, input_data: AgentInput, context: SessionContext) -> AgentResponse:
         """Process resume text and analyze content strength.
@@ -97,6 +104,8 @@ class ContentStrengthAgent(BaseAgent):
             Agent response with content strength analysis
         """
         if not isinstance(input_data, AgentInput):
+            msg = "ContentStrengthAgent expects AgentInput."
+            raise TypeError(msg)
             msg = "ContentStrengthAgent expects AgentInput."
             raise TypeError(msg)
 
@@ -122,6 +131,7 @@ class ContentStrengthAgent(BaseAgent):
             )
             structured_result = validated.model_dump()
 
+            resume_payload: dict[str, Any] = {}
             resume_payload: dict[str, Any] = {}
             if input_data.resume is not None:
                 resume_payload = input_data.resume.model_dump(exclude_none=True)
@@ -238,6 +248,8 @@ class ContentStrengthAgent(BaseAgent):
             self._SUGGESTION_RISK.get(s.get("type", ""), 0.1)
             for s in suggestions
             if isinstance(s, dict)
+            for s in suggestions
+            if isinstance(s, dict)
         ]
         return round(max(risks, default=0.0), 3)
 
@@ -319,6 +331,7 @@ class ContentStrengthAgent(BaseAgent):
 
     @staticmethod
     def _build_prompt(input_data: AgentInput) -> str:
+        resume_data: dict[str, Any] = {}
         resume_data: dict[str, Any] = {}
         if input_data.resume is not None:
             resume_data = input_data.resume.model_dump(exclude_none=True)

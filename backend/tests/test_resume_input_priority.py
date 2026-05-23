@@ -39,7 +39,7 @@ class StubAgent:
     def process(
         self, input_data: AgentInput | str | bytes, context: SessionContext
     ) -> AgentResponse:
-        self.inputs.append(input_data)
+        self.inputs.append(input_data, context)
         return AgentResponse(
             agent_name=self._name,
             content={"ok": True},
@@ -60,7 +60,7 @@ class StubExtractorAgent(StubAgent):
         self, input_data: AgentInput | str | bytes, context: SessionContext
     ) -> AgentResponse:
         self.calls += 1
-        self.inputs.append(input_data)
+        self.inputs.append(input_data, context)
         return AgentResponse(
             agent_name=self._name,
             content={"work": [{"name": "Extracted from PDF"}]},
