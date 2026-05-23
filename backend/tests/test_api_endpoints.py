@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -14,7 +14,7 @@ from app.models import AgentResponse, ChatRequest
 class StubOrchestrator:
     """Deterministic orchestrator stub for endpoint schema tests."""
 
-    def orchestrate(self, request: ChatRequest, context) -> AgentResponse:  # noqa: ANN001
+    def orchestrate(self, request: ChatRequest, context) -> AgentResponse:
         if request.intent == "RESUME_CRITIC":
             payload = {
                 "score": 88,
@@ -24,7 +24,7 @@ class StubOrchestrator:
             }
             return AgentResponse(
                 agent_name="ResumeCriticAgent",
-                content=json.dumps(payload),
+                content=payload,
             )
         if request.intent == "CONTENT_STRENGTH":
             payload = {
@@ -60,7 +60,7 @@ class StubOrchestrator:
             }
             return AgentResponse(
                 agent_name="ContentStrengthAgent",
-                content=json.dumps(payload),
+                content=payload,
             )
         if request.intent == "ALIGNMENT":
             payload = {
@@ -73,12 +73,12 @@ class StubOrchestrator:
             }
             return AgentResponse(
                 agent_name="JobAlignmentAgent",
-                content=json.dumps(payload),
+                content=payload,
             )
 
         return AgentResponse(
             agent_name="InterviewCoachAgent",
-            content="Tell me about a challenging project you delivered end-to-end.",
+            content={"question": "Tell me about a challenging project you delivered end-to-end."},
         )
 
 
@@ -153,7 +153,7 @@ def test_agents_and_chat():
     } <= set(alignment_payload.keys())
 
     assert interview_response.status_code == 200
-    assert isinstance(interview_response.json()["payload"], str)
+    assert isinstance(interview_response.json()["payload"], dict)
 
 
 def test_chat_rejects_invalid_intent():

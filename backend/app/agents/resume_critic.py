@@ -3,20 +3,23 @@
 import json
 import time
 from datetime import date
-from typing import Any, Dict
+from typing import Any
 
 from langfuse import observe
 
+from app.core.config import settings
+from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
+from app.core.logging import logger
+from app.models.agent import AgentInput, AgentResponse, ResumeCriticReport
+from app.models.session import SessionContext
+from app.utils.resume_location import resume_location_exists
+
 from .base import BaseAgent
-from ..core.logging import logger
-from ..core.config import settings
-from ..core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
-from ..models.agent import AgentResponse, ResumeCriticReport, AgentInput
-from ..models.session import SessionContext
-from ..utils.resume_location import resume_location_exists
+
 
 class ResumeCriticAgent(BaseAgent):
     """Agent for analyzing resume structure, ATS compatibility, and impact."""
+
     USE_MOCK_RESPONSE = settings.MOCK_RESUME_CRITIC_AGENT
     MOCK_RESPONSE_KEY = "ResumeCriticAgent"
 
@@ -31,7 +34,7 @@ class ResumeCriticAgent(BaseAgent):
         - The tool returns the reference date as YYYY-MMM-DD.
         - Do not infer today's date from resume content.
 
-        LOCATION FORMAT: 
+        LOCATION FORMAT:
         - JSON path matching the resume schema
         - e.g. work[0].highlights[1], skills[2].keywords
         - Do not suggest new JSON paths
@@ -63,7 +66,7 @@ class ResumeCriticAgent(BaseAgent):
         """
         + RESUME_SCHEMA
         + ANTI_JAILBREAK_DIRECTIVE
-)
+    )
 
     def __init__(self, gemini_service):
         """Initialize Resume Critic Agent.
@@ -76,11 +79,9 @@ class ResumeCriticAgent(BaseAgent):
             system_prompt=self.SYSTEM_PROMPT,
             name="ResumeCriticAgent",
         )
-    
+
     @observe(name="resume_critic_process", as_type="agent")
-    def process(
-        self, input_data: AgentInput, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput, context: SessionContext) -> AgentResponse:
         """Process resume text and provide critique.
 
         Args:
@@ -91,7 +92,8 @@ class ResumeCriticAgent(BaseAgent):
             Agent response with critique and analysis
         """
         if not isinstance(input_data, AgentInput):
-            raise TypeError("ResumeCriticAgent expects AgentInput.")
+            msg = "ResumeCriticAgent expects AgentInput."
+            raise TypeError(msg)
 
         session_id = getattr(context, "session_id", "unknown")
         agent_name = self.get_name()
@@ -126,18 +128,24 @@ class ResumeCriticAgent(BaseAgent):
                 return self._resolve_reference_date(context)
 
             tools = [get_reference_date]
-            raw_result = raw_result or self.call_gemini(input_text, context, tools=tools)
+            raw_result = raw_result or self.call_gemini(
+                input_text, context, tools=tools
+            )
 
             # Extract just the critique part if the LLM wrapped it, or use the whole thing
             parsed = self._parse_json(raw_result)
-            critique_data = parsed.get("critique", parsed) if isinstance(parsed, dict) else {}
-            
+            critique_data = (
+                parsed.get("critique", parsed) if isinstance(parsed, dict) else {}
+            )
+
             # Re-serialize for parse_and_validate
             raw_critique = json.dumps(critique_data)
 
-            structured_result = self.parse_and_validate(raw_critique, ResumeCriticReport).model_dump()
+            structured_result = self.parse_and_validate(
+                raw_critique, ResumeCriticReport
+            ).model_dump()
 
-            resume_payload: Dict[str, Any] = {}
+            resume_payload: dict[str, Any] = {}
             if input_data.resume is not None:
                 resume_payload = input_data.resume.model_dump(exclude_none=True)
 
@@ -147,7 +155,9 @@ class ResumeCriticAgent(BaseAgent):
                     issue
                     for issue in issues
                     if isinstance(issue, dict)
-                    and resume_location_exists(resume_payload, issue.get("location", ""))
+                    and resume_location_exists(
+                        resume_payload, issue.get("location", "")
+                    )
                 ]
                 removed = len(issues) - len(valid_issues)
                 structured_result["issues"] = valid_issues
@@ -155,29 +165,34 @@ class ResumeCriticAgent(BaseAgent):
                 removed = 0
 
             processing_time = time.time() - processing_start_time
-            
-            logger.debug("ResumeCriticAgent processing completed",
-                        session_id=session_id,
-                        processing_time_ms=round(processing_time * 1000, 2))
 
-            confidence = self._calculate_confidence(structured_result)
-            structured_result["score"] = confidence
+            logger.debug(
+                "ResumeCriticAgent processing completed",
+                session_id=session_id,
+                processing_time_ms=round(processing_time * 1000, 2),
+            )
+
+            score_100 = self._calculate_confidence(structured_result)
+            confidence_score = round(score_100 / 100.0, 4)
+            structured_result["score"] = score_100
             decision_trace = [
                 "ResumeCriticAgent: Analyzed resume structure and content impact",
-                f"ResumeCriticAgent: Generated critique with confidence {confidence}",
+                f"ResumeCriticAgent: Generated critique with confidence {confidence_score}",
             ]
             sharp_metadata = {
                 "analysis_type": "resume_critique",
-                "confidence_score": confidence,
+                "confidence_score": confidence_score,
                 "ats_compatibility_checked": True,
                 "locationsFiltered": removed,
             }
 
             response = AgentResponse(
                 agent_name=self.get_name(),
-                content=json.dumps(structured_result, indent=2),
+                content=structured_result,
                 reasoning="Analyzed resume structure and content impact.",
-                confidence_score=confidence,
+                confidence_score=confidence_score,
+                needs_review=confidence_score < 0.3,
+                low_confidence_fields=[],
                 decision_trace=decision_trace,
                 sharp_metadata=sharp_metadata,
             )
@@ -185,7 +200,7 @@ class ResumeCriticAgent(BaseAgent):
             logger.debug(
                 "ResumeCriticAgent response created",
                 session_id=session_id,
-                confidence_score=confidence,
+                confidence_score=confidence_score,
                 analysis_type="resume_critique",
                 ats_compatibility_checked=True,
             )
@@ -203,37 +218,14 @@ class ResumeCriticAgent(BaseAgent):
             )
             raise
 
-    def _parse_json(self, text: str) -> Dict[str, Any]:
-        """Parse JSON from raw or fenced markdown text."""
-        if not text:
-            return {}
+    def _parse_json(self, text: str) -> dict[str, Any]:
+        """Parse JSON from raw or fenced markdown text.
 
-        # Remove markdown code blocks if the AI ignored instructions
-        text = text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
+        Delegates to the shared parse_json_object utility.
+        """
+        from app.utils.json_parser import parse_json_object
 
-        try:
-            return json.loads(text)
-        except Exception as e:
-            logger.warning(f"Direct JSON parse failed, trying regex: {e}")
-
-        # If it still fails, find the first { and last }
-        try:
-            start_idx = text.find("{")
-            end_idx = text.rfind("}")
-            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                json_str = text[start_idx : end_idx + 1]
-                return json.loads(json_str)
-        except Exception as e:
-            logger.error(f"Failed to parse JSON using regex extraction: {e}")
-
-        return {}
+        return parse_json_object(text)
 
     @staticmethod
     def _build_prompt(context: SessionContext) -> str:
@@ -249,8 +241,8 @@ class ResumeCriticAgent(BaseAgent):
                 if ref_date:
                     return str(ref_date)
         return date.today().strftime("%Y-%b-%d")
-    
-    def _calculate_confidence(self, result: Dict[str, Any]) -> int:
+
+    def _calculate_confidence(self, result: dict[str, Any]) -> int:
         issues = result.get("issues") or []
         if not issues:
             return 50
@@ -258,7 +250,8 @@ class ResumeCriticAgent(BaseAgent):
         severity_weights = {"HIGH": 1.0, "MEDIUM": 0.7, "LOW": 0.4}
         scores = [
             severity_weights.get(i.get("severity", "LOW"), 0.4)
-            for i in issues if isinstance(i, dict)
+            for i in issues
+            if isinstance(i, dict)
         ]
         return int(min(sum(scores) / len(scores), 1.0) * 100)
 

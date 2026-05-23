@@ -1,0 +1,32 @@
+You are Claude Code. Task: ANALYZE only — do NOT modify files or run any commands. Working directory is the repo root.
+
+Goal
+- Analyze the high-complexity functions in backend/app/agents and produce a compact, actionable refactor plan that can be executed in small, reviewable commits.
+
+Targets
+- backend/app/agents/interview_coach.py  (function: process)
+- backend/app/agents/job_alignment.py   (function: _parse_json)
+- backend/app/agents/content_strength.py (scan for hotspots)
+
+Requirements
+1) For each target function, list the root causes of high cyclomatic complexity (specific lines/constructs: nested ifs, long switch/case, multi-responsibility, inlined parsing, try/except blocks, large loops, etc.).
+2) Propose a minimal sequence of refactor steps (numbered). Each step should be small enough to be a single commit (e.g., extract helper, replace nested if with guard clauses, split function into A and B). For each step list:
+   - description
+   - files to change
+   - expected tests to add or update (if any)
+   - estimated reduction in complexity (low/medium/high)
+   - estimated risk (low/medium/high) and reason
+3) Produce an ordered plan of at most 6 steps that achieves noticeable complexity reduction while preserving behavior.
+4) For each proposed step, provide the exact git commands I should run to create a branch, apply a patch file (you may give a git-apply patch template), run tests, and commit. (I will run these later.)
+5) Return output as JSON only, with fields:
+   - summary: short text
+   - root_causes: array of "file:function - brief cause"
+   - plan: array of step objects {id:int, title:string, description:string, files:[...], tests:[...], estimated_complexity_reduction:string, risk:string, git_commands:[...]}
+   - files_to_review: array of file paths you think will be touched
+   - notes: any blocking issues (missing tests, external deps, ambiguous behavior)
+
+Constraints
+- Do NOT edit any files. Read-only analysis only.
+- Keep JSON compact and machine-readable. Avoid extra commentary outside JSON.
+
+End.

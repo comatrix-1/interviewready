@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue *)",
+      "Bash(uv run *)",
+      "Bash(pip install *)",
+      "Bash(radon cc *)",
+      "Bash(git commit *)",
+      "Bash(pip list *)"
+    ]
+  }
+}

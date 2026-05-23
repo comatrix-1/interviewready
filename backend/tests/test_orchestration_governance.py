@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.governance import SharpGovernanceService
 from app.models.agent import AgentResponse, ChatRequest
-from app.models import AgentInput
 from app.models.session import SessionContext
 from app.orchestration import OrchestrationAgent
+
+if TYPE_CHECKING:
+    from app.models import AgentInput
 
 
 class StubAgent:
@@ -33,9 +37,11 @@ class StubAgent:
         self.inputs.append(input_data)
         return AgentResponse(
             agent_name=self._name,
-            content=f"{self._name} processed",
+            content={"message": f"{self._name} processed"},
             reasoning=f"{self._name} reasoning",
             confidence_score=self._confidence,
+            needs_review=self._confidence < 0.3,
+            low_confidence_fields=[],
             decision_trace=[],
             sharp_metadata={},
         )
@@ -45,9 +51,11 @@ def test_governance_flags_low_confidence() -> None:
     governance = SharpGovernanceService()
     response = AgentResponse(
         agent_name="ResumeCriticAgent",
-        content="analysis",
+        content={"analysis": "analysis"},
         reasoning="reasoning",
         confidence_score=0.1,
+        needs_review=True,
+        low_confidence_fields=[],
         decision_trace=[],
         sharp_metadata={},
     )
@@ -61,20 +69,27 @@ def test_governance_flags_low_confidence() -> None:
 
 def test_governance_content_strength_audit_flags_unfaithful() -> None:
     governance = SharpGovernanceService()
-    content = """
-    {
-      "skills": [{"name": "Python", "evidenceStrength": "HIGH"}],
-      "achievements": [{"description": "Increased throughput", "quantifiable": true}],
-      "suggestions": [{"original": "did things", "suggested": "scaled platform", "faithful": false}],
-      "hallucinationRisk": 0.8,
-      "summary": "summary"
-    }
-    """
     response = AgentResponse(
         agent_name="ContentStrengthAgent",
-        content=content,
+        content={
+            "skills": [{"name": "Python", "evidenceStrength": "HIGH"}],
+            "achievements": [
+                {"description": "Increased throughput", "quantifiable": True}
+            ],
+            "suggestions": [
+                {
+                    "original": "did things",
+                    "suggested": "scaled platform",
+                    "faithful": False,
+                }
+            ],
+            "hallucinationRisk": 0.8,
+            "summary": "summary",
+        },
         reasoning="summary",
         confidence_score=0.9,
+        needs_review=False,
+        low_confidence_fields=[],
         decision_trace=[],
         sharp_metadata={},
     )
@@ -91,9 +106,11 @@ def test_governance_preserves_interview_metadata_and_flags_sensitive_content() -
     governance = SharpGovernanceService()
     response = AgentResponse(
         agent_name="InterviewCoachAgent",
-        content='{"question":"Q1","can_proceed":true}',
+        content={"question": "Q1", "can_proceed": True},
         reasoning="interview reasoning",
         confidence_score=0.9,
+        needs_review=True,
+        low_confidence_fields=[],
         decision_trace=[],
         sharp_metadata={
             "sensitive_input_detected": True,
@@ -106,7 +123,9 @@ def test_governance_preserves_interview_metadata_and_flags_sensitive_content() -
 
     audited = governance.audit(response, "resume input")
 
-    assert audited.sharp_metadata["responsible_ai"]["explainability"]["decision_basis"] == ["job alignment"]
+    assert audited.sharp_metadata["responsible_ai"]["explainability"][
+        "decision_basis"
+    ] == ["job alignment"]
     assert audited.sharp_metadata["governance_audit"] == "flagged"
     assert "sensitive_interview_content" in audited.sharp_metadata["audit_flags"]
     assert "bias_review_required" in audited.sharp_metadata["audit_flags"]
@@ -117,9 +136,11 @@ def test_governance_flags_prompt_injection_attempts_for_interview_agent() -> Non
     governance = SharpGovernanceService()
     response = AgentResponse(
         agent_name="InterviewCoachAgent",
-        content='{"question":"Q2","can_proceed":false}',
+        content={"question": "Q2", "can_proceed": False},
         reasoning="interview reasoning",
         confidence_score=0.9,
+        needs_review=True,
+        low_confidence_fields=[],
         decision_trace=[],
         sharp_metadata={
             "prompt_injection_blocked": True,
@@ -151,7 +172,7 @@ def test_orchestration_routes_resume_critic_intent() -> None:
         intent="RESUME_CRITIC",
         resumeData={"skills": [{"name": "Python"}]},
         jobDescription="",
-        messageHistory=[]
+        messageHistory=[],
     )
     result = orchestrator.orchestrate(request, context)
 
@@ -178,7 +199,7 @@ def test_orchestration_routes_alignment_intent() -> None:
         intent="ALIGNMENT",
         resumeData={"skills": [{"name": "Python"}]},
         jobDescription="",
-        messageHistory=[]
+        messageHistory=[],
     )
     result = orchestrator.orchestrate(request, context)
 

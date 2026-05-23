@@ -1,12 +1,13 @@
 """LLM-as-a-judge evaluator for agent outputs."""
 
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel
-from langfuse import get_client
+from typing import Any
 
+from langfuse import get_client
+from pydantic import BaseModel
+
+from app.agents.eval_rubrics import JUDGE_TEMPERATURE, get_rubric
 from app.core.config import settings
 from app.core.logging import logger
-from app.agents.eval_rubrics import JUDGE_TEMPERATURE, get_rubric
 
 
 class JudgeEvaluation(BaseModel):
@@ -54,12 +55,12 @@ Provide a JSON response with:
         agent_name: str,
         input_data: str,
         output: str,
-        expected_output: Optional[str] = None,
-        trace_id: Optional[str] = None,
-        intent: Optional[str] = None,
-        session_id: Optional[str] = None,
-        message_history: Optional[List[Any]] = None,
-        run_name: Optional[str] = None,
+        expected_output: str | None = None,
+        trace_id: str | None = None,
+        intent: str | None = None,
+        session_id: str | None = None,
+        message_history: list[Any] | None = None,
+        run_name: str | None = None,
     ) -> JudgeEvaluation:
         """Evaluate an agent's output using LLM-as-a-judge.
 
@@ -93,7 +94,7 @@ Provide a JSON response with:
         system_prompt = self._build_system_prompt(agent_name)
 
         try:
-            usage_details: Optional[Dict[str, int]] = None
+            usage_details: dict[str, int] | None = None
             if hasattr(self.gemini_service, "generate_response_with_usage"):
                 response, usage_details = (
                     self.gemini_service.generate_response_with_usage(
@@ -151,7 +152,7 @@ Provide a JSON response with:
                 quality_score=0.5,
                 accuracy_score=0.5,
                 helpfulness_score=0.5,
-                reasoning=f"Evaluation failed: {str(e)}",
+                reasoning=f"Evaluation failed: {e!s}",
                 concerns=["Judge evaluation unavailable"],
             )
 
@@ -164,9 +165,9 @@ Provide a JSON response with:
         agent_name: str,
         input_data: str,
         output: str,
-        expected_output: Optional[str],
+        expected_output: str | None,
         *,
-        message_history: Optional[List[Any]] = None,
+        message_history: list[Any] | None = None,
     ) -> str:
         """Build the prompt for the judge LLM."""
         prompt = f"""Evaluate the following agent output from '{agent_name}'.
@@ -200,7 +201,6 @@ Provide your evaluation as valid JSON."""
 
     def _parse_judge_response(self, response: str) -> JudgeEvaluation:
         """Parse the judge's JSON response into a JudgeEvaluation."""
-        import json
         from app.utils.json_parser import parse_json_object
 
         parsed = parse_json_object(response)
@@ -223,14 +223,14 @@ Provide your evaluation as valid JSON."""
         )
 
     def _build_cost_details(
-        self, usage_details: Dict[str, int]
-    ) -> Optional[Dict[str, float]]:
+        self, usage_details: dict[str, int]
+    ) -> dict[str, float] | None:
         prompt_rate = settings.JUDGE_PROMPT_COST_PER_1K_USD
         completion_rate = settings.JUDGE_COMPLETION_COST_PER_1K_USD
         if prompt_rate is None and completion_rate is None:
             return None
 
-        cost_details: Dict[str, float] = {}
+        cost_details: dict[str, float] = {}
         total_cost = 0.0
 
         prompt_tokens = usage_details.get("prompt_tokens")
@@ -246,34 +246,53 @@ Provide your evaluation as valid JSON."""
         cost_details["total"] = total_cost
         return cost_details
 
+    def _build_judge_metadata(
+        self,
+        agent_name: str,
+        usage_details: dict[str, int],
+        cost_details: dict[str, float] | None,
+        model_name: str | None,
+        *,
+        intent: str | None = None,
+        session_id: str | None = None,
+        run_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Build metadata dict for judge logging, with optional context fields."""
+        metadata: dict[str, Any] = {
+            "agent": agent_name,
+            "evaluator": "llm-as-a-judge",
+            "usage_details": usage_details,
+        }
+        for key, val in (("intent", intent), ("session_id", session_id), ("run_name", run_name)):
+            if val:
+                metadata[key] = val
+        if cost_details is not None:
+            metadata["cost_details"] = cost_details
+        if model_name:
+            metadata["model"] = model_name
+        return metadata
+
     def _log_usage_to_langfuse(
         self,
         trace_id: str,
         agent_name: str,
-        usage_details: Dict[str, int],
+        usage_details: dict[str, int],
         system_prompt: str,
         judge_input: str,
         response_text: str,
-        intent: Optional[str] = None,
-        session_id: Optional[str] = None,
-        run_name: Optional[str] = None,
+        intent: str | None = None,
+        session_id: str | None = None,
+        run_name: str | None = None,
     ) -> None:
         if not usage_details:
             return
 
-        metadata = {
-            "agent": agent_name,
-            "evaluator": "llm-as-a-judge",
-        }
-        if intent:
-            metadata["intent"] = intent
-        if session_id:
-            metadata["session_id"] = session_id
-        if run_name:
-            metadata["run_name"] = run_name
-
         model_name = getattr(self.gemini_service, "model_name", None)
         cost_details = self._build_cost_details(usage_details)
+        metadata = self._build_judge_metadata(
+            agent_name, usage_details, cost_details, model_name,
+            intent=intent, session_id=session_id, run_name=run_name,
+        )
         input_payload = {
             "system_prompt": system_prompt[:2000],
             "user_prompt": judge_input[:4000],
@@ -286,47 +305,53 @@ Provide your evaluation as valid JSON."""
             current_trace_id = None
 
         if current_trace_id == trace_id:
-            try:
-                generation_metadata = {
-                    **metadata,
-                    "usage_details": usage_details,
-                }
-                if cost_details is not None:
-                    generation_metadata["cost_details"] = cost_details
+            self._try_update_generation(metadata, input_payload, output_payload, usage_details, cost_details, model_name, trace_id)
+        else:
+            self._try_create_event(trace_id, metadata, input_payload, output_payload)
 
-                self.langfuse.update_current_generation(
-                    name="llm_judge",
-                    input=input_payload,
-                    output=output_payload,
-                    metadata=generation_metadata,
-                    model=model_name,
-                    usage_details=usage_details,
-                    cost_details=cost_details,
-                )
-                return
-            except Exception as e:
-                logger.warning(
-                    "Failed to update judge generation usage in Langfuse",
-                    error=str(e),
-                    trace_id=trace_id,
-                )
-
+    def _try_update_generation(
+        self,
+        metadata: dict[str, Any],
+        input_payload: dict[str, str],
+        output_payload: str,
+        usage_details: dict[str, int],
+        cost_details: dict[str, float] | None,
+        model_name: str | None,
+        trace_id: str,
+    ) -> None:
+        """Attempt to update the current generation in Langfuse."""
         try:
-            event_metadata: Dict[str, Any] = {
-                **metadata,
-                "usage_details": usage_details,
-            }
-            if cost_details is not None:
-                event_metadata["cost_details"] = cost_details
-            if model_name:
-                event_metadata["model"] = model_name
+            self.langfuse.update_current_generation(
+                name="llm_judge",
+                input=input_payload,
+                output=output_payload,
+                metadata=metadata,
+                model=model_name,
+                usage_details=usage_details,
+                cost_details=cost_details,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to update judge generation usage in Langfuse",
+                error=str(e),
+                trace_id=trace_id,
+            )
 
+    def _try_create_event(
+        self,
+        trace_id: str,
+        metadata: dict[str, Any],
+        input_payload: dict[str, str],
+        output_payload: str,
+    ) -> None:
+        """Attempt to create a Langfuse event for judge usage."""
+        try:
             self.langfuse.create_event(
                 trace_context={"trace_id": trace_id},
                 name="llm_judge_generation",
                 input=input_payload,
                 output=output_payload,
-                metadata=event_metadata,
+                metadata=metadata,
             )
         except Exception as e:
             logger.warning(
@@ -340,9 +365,9 @@ Provide your evaluation as valid JSON."""
         trace_id: str,
         agent_name: str,
         evaluation: JudgeEvaluation,
-        intent: Optional[str] = None,
-        session_id: Optional[str] = None,
-        run_name: Optional[str] = None,
+        intent: str | None = None,
+        session_id: str | None = None,
+        run_name: str | None = None,
     ) -> None:
         """Log evaluation scores to Langfuse."""
         try:

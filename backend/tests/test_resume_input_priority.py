@@ -18,6 +18,8 @@ from app.models import (
 )
 from app.orchestration import OrchestrationAgent
 
+NUMBER_OF_EXTRACTOR_CALLS = 2
+
 
 class StubAgent:
     def __init__(self, name: str):
@@ -40,7 +42,7 @@ class StubAgent:
         self.inputs.append(input_data)
         return AgentResponse(
             agent_name=self._name,
-            content=json.dumps({"ok": True}),
+            content={"ok": True},
             reasoning="stub",
             confidence_score=0.9,
             decision_trace=[],
@@ -61,7 +63,7 @@ class StubExtractorAgent(StubAgent):
         self.inputs.append(input_data)
         return AgentResponse(
             agent_name=self._name,
-            content=json.dumps({"work": [{"name": "Extracted from PDF"}]}),
+            content={"work": [{"name": "Extracted from PDF"}]},
             reasoning="stub extract",
             confidence_score=0.2 if self.needs_review else 1.0,
             needs_review=self.needs_review,
@@ -154,13 +156,23 @@ def test_extractor_agent_extracts_pdf_payload() -> None:
     context = SessionContext(session_id="s3", user_id="u3")
     payload = json.dumps({"data": "any-base64", "fileType": "pdf"})
 
-    with patch("app.agents.extractor.parse_pdf_base64", return_value="Jane Doe Resume Text"), patch(
-        "app.agents.extractor.ExtractorAgent._generate_llm_response",
-        return_value=(Resume(work=[Work(name="Jane Doe Resume Text")]), 0.95, [], []),
+    with (
+        patch(
+            "app.agents.extractor.parse_pdf_base64", return_value="Jane Doe Resume Text"
+        ),
+        patch(
+            "app.agents.extractor.ExtractorAgent._generate_llm_response",
+            return_value=(
+                Resume(work=[Work(name="Jane Doe Resume Text")]),
+                0.95,
+                [],
+                [],
+            ),
+        ),
     ):
         response = agent.process(payload, context)
 
-    parsed = json.loads(response.content or "{}")
+    parsed = response.content or {}
     assert response.agent_name == "ExtractorAgent"
     assert parsed.get("work")[0].get("name") == "Jane Doe Resume Text"
 
@@ -182,7 +194,7 @@ def test_normalization_failure_returns_action_plan() -> None:
     result = orchestrator.orchestrate(request, context)
 
     assert result.agent_name == "NormalizeStage"
-    payload = json.loads(result.content or "{}")
+    payload = result.content or {}
     assert payload.get("summary") == "Resume normalization failed."
     assert payload.get("actions")
     assert not resume_agent.inputs
@@ -238,7 +250,7 @@ def test_resume_control_skips_extractor_after_review() -> None:
         resumeData=Resume(work=[Work(name="Edited Resume")]),
     )
 
-    result = orchestrator.orchestrate(resume_request, context)
+    orchestrator.orchestrate(resume_request, context)
 
     assert extractor.calls == 1
     assert resume_agent.inputs
@@ -275,4 +287,4 @@ def test_rewind_with_new_resume_file_reextracts() -> None:
 
     orchestrator.orchestrate(rewind_request, context)
 
-    assert extractor.calls == 2
+    assert extractor.calls == NUMBER_OF_EXTRACTOR_CALLS
