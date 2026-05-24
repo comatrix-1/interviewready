@@ -341,7 +341,7 @@ class OrchestrationAgent:
             response = extractor.process(
                 json.dumps(request.resumeFile.model_dump()), context
             )
-            parsed = json.loads(response.content or "{}")
+            parsed = response.content or {}
             resume = Resume.model_validate(parsed)
             resume_doc = self._build_resume_doc(resume, "resumeFile")
             resume_text = self._serialize_resume(resume)
