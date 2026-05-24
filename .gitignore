@@ -110,3 +110,5 @@ __pycache__
 
 # Kilo Code
 .kilo
+# Added by code-review-graph
+.code-review-graph/
