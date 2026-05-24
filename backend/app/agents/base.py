@@ -87,7 +87,7 @@ class BaseAgent(ABC, BaseAgentProtocol):
         return cls._mock_responses_cache
 
     def get_mock_response_by_key(self, key: str) -> str | None:
-    def get_mock_response_by_key(self, key: str) -> str | None:
+        """Return a mock response by key from the cached file, if present."""
         responses = self._load_mock_responses()
         value = responses.get(key)
         if isinstance(value, str):
@@ -100,7 +100,6 @@ class BaseAgent(ABC, BaseAgentProtocol):
         self,
         input_text: str,
         context: SessionContext,
-        tools: list[Callable] | None = None,
         tools: list[Callable] | None = None,
     ) -> str:
         session_id = getattr(context, "session_id", "unknown")

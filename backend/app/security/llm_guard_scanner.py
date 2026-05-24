@@ -1,7 +1,6 @@
 """LLM Guard scanner service for input/output security."""
 
 from typing import Any
-<<<<<<< HEAD
 from ..core.config import settings
 from ..core.logging import logger
 
@@ -12,13 +11,7 @@ try:
 except Exception as _e:
     DataFog = None
     logger = logger  # keep linter happy; real logger is imported above
-=======
 
-import datafog as DataFog
-
-from ..core.config import settings
-from ..core.logging import logger
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
 HAS_LLM_GUARD = False
 
@@ -118,10 +111,6 @@ class LLMGuardScanner:
 
         except Exception as e:
             logger.exception(f"LLM Guard input scan failed: {e}")
-<<<<<<< HEAD
-            logger.exception(f"LLM Guard input scan failed: {e}")
-=======
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
             return True, prompt, []
 
     def scan_output(self, output: str) -> tuple[bool, str, list[dict[str, Any]]]:
@@ -181,10 +170,6 @@ class LLMGuardScanner:
 
         except Exception as e:
             logger.exception(f"LLM Guard output scan failed: {e}")
-<<<<<<< HEAD
-            logger.exception(f"LLM Guard output scan failed: {e}")
-=======
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
             return True, output, []
 
     def scan_both(
@@ -206,10 +191,6 @@ class LLMGuardScanner:
 
 
 _llm_guard_scanner: LLMGuardScanner | None = None
-<<<<<<< HEAD
-_llm_guard_scanner: LLMGuardScanner | None = None
-=======
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
 
 def get_llm_guard_scanner() -> LLMGuardScanner:

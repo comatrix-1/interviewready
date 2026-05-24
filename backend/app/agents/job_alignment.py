@@ -8,15 +8,12 @@ from langfuse import observe
 
 from app.core.config import settings
 from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
-<<<<<<< HEAD
-=======
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, AlignmentReport
 from app.models.session import SessionContext
 from app.utils.json_parser import parse_json_object
 from app.utils.resume_location import filter_locations
 
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
 from .base import BaseAgent
 
 
@@ -176,9 +173,7 @@ class JobAlignmentAgent(BaseAgent):
                 self.MOCK_RESPONSE_KEY, self.USE_MOCK_RESPONSE,
                 AlignmentReport,
             )
-<<<<<<< HEAD
             structured_result = validated.model_dump()
-=======
 
             if self.USE_MOCK_RESPONSE and raw_result is None:
                 logger.warning(
@@ -197,7 +192,6 @@ class JobAlignmentAgent(BaseAgent):
             if not raw_result or not raw_result.strip():
                 msg = "Empty response received from Gemini API"
                 raise ValueError(msg)
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
             processing_time = time.time() - processing_start_time
             logger.debug(
@@ -211,13 +205,11 @@ class JobAlignmentAgent(BaseAgent):
             experience_match: list[str] = structured_result.get("experienceMatch", [])
             summary: str = structured_result.get("summary", "")
 
-<<<<<<< HEAD
             resume_payload = self._extract_resume_payload(input_data)
             removed_skills, removed_experience = self._filter_alignment_locations(
                 structured_result, resume_payload, skills_match, experience_match
             )
 
-=======
             resume_payload: dict[str, Any] = {}
             if input_data.resume is not None:
                 resume_payload = input_data.resume.model_dump(exclude_none=True)
@@ -238,7 +230,6 @@ class JobAlignmentAgent(BaseAgent):
                 structured_result["skillsMatch"] = skills_match
                 structured_result["experienceMatch"] = experience_match
 
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
             confidence = self._compute_confidence(
                 skills_match, missing_skills, experience_match
             )

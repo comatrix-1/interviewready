@@ -779,13 +779,10 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         processing_start_time = time.time()
         is_follow_up = False
         user_answer = ""
-<<<<<<< HEAD
-=======
         evaluation_result: dict | None = None
         model_answer_score: float | None = None
         model_can_proceed: bool | None = None
         precomputed_result: str | None = None
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
         method_used = "uninitialized"
         state = self._get_interview_state(context)
         security_findings: list[str] = []
@@ -793,7 +790,6 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         prompt_injection_issues: list[str] = []
 
         # Extract input
-<<<<<<< HEAD
         if isinstance(input_data, AgentInput):
             if input_data.audio_data is not None:
                 return self._process_audio_input(input_data.audio_data)
@@ -902,59 +898,9 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         bias_flags.extend(
             self._detect_bias_flags(
                 context.job_description or input_data.job_description
-=======
-        (
-            input_text,
-            is_follow_up,
-            user_answer,
-            evaluation_result,
-            security_findings,
-            bias_flags,
-            prompt_injection_issues,
-            precomputed_result,
-            method_used,
-            model_answer_score,
-            model_can_proceed,
-        ) = self._process_input_data(
-            input_data, context, state, session_id, security_findings, bias_flags
-        )
-
-        input_type = "audio" if isinstance(input_text, bytes) else "text"
-
-        # Log processing start
-        logger.debug(
-            "InterviewCoachAgent processing started",
-            session_id=session_id,
-            input_type=input_type,
-            input_length=len(input_text),
-        )
-
-        try:
-            result, method_used = self._generate_response(
-                input_text,
-                context,
-                session_id,
-                state,
-                prompt_injection_issues,
-                precomputed_result,
-                is_follow_up,
-                model_can_proceed,
-            )
-
-            processing_time = time.time() - processing_start_time
-            logger.debug(
-                "InterviewCoachAgent processing completed",
-                session_id=session_id,
-                input_type=input_type,
-                processing_time_ms=round(processing_time * 1000, 2),
-                method_used=method_used,
-                result_length=len(result),
-                result_preview=result[:100] + "..." if len(result) > 100 else result,
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
             )
         )
 
-<<<<<<< HEAD
         if is_follow_up and user_answer:
             return self._process_user_answer(
                 input_data,
@@ -1696,59 +1642,6 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                 sharp_metadata["can_proceed"] = model_can_proceed
 
         return sharp_metadata
-=======
-            # Parse the JSON response and handle progression logic
-            response_json, method_used = self._parse_and_validate_response(
-                result,
-                context,
-                session_id,
-                state,
-                is_follow_up,
-                model_can_proceed,
-                method_used,
-            )
-
-            # Handle interview progression and response formatting
-            response_json, result, model_answer_score, model_can_proceed, state = (
-                self._handle_interview_progression(
-                    response_json,
-                    input_data,
-                    is_follow_up,
-                    user_answer,
-                    evaluation_result,
-                    context,
-                    session_id,
-                    state,
-                    method_used,
-                )
-            )
-
-            # Build final response with metadata
-            return self._build_agent_response(
-                input_text,
-                context,
-                session_id,
-                method_used,
-                security_findings,
-                prompt_injection_issues,
-                bias_flags,
-                model_answer_score,
-                model_can_proceed,
-                result,
-            )
-
-        except Exception as e:
-            processing_time = time.time() - processing_start_time
-            logger.log_agent_error(agent_name, e, session_id)
-            logger.error(
-                "InterviewCoachAgent processing failed",
-                session_id=session_id,
-                processing_time_ms=round(processing_time * 1000, 2),
-                error_type=type(e).__name__,
-                error_message=str(e),
-            )
-            raise
->>>>>>> d4ad3a3680180078956713f7cb95169837622063
 
     def _process_input_data(
         self,
