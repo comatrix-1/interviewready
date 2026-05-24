@@ -107,3 +107,6 @@ __pycache__
 
 # Aider
 .aider*
+
+# Kilo Code
+.kilo
