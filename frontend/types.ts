@@ -121,8 +121,6 @@ export interface ResumeFile {
 
 export interface ChatRequest {
   intent: 'RESUME_CRITIC' | 'CONTENT_STRENGTH' | 'ALIGNMENT' | 'INTERVIEW_COACH';
-  control?: 'resume' | 'rewind';
-  checkpointId?: string;
   resumeData?: ResumeSchema | null;
   jobDescription: string;
   messageHistory: InterviewMessage[];
@@ -145,16 +143,6 @@ export interface SharedState {
   alignmentReport: AlignmentReport | null;
   interviewHistory: InterviewMessage[];
   interviewMode?: InterviewMode;
-  extractionReview?: {
-    needsReview: boolean;
-    checkpointId?: string;
-    reviewPayload?: {
-      extracted_data?: ResumeSchema;
-      validation_errors?: string[];
-      confidence_score?: number;
-      fields_requiring_attention?: string[];
-    };
-  } | null;
 }
 
 export type ResumeLookupResult = {

@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from langfuse import Langfuse, observe, propagate_attributes
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.core.logging import logger
@@ -21,7 +20,6 @@ from app.models.agent import (
 )
 from app.models.resume import Resume
 from app.models.session import SessionContext
-from app.orchestration.persistence import get_checkpoint_store
 from app.utils.json_parser import parse_json_payload
 from app.utils.validators import is_valid_date, is_valid_url
 
@@ -50,7 +48,6 @@ class OrchestrationState:
     needs_review: bool = False
     review_payload: dict[str, Any] | None = None
     shared_memory: dict[str, Any] = field(default_factory=dict)
-    checkpoint_key: str | None = None
     halt: bool = False
     review_attempts: int = 0
     index: int = 0
@@ -68,7 +65,6 @@ class OrchestrationAgent:
     ):
         self.agent_list = {a.get_name(): a for a in agent_list}
         self.governance = governance
-        self.checkpoints = get_checkpoint_store()
         self.workflow = self._build_workflow()
 
     def get_agents(self) -> dict[str, BaseAgentProtocol]:
@@ -106,20 +102,6 @@ class OrchestrationAgent:
                     msg = "No response produced"
                     raise RuntimeError(msg)
 
-                checkpoint_id = (
-                    final_state.checkpoint_key
-                    if final_state is not None
-                    else result.get("checkpoint_key") or result.get("checkpoint_id")
-                )
-                review_payload = (
-                    final_state.review_payload
-                    if final_state is not None
-                    else result.get("review_payload")
-                )
-
-                self._attach_checkpoint_metadata(
-                    response, checkpoint_id, review_payload
-                )
 
                 if final_state is not None:
                     context.shared_memory = final_state.shared_memory
@@ -133,54 +115,9 @@ class OrchestrationAgent:
         self, request: ChatRequest, context: SessionContext, intent: Intent
     ) -> OrchestrationState:
         control = getattr(request, "control", None)
-        checkpoint_id = getattr(request, "checkpointId", None)
         session_id = getattr(context, "session_id", "unknown")
         sequence = INTENT_TO_AGENTS[intent]
 
-        if control == "rewind":
-            if not checkpoint_id:
-                msg = "checkpointId is required for rewind control"
-                raise ValueError(msg)
-            record = self.checkpoints.rewind(session_id, checkpoint_id)
-            if record is None:
-                msg = "Invalid checkpointId for rewind"
-                raise ValueError(msg)
-            state = record.state
-            state.request = request
-            state.context = context
-            state.agent_sequence = sequence
-            state.response = None
-            state.input = None
-            state.halt = False
-            state.index = 0
-            self._apply_resume_override(state, request)
-            return state
-
-        if control == "resume":
-            record = None
-            if checkpoint_id:
-                record = self.checkpoints.get(session_id, checkpoint_id)
-            else:
-                record = self.checkpoints.latest(session_id)
-            if record is None:
-                msg = "No checkpoint available to resume"
-                raise ValueError(msg)
-            state = record.state
-            state.request = request
-            state.context = context
-            state.agent_sequence = sequence
-            state.review_attempts = max(state.review_attempts, 0) + 1
-            state.response = None
-            state.input = None
-            state.halt = False
-            state.needs_review = False
-            state.review_payload = None
-            self._apply_resume_override(state, request)
-            return state
-
-        if control:
-            msg = f"Unsupported control operation: {control}"
-            raise ValueError(msg)
 
         return OrchestrationState(
             request=request,
@@ -236,7 +173,7 @@ class OrchestrationAgent:
             {"continue": "run_agent", "end": END},
         )
         graph.add_edge("hitl_review", END)
-        return graph.compile(checkpointer=MemorySaver())
+        return graph.compile()
 
     def _route_after_normalize(self, state: OrchestrationState) -> str:
         if state.halt:
@@ -291,7 +228,6 @@ class OrchestrationAgent:
             extractor_validation_errors=validation_errors,
             review_payload=review_payload,
         )
-        self._record_checkpoint(state)
 
         if needs_review:
             state.response = self._build_review_response(state)
@@ -463,7 +399,6 @@ class OrchestrationAgent:
             state, artifacts=[artifact.model_dump() for artifact in state.artifacts]
         )
         state.index += 1
-        self._record_checkpoint(state)
 
         return state
 
@@ -495,29 +430,13 @@ class OrchestrationAgent:
             audio_data=getattr(request, "audioData", None),
         )
 
-    def _record_checkpoint(self, state: OrchestrationState) -> None:
-        session_id = getattr(state.context, "session_id", "unknown")
-        state.checkpoint_key = self.checkpoints.save(session_id, state)
 
-    def _attach_checkpoint_metadata(
-        self,
-        response: AgentResponse,
-        checkpoint_id: str | None,
-        review_payload: dict[str, Any] | None,
-    ) -> None:
-        if response.sharp_metadata is None:
-            response.sharp_metadata = {}
-        if checkpoint_id:
-            response.sharp_metadata["checkpoint_id"] = checkpoint_id
-        if review_payload:
-            response.sharp_metadata["review_payload"] = review_payload
 
     def _build_review_response(self, state: OrchestrationState) -> AgentResponse:
         payload = {
             "review_payload": state.review_payload or {},
             "metadata": {
                 "review_required": True,
-                "checkpoint_id": state.checkpoint_key,
             },
         }
         return AgentResponse(
@@ -535,7 +454,6 @@ class OrchestrationAgent:
             ),
             decision_trace=state.context.decision_trace or [],
             sharp_metadata={
-                "checkpoint_id": state.checkpoint_key,
                 "review_payload": state.review_payload,
             },
         )

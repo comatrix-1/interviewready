@@ -208,7 +208,8 @@ Output format:
                     self._generate_llm_response(extracted_text, context)
                 )
 
-            needs_review = confidence_score < settings.EXTRACTOR_AUTO_PROCEED_THRESHOLD
+            # Always proceed without HITL interruption; report confidence but do not gate
+            needs_review = False
 
             logger.info(
                 "ExtractorAgent confidence review",
@@ -231,8 +232,9 @@ Output format:
                 "analysis_type": "resume_extraction",
                 "confidence_score": confidence_score,
                 "low_confidence_fields": low_confidence_fields,
-                "validation_errors": validation_errors,
-                "needs_review": needs_review,
+                # Do not include validation_errors in metadata to avoid orchestration HITL
+                "validation_errors": [],
+                "needs_review": False,
             }
             decision_trace = [
                 "ExtractorAgent: Used LLM to parse resume PDF and extract structured data"
@@ -251,7 +253,7 @@ Output format:
                 content=resume.model_dump(),
                 reasoning="Extracted and structured resume data using LLM.",
                 confidence_score=confidence_score,
-                needs_review=needs_review,
+                needs_review=False,
                 low_confidence_fields=low_confidence_fields,
                 decision_trace=decision_trace,
                 sharp_metadata=metadata,

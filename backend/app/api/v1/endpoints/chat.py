@@ -156,8 +156,6 @@ def _attach_payload_metadata(
             "confidence_score": response.confidence_score,
             "needs_review": response.needs_review,
             "low_confidence_fields": response.low_confidence_fields or [],
-            "checkpoint_id": (response.sharp_metadata or {}).get("checkpoint_id"),
-            "review_payload": (response.sharp_metadata or {}).get("review_payload"),
             "review_required": bool(response.needs_review),
         }
     )

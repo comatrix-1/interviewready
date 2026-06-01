@@ -49,8 +49,7 @@ const AppContent: React.FC = () => {
       criticReport: null,
       contentReport: null,
       alignmentReport: null,
-      interviewHistory: [],
-      extractionReview: null
+      interviewHistory: []
     };
   });
 
@@ -85,8 +84,7 @@ const AppContent: React.FC = () => {
         criticReport: null,
         contentReport: null,
         alignmentReport: null,
-        interviewHistory: [],
-        extractionReview: null
+        interviewHistory: []
       });
       setError(null);
     }
@@ -281,36 +279,12 @@ const WorkflowController: React.FC<{
       throw new Error(`Invalid response from backend: ${parseErr}`);
     }
 
-    const metadata = getResponseMetadata(response);
-    const needsReview = Boolean(metadata?.review_required ?? metadata?.needs_review);
-    const reviewPayload =
-      metadata?.review_payload ||
-      (isRecord(response.payload) ? response.payload.review_payload : null);
-    const checkpointId = metadata?.checkpoint_id;
-
     updateProgress(90, 3);
 
-    return { responseData, parsedResume, needsReview, reviewPayload, checkpointId };
+    return { responseData, parsedResume };
   };
 
-  const handleReviewRequired = (reviewPayload: any, checkpointId: string, parsedResume: Resume | null) => {
-    if (reviewPayload?.extracted_data) {
-      setManualResumeText(JSON.stringify(reviewPayload.extracted_data, null, 2));
-    }
-    setState(prev => ({
-      ...prev,
-      currentResume: parsedResume || prev.currentResume,
-      history: parsedResume ? [...prev.history, parsedResume] : prev.history,
-      criticReport: null,
-      status: WorkflowStatus.IDLE,
-      extractionReview: {
-        needsReview: true,
-        checkpointId,
-        reviewPayload,
-      }
-    }));
-    updateProgress(100, 3);
-  };
+
 
   const handleSuccessfulProcessing = (responseData: any, parsedResume: Resume | null) => {
     setState(prev => ({
@@ -319,7 +293,7 @@ const WorkflowController: React.FC<{
       history: parsedResume ? [...prev.history, parsedResume] : prev.history,
       criticReport: responseData,
       status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
-      extractionReview: null,
+
     }));
     setManualResumeText('');
     updateProgress(100, 3);
@@ -342,7 +316,6 @@ const WorkflowController: React.FC<{
         ...prev,
         criticReport: report,
         status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
-        extractionReview: null,
       }));
     } catch (err: any) {
       setError(err.message || 'Failed to analyze resume');
@@ -365,14 +338,7 @@ const WorkflowController: React.FC<{
 
       try {
         if (file.type === 'application/pdf') {
-          const { responseData, parsedResume, needsReview, reviewPayload, checkpointId } = 
-            await processPdfFile(file);
-
-          if (needsReview) {
-            handleReviewRequired(reviewPayload, checkpointId, parsedResume);
-            return;
-          }
-
+          const { responseData, parsedResume } = await processPdfFile(file);
           handleSuccessfulProcessing(responseData, parsedResume);
         }
       } catch (err: any) {
@@ -417,7 +383,6 @@ const WorkflowController: React.FC<{
         history: [...prev.history, parsed],
         criticReport: report,
         status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
-        extractionReview: null,
       }));
       setManualResumeText('');
     } catch (err: any) {
@@ -427,94 +392,7 @@ const WorkflowController: React.FC<{
     }
   };
 
-  const submitReviewResume = async () => {
-    setManualResumeError(null);
-    const checkpointId = state.extractionReview?.checkpointId;
-    if (!checkpointId) {
-      setManualResumeError('Missing checkpoint id for review resume.');
-      return;
-    }
 
-    let parsed: any;
-    try {
-      parsed = JSON.parse(manualResumeText);
-    } catch {
-      setManualResumeError('Review edits must be valid JSON.');
-      return;
-    }
-
-    if (!parsed || typeof parsed !== 'object') {
-      setManualResumeError('Review edits must be a JSON object.');
-      return;
-    }
-
-    startLoading('Applying your edits...', ['Validating updates', 'Re-running review', 'Continuing analysis']);
-    try {
-      updateProgress(35, 0);
-      const request: ChatRequest = {
-        intent: 'RESUME_CRITIC',
-        control: 'resume',
-        checkpointId,
-        resumeData: parsed,
-        jobDescription: '',
-        messageHistory: []
-      };
-
-      const response = await backendService.callChatEndpoint(request);
-      const parsedResume = await backendService.fetchCurrentResume();
-      const metadata = getResponseMetadata(response);
-      const needsReview = Boolean(metadata?.review_required ?? metadata?.needs_review);
-      const reviewPayload =
-        metadata?.review_payload ||
-        (isRecord(response.payload) ? response.payload.review_payload : null);
-      const nextCheckpointId = metadata?.checkpoint_id || checkpointId;
-
-      updateProgress(70, 1);
-
-      if (needsReview) {
-        if (reviewPayload?.extracted_data) {
-          setManualResumeText(JSON.stringify(reviewPayload.extracted_data, null, 2));
-        }
-        setState(prev => ({
-          ...prev,
-          currentResume: parsedResume || prev.currentResume,
-          history: parsedResume ? [...prev.history, parsedResume] : prev.history,
-          criticReport: null,
-          status: WorkflowStatus.IDLE,
-          extractionReview: {
-            needsReview: true,
-            checkpointId: nextCheckpointId,
-            reviewPayload,
-          }
-        }));
-        updateProgress(100, 2);
-        return;
-      }
-
-      let responseData;
-      // FIX S2486: include original error context instead of swallowing it
-      try {
-        responseData = response.payload || JSON.parse(response.content || '{}');
-      } catch (parseErr) {
-        throw new Error(`Invalid response from backend: ${parseErr}`);
-      }
-
-      updateProgress(100, 2);
-      setState(prev => ({
-        ...prev,
-        currentResume: parsedResume || prev.currentResume,
-        history: parsedResume ? [...prev.history, parsedResume] : prev.history,
-        criticReport: responseData,
-        status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
-        extractionReview: null,
-      }));
-      setManualResumeText('');
-    } catch (err: any) {
-      setManualResumeError(err.message || 'Failed to process review edits.');
-    } finally {
-      stopLoading();
-    }
-  };
 
   const approveCritic = async () => {
     setState(prev => ({ ...prev, status: WorkflowStatus.ANALYZING_CONTENT }));
@@ -689,13 +567,10 @@ const WorkflowController: React.FC<{
       {(state.status === WorkflowStatus.IDLE || state.status === WorkflowStatus.EXTRACTING) && (
         <UploadStep
           onUploadSubmit={handleUploadSubmit}
-          reviewNotice={state.extractionReview}
-          reviewPayload={state.extractionReview?.reviewPayload}
           manualResumeText={manualResumeText}
           manualResumeError={manualResumeError}
           onManualResumeChange={setManualResumeText}
           onManualSubmit={submitManualResume}
-          onReviewSubmit={submitReviewResume}
         />
       )}
       {(state.status === WorkflowStatus.CRITIQUING || state.status === WorkflowStatus.AWAITING_CRITIC_APPROVAL) && state.criticReport && (

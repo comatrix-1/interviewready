@@ -58,7 +58,7 @@ class ChatRequest(BaseModel):
         "ALIGNMENT",
         "INTERVIEW_COACH",
     ]
-    control: Literal["resume", "rewind"] | None = None
+    control: Literal["resume"] | None = None
     checkpointId: str | None = None
     resumeData: Resume | None = None
     resumeFile: ResumeFile | None = None
