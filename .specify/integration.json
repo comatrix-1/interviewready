@@ -1,7 +1,7 @@
 {
-  "integration": "copilot",
+  "integration": "pi",
   "version": "0.6.1",
   "scripts": {
-    "update-context": ".specify/integrations/copilot/scripts/update-context.ps1"
+    "update-context": ".specify/integrations/pi/scripts/update-context.ps1"
   }
 }
