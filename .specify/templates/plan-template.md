@@ -31,7 +31,12 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Minimum gates per InterviewReady Constitution:
+- Code Quality: Lint, format, and type checks MUST pass; architectural boundaries respected.
+- Testing: For new work, at least one failing test exists before implementation; unit and (if applicable) integration tests added; bug fixes include regression tests; coverage ≥80% overall and ≥90% for critical modules.
+- UX Consistency: Copy, error states, and flows align with project UX patterns; accessibility meets WCAG 2.1 AA for new UI.
+- Performance: Explicit budgets defined (e.g., p95 latency, memory); evidence of local profiling or checks for significant paths.
+- Delivery Safety: PR includes validation notes and rollback/mitigation plan when risk is non-trivial.
 
 ## Project Structure
 

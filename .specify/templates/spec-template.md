@@ -95,6 +95,18 @@
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
+### Non-Functional Requirements (mandatory)
+
+- Performance Budgets: Define and agree budgets before implementation
+  - API: p95 ≤ [___] ms, p99 ≤ [___] ms, throughput ≥ [___]/s
+  - Frontend: main-thread work ≤ 50ms/interaction; first meaningful render ≤ [___] ms
+  - Memory/Resource ceilings: ≤ [___]
+- UX Consistency Standards: Reference shared UX patterns; specify loading/empty/error
+  states and copy tone. Accessibility: WCAG 2.1 AA for new UI.
+- Reliability: Timeouts, retries, and backpressure defined for external calls;
+  graceful degradation required.
+- Observability: Required logs/metrics/traces for critical paths.
+
 ### Key Entities *(include if feature involves data)*
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]
@@ -108,6 +120,8 @@
 -->
 
 ### Measurable Outcomes
+
+Include at least one performance metric and one UX consistency metric:
 
 - **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
