@@ -6,7 +6,6 @@ heavy backend package.
 import importlib.util
 from pathlib import Path
 
-import pytest
 from pydantic import BaseModel, Field
 
 # --- Load llm_validation module ---

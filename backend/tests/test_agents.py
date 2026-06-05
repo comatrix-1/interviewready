@@ -1,6 +1,5 @@
 """Test script for agent implementations."""
 
-import json
 
 from dotenv import load_dotenv
 

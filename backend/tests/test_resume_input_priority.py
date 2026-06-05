@@ -19,7 +19,6 @@ from app.models import (
 from app.orchestration import OrchestrationAgent
 
 
-
 class StubAgent:
     def __init__(self, name: str):
         self._name = name

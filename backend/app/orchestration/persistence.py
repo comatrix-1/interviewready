@@ -5,9 +5,6 @@ import time
 import uuid
 from dataclasses import dataclass
 from threading import RLock
-from typing import Annotated
-
-from typing_extensions import TypedDict
 
 
 @dataclass(frozen=True)

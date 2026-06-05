@@ -2,11 +2,12 @@
 
 import json
 
+import pytest
+
 from app.agents.gemini_service import GeminiService
 from app.agents.interview_coach import InterviewCoachAgent
 from app.models.agent import AgentInput
 from app.models.session import SessionContext
-import pytest
 
 
 def _build_agent(monkeypatch) -> InterviewCoachAgent:

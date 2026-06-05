@@ -4,10 +4,8 @@ The llm_validation module is loaded via importlib to avoid importing the
 heavy backend package (which pulls in optional deps like langfuse, sqlalchemy).
 """
 import importlib.util
-import json
 from pathlib import Path
 
-import pytest
 from pydantic import BaseModel, Field
 
 # --- Load llm_validation module ---

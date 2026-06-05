@@ -20,7 +20,6 @@ from app.models.agent import (
 )
 from app.models.resume import Resume
 from app.models.session import SessionContext
-from app.utils.json_parser import parse_json_payload
 from app.utils.validators import is_valid_date, is_valid_url
 
 if TYPE_CHECKING:

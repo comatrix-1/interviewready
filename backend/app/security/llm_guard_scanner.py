@@ -1,6 +1,7 @@
 """LLM Guard scanner service for input/output security."""
 
 from typing import Any
+
 from ..core.config import settings
 from ..core.logging import logger
 

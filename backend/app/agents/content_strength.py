@@ -11,10 +11,8 @@ from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, ContentStrengthReport
 from app.models.session import SessionContext
-from app.utils.resume_location import resume_location_exists
 
 from .base import BaseAgent
-
 
 
 class ContentStrengthAgent(BaseAgent):

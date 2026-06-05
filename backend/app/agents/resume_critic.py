@@ -17,7 +17,6 @@ from app.utils.resume_location import resume_location_exists
 from .base import BaseAgent
 
 
-
 class ResumeCriticAgent(BaseAgent):
     """Agent for analyzing resume structure, ATS compatibility, and impact."""
 
