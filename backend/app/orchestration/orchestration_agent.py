@@ -80,8 +80,7 @@ class OrchestrationAgent:
         session_id = getattr(context, "session_id", "unknown")
         user_id = getattr(context, "user_id", None)
 
-        with langfuse.start_as_current_observation(name="orchestration_execution"):
-            with propagate_attributes(user_id=user_id, session_id=session_id):
+        with langfuse.start_as_current_observation(name="orchestration_execution"), propagate_attributes(user_id=user_id, session_id=session_id):
                 intent = self._parse_intent(request.intent)
                 if request.jobDescription:
                     context.job_description = request.jobDescription
@@ -406,7 +405,7 @@ class OrchestrationAgent:
             return Intent(raw)
         except ValueError:
             msg = f"Unsupported intent: {raw}"
-            raise ValueError(msg)
+            raise ValueError(msg) from None
 
     def _get_agent(self, name: str) -> BaseAgentProtocol:
         if name not in self.agent_list:

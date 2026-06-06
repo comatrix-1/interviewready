@@ -168,7 +168,7 @@ async def interview_live_websocket(
                 logger.info(
                     f"[VOICE_BACKEND] Client receive loop closed for session {session_id}"
                 )
-                raise WebSocketDisconnect
+                raise WebSocketDisconnect from exc
             logger.error(f"[VOICE_BACKEND] Error receiving from client: {exc}")
             await websocket.send_json({"error": f"Client communication error: {exc!s}"})
 
@@ -244,11 +244,9 @@ async def interview_live_websocket(
                 )
     finally:
         receive_task.cancel()
-        try:
-            # Shield the cleanup to ensure it completes even if the main task is being cancelled
+        # Shield the cleanup to ensure it completes even if the main task is being cancelled
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await asyncio.shield(receive_task)
-        except (asyncio.CancelledError, Exception):
-            pass
 
         if websocket.client_state.name != "DISCONNECTED":
             try:

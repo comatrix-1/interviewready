@@ -145,13 +145,13 @@ class BaseAgent(ABC, BaseAgentProtocol):
                 metadata={"agent": agent_name, "prompt_length": len(input_text)},
             ) as trace,
             propagate_attributes(user_id=user_id, session_id=session_id),
-        ):
-            with trace.start_as_current_observation(
+            trace.start_as_current_observation(
                 as_type="span",
                 name="call_gemini",
                 input={"prompt": input_text[:1000]},
                 metadata={"model": self.gemini_service.model_name},
-            ) as span:
+            ) as span,
+        ):
                 logger.log_api_call(
                     "gemini",
                     "generate_response",

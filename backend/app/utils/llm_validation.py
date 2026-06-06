@@ -21,12 +21,13 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Callable, Optional, Tuple, Type
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel
 
 
-def extract_json_substring(text: str) -> Optional[str]:
+def extract_json_substring(text: str) -> str | None:
     """Extract the first JSON-like substring (object or array) from text.
 
     This finds occurrences of '{' or '[' and returns the minimally
@@ -47,7 +48,7 @@ def extract_json_substring(text: str) -> Optional[str]:
     if not start_idxs:
         return None
 
-    def find_match(start: int, opener: str) -> Optional[str]:
+    def find_match(start: int, opener: str) -> str | None:
         stack = [opener]
         i = start + 1
         in_string = False
@@ -143,7 +144,7 @@ def remove_trailing_commas(text: str) -> str:
         return text
 
     result: list[str] = []
-    in_string: Optional[str] = None
+    in_string: str | None = None
     escape = False
     i = 0
     n = len(text)
@@ -199,7 +200,7 @@ def balance_brackets(text: str) -> str:
         return text
 
     stack: list[str] = []
-    in_string: Optional[str] = None
+    in_string: str | None = None
     escape = False
 
     for ch in text:
@@ -233,7 +234,7 @@ def balance_brackets(text: str) -> str:
     return text + to_append
 
 
-def _sanitize_and_parse(text: str, schema: Type[BaseModel]) -> Optional[BaseModel]:
+def _sanitize_and_parse(text: str, schema: type[BaseModel]) -> BaseModel | None:
     """Apply sanitizer heuristics and attempt to parse.
 
     Attempts: extract_json_substring -> fix_single_quotes ->
@@ -242,7 +243,7 @@ def _sanitize_and_parse(text: str, schema: Type[BaseModel]) -> Optional[BaseMode
     If extraction fails due to unbalanced input, tries balancing first then
     re-extracts.
     """
-    def _try_parse(candidate: str) -> Optional[BaseModel]:
+    def _try_parse(candidate: str) -> BaseModel | None:
         """Apply fix chain and parse a candidate string."""
         fixed = fix_single_quotes(candidate)
         fixed = remove_trailing_commas(fixed)
@@ -275,10 +276,10 @@ def _sanitize_and_parse(text: str, schema: Type[BaseModel]) -> Optional[BaseMode
 
 def validate_or_repair(
     raw: str | dict[str, Any],
-    schema: Type[BaseModel],
-    hint: Optional[str] = None,
-    llm_reformat: Optional[Callable[[str, Type[BaseModel], Optional[str]], Optional[BaseModel]]] = None,
-) -> Tuple[BaseModel, str]:
+    schema: type[BaseModel],
+    hint: str | None = None,
+    llm_reformat: Callable[[str, type[BaseModel], str | None], BaseModel | None] | None = None,
+) -> tuple[BaseModel, str]:
     """Validate and optionally repair an LLM output against a Pydantic schema.
 
     The flow is:
@@ -356,8 +357,8 @@ __all__ = [
 
 def _build_reformat_prompt(
     raw_text: str,
-    schema: Type[BaseModel],
-    hint: Optional[str] = None,
+    schema: type[BaseModel],
+    hint: str | None = None,
 ) -> str:
     """Build a concise reformat prompt for the LLM.
 
@@ -407,11 +408,11 @@ def _build_example_from_json_schema(schema: dict[str, Any]) -> Any:
 
 def reformat_with_llm(
     raw: str,
-    schema: Type[BaseModel],
-    hint: Optional[str] = None,
+    schema: type[BaseModel],
+    hint: str | None = None,
     *,
     generate_fn: Callable[[str, str], str],
-) -> Optional[BaseModel]:
+) -> BaseModel | None:
     """Use an LLM to reformat *raw* into valid JSON matching *schema*.
 
     Args:
@@ -448,7 +449,7 @@ def reformat_with_llm(
 
 def make_llm_reformatter(
     generate_fn: Callable[[str, str], str],
-) -> Callable[[str, Type[BaseModel], Optional[str]], Optional[BaseModel]]:
+) -> Callable[[str, type[BaseModel], str | None], BaseModel | None]:
     """Create a reformatter callable for use with ``validate_or_repair``.
 
     Usage::
@@ -463,7 +464,7 @@ def make_llm_reformatter(
         A callable ``(raw, schema, hint) -> instance | None`` suitable
         as the ``llm_reformat`` argument to ``validate_or_repair``.
     """
-    def _reformat(raw: str, schema: Type[BaseModel], hint: Optional[str] = None) -> Optional[BaseModel]:
+    def _reformat(raw: str, schema: type[BaseModel], hint: str | None = None) -> BaseModel | None:
         return reformat_with_llm(raw, schema, hint=hint, generate_fn=generate_fn)
 
     return _reformat

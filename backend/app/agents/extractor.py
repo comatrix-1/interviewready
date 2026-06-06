@@ -165,10 +165,11 @@ Output format:
         if isinstance(input_data, AgentInput):
             msg = "ExtractorAgent expects a resumeFile JSON payload, not AgentInput."
             raise ValueError(msg)
-        if isinstance(input_data, bytes):
-            input_text = input_data.decode("utf-8", errors="ignore")
-        else:
-            input_text = input_data
+        input_text = (
+            input_data.decode("utf-8", errors="ignore")
+            if isinstance(input_data, bytes)
+            else input_data
+        )
 
         logger.debug(
             "ExtractorAgent processing started",

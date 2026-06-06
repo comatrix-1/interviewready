@@ -728,10 +728,7 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
         message_history = getattr(input_data, "message_history", []) or []
 
         def _message_value(message, key: str) -> str:
-            if isinstance(message, dict):
-                value = message.get(key, "")
-            else:
-                value = getattr(message, key, "")
+            value = message.get(key, "") if isinstance(message, dict) else getattr(message, key, "")
             return (value or "").strip() if isinstance(value, str) else ""
 
         user_messages = [

@@ -413,7 +413,7 @@ class GeminiLiveService:
         except Exception as e:
             self.connected = False
             msg = f"Failed to connect to Gemini Live: {e!s}"
-            raise ConnectionError(msg)
+            raise ConnectionError(msg) from e
 
     def send_audio_and_wait_response(
         self,
