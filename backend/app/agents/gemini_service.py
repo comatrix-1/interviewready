@@ -438,8 +438,6 @@ class GeminiLiveService:
             return None
 
         try:
-            from google.genai import types
-
             audio_part = types.Part.from_bytes(data=audio_data, mime_type=mime_type)
             contents = [audio_part]
             if text_prompt:
@@ -473,7 +471,7 @@ class GeminiLiveService:
             return None
 
         try:
-            from google.genai import types
+
 
             response = self.client.models.generate_content(
                 model=self.model_name,

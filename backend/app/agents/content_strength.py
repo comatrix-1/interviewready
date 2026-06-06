@@ -11,6 +11,7 @@ from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, ContentStrengthReport
 from app.models.session import SessionContext
+from app.utils.json_parser import parse_json_object
 
 from .base import BaseAgent
 
@@ -315,8 +316,6 @@ class ContentStrengthAgent(BaseAgent):
 
         Delegates to the shared parse_json_object utility.
         """
-        from app.utils.json_parser import parse_json_object
-
         return parse_json_object(text)
 
     @staticmethod

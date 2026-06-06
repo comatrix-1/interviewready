@@ -89,7 +89,7 @@ select = [
     # FastAPI
     "FAST",
     # pylint
-    "PLE", "PLW",
+    "PLC", "PLE", "PLW",
 ]
 ignore = [
     # Line length

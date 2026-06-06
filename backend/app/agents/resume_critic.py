@@ -12,6 +12,7 @@ from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, ResumeCriticReport
 from app.models.session import SessionContext
+from app.utils.json_parser import parse_json_object
 from app.utils.resume_location import resume_location_exists
 
 from .base import BaseAgent
@@ -231,7 +232,7 @@ class ResumeCriticAgent(BaseAgent):
             return {}
 
 
-        from app.utils.json_parser import parse_json_object
+
 
         return parse_json_object(text)
 

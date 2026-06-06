@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.agents.eval_rubrics import JUDGE_TEMPERATURE, get_rubric
 from app.core.config import settings
 from app.core.logging import logger
+from app.utils.json_parser import parse_json_object
 
 
 class JudgeEvaluation(BaseModel):
@@ -201,7 +202,7 @@ Provide your evaluation as valid JSON."""
 
     def _parse_judge_response(self, response: str) -> JudgeEvaluation:
         """Parse the judge's JSON response into a JudgeEvaluation."""
-        from app.utils.json_parser import parse_json_object
+
 
         parsed = parse_json_object(response)
 

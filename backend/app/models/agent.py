@@ -1,10 +1,13 @@
 """Agent-related models."""
 
+import base64
 from dataclasses import field
 from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.utils.audio_utils import pcm_to_wav, validate_audio_format
 
 from .resume import Resume
 
@@ -69,19 +72,12 @@ class ChatRequest(BaseModel):
     @field_validator("audioData", mode="before")
     @classmethod
     def decode_audio_data(cls, v):
-        if isinstance(v, str):
-            import base64
-
-            decoded = base64.b64decode(v)
-        else:
-            decoded = v
+        decoded = base64.b64decode(v) if isinstance(v, str) else v
 
         if decoded is None:
             return None
 
         # Convert PCM to WAV if not already WAV
-        from app.utils.audio_utils import pcm_to_wav, validate_audio_format
-
         if not validate_audio_format(decoded):
             # Assume it's PCM and convert to WAV
             decoded = pcm_to_wav(decoded)

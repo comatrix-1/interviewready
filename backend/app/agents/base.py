@@ -17,6 +17,7 @@ from app.models.session import SessionContext
 from app.security.llm_guard_scanner import get_llm_guard_scanner
 from app.utils.json_parser import parse_json_object
 from app.utils.output_sanitizer import get_output_sanitizer
+from app.utils.resume_location import resume_location_exists
 
 langfuse = Langfuse()
 
@@ -340,8 +341,6 @@ class BaseAgent(ABC, BaseAgentProtocol):
         Returns:
             Tuple of (filtered items, number of items removed).
         """
-        from app.utils.resume_location import resume_location_exists
-
         if not resume_payload or not items:
             return items, 0
 

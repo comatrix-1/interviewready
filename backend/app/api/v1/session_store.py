@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from threading import RLock
 
 from app.models import SessionContext
@@ -21,7 +22,7 @@ class SessionStore:
 
     def _generate_session_id(self) -> str:
         """Generate a unique session ID that is not currently in use."""
-        import uuid
+
 
         attempts = 0
         while attempts < 100:
