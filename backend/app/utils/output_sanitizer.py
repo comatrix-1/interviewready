@@ -95,12 +95,7 @@ class OutputSanitizer:
         return all(not pattern.search(output) for pattern in self.system_patterns[:5])
 
 
-_output_sanitizer = None
-
+_output_sanitizer = OutputSanitizer()
 
 def get_output_sanitizer() -> OutputSanitizer:
-    """Get or create the global output sanitizer instance."""
-    global _output_sanitizer
-    if _output_sanitizer is None:
-        _output_sanitizer = OutputSanitizer()
     return _output_sanitizer
