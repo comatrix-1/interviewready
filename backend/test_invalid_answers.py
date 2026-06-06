@@ -12,9 +12,7 @@ from app.models.session import SessionContext
 class DummyGeminiService:
     """Dummy Gemini service for testing."""
 
-    def generate_response(
-        self, system_prompt: str, user_input: str, tools: list | None = None
-    ) -> str:
+    def generate_response(self, system_prompt: str, user_input: str, tools: list | None = None) -> str:
         return '{"current_question_number": 1, "question": "Test question"}'
 
 
@@ -51,9 +49,7 @@ def test_invalid_answers():
         context.shared_memory["current_question_index"] = question_index
 
         # Simulate invalid answer (is_follow_up=True, is_valid=False)
-        mock_key = agent._get_dynamic_mock_key(
-            context, is_follow_up=True, is_valid=False
-        )
+        mock_key = agent._get_dynamic_mock_key(context, is_follow_up=True, is_valid=False)
 
         # Verify the mock response exists
         response_str = agent.get_mock_response_by_key(mock_key)
@@ -65,9 +61,7 @@ def test_invalid_answers():
     # Test normal progression
     for question_index in range(5):
         context.shared_memory["current_question_index"] = question_index
-        mock_key = agent._get_dynamic_mock_key(
-            context, is_follow_up=False, is_valid=True
-        )
+        mock_key = agent._get_dynamic_mock_key(context, is_follow_up=False, is_valid=True)
         response_str = agent.get_mock_response_by_key(mock_key)
         if response_str:
             response = json.loads(response_str)

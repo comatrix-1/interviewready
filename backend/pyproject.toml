@@ -89,11 +89,30 @@ select = [
     # FastAPI
     "FAST",
     # pylint
-    "PLC", "PLE", "PLW",
+    "PL",
 ]
 ignore = [
     # Line length
-    "E501"
+    "E501",
+    # Too many arguments in function definition
+    "PLR0913"
+]
+
+[tool.ruff.lint.per-file-ignores]
+# TESTS: allow pytest style freedom
+"tests/**/*.py" = [
+    "PLR2004",  # magic values OK in assertions
+    "S101",     # allow assert statements
+    "PLR0913",  # too many arguments (fixtures often do this)
+]
+# SCRIPT / UTILITIES: slightly relaxed complexity rules
+"scripts/**/*.py" = [
+    "PLR0912",  # too many branches
+    "PLR0915",  # too many statements
+]
+# INIT FILES often import-only
+"__init__.py" = [
+    "F401",     # unused imports
 ]
 
 [tool.mypy]

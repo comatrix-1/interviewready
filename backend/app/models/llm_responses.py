@@ -6,6 +6,7 @@ the expected structured output shapes returned by LLM-backed agents.
 Start small: this PR adds OrchestrationResult used by the orchestration
 agent. Follow-on PRs will add other agent schemas and helpers.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -25,9 +26,7 @@ class OrchestrationDetail(BaseModel):
     note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    model_config = {
-        "extra": "forbid"
-    }
+    model_config = {"extra": "forbid"}
 
 
 class OrchestrationResult(BaseModel):
@@ -43,9 +42,7 @@ class OrchestrationResult(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     details: list[OrchestrationDetail] = Field(default_factory=list)
 
-    model_config = {
-        "extra": "forbid"
-    }
+    model_config = {"extra": "forbid"}
 
 
 # Pydantic v2: when using postponed annotations (from __future__ import annotations),

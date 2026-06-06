@@ -45,11 +45,8 @@ class CheckpointStore:
         return None
 
 
-
 _checkpoint_store = CheckpointStore()
 
 
 def get_checkpoint_store() -> CheckpointStore:
     return _checkpoint_store
-
-

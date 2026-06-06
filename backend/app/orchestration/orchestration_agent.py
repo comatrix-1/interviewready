@@ -73,47 +73,38 @@ class OrchestrationAgent:
     # ---------- Public API ----------
 
     @observe(name="orchestration_execution")
-    def orchestrate(
-        self, request: ChatRequest, context: SessionContext
-    ) -> AgentResponse:
+    def orchestrate(self, request: ChatRequest, context: SessionContext) -> AgentResponse:
         start = time.time()
         session_id = getattr(context, "session_id", "unknown")
         user_id = getattr(context, "user_id", None)
 
-        with langfuse.start_as_current_observation(name="orchestration_execution"), propagate_attributes(user_id=user_id, session_id=session_id):
-                intent = self._parse_intent(request.intent)
-                if request.jobDescription:
-                    context.job_description = request.jobDescription
+        with (
+            langfuse.start_as_current_observation(name="orchestration_execution"),
+            propagate_attributes(user_id=user_id, session_id=session_id),
+        ):
+            intent = self._parse_intent(request.intent)
+            if request.jobDescription:
+                context.job_description = request.jobDescription
 
-                state = self._resolve_state(request, context, intent)
-                config = {"configurable": {"thread_id": session_id}}
+            state = self._resolve_state(request, context, intent)
+            config = {"configurable": {"thread_id": session_id}}
 
-                result = self.workflow.invoke(state, config=config)
-                final_state = result if isinstance(result, OrchestrationState) else None
-                response = (
-                    final_state.response
-                    if final_state is not None
-                    else result.get("response")
-                )
+            result = self.workflow.invoke(state, config=config)
+            final_state = result if isinstance(result, OrchestrationState) else None
+            response = final_state.response if final_state is not None else result.get("response")
 
-                if not response:
-                    msg = "No response produced"
-                    raise RuntimeError(msg)
+            if not response:
+                msg = "No response produced"
+                raise RuntimeError(msg)
 
+            if final_state is not None:
+                context.shared_memory = final_state.shared_memory
 
-                if final_state is not None:
-                    context.shared_memory = final_state.shared_memory
+            logger.log_orchestration_complete(session_id, time.time() - start, state.agent_sequence)
+            return response
 
-                logger.log_orchestration_complete(
-                    session_id, time.time() - start, state.agent_sequence
-                )
-                return response
-
-    def _resolve_state(
-        self, request: ChatRequest, context: SessionContext, intent: Intent
-    ) -> OrchestrationState:
+    def _resolve_state(self, request: ChatRequest, context: SessionContext, intent: Intent) -> OrchestrationState:
         sequence = INTENT_TO_AGENTS[intent]
-
 
         return OrchestrationState(
             request=request,
@@ -122,9 +113,7 @@ class OrchestrationAgent:
             shared_memory=dict(context.shared_memory or {}),
         )
 
-    def _apply_resume_override(
-        self, state: OrchestrationState, request: ChatRequest
-    ) -> None:
+    def _apply_resume_override(self, state: OrchestrationState, request: ChatRequest) -> None:
         if request.resumeData and self._has_content(request.resumeData):
             resume = request.resumeData
             state.resume_document = self._build_resume_doc(resume, "resumeData")
@@ -231,10 +220,7 @@ class OrchestrationAgent:
 
     def _process_resume_input(
         self, request: ChatRequest, context: SessionContext
-    ) -> (
-        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]
-        | AgentResponse
-    ):
+    ) -> tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool] | AgentResponse:
         if request.resumeData and self._has_content(request.resumeData):
             return self._process_resume_data(request.resumeData, "resumeData", context)
 
@@ -264,15 +250,10 @@ class OrchestrationAgent:
 
     def _process_resume_file(
         self, request: ChatRequest, context: SessionContext
-    ) -> (
-        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]
-        | AgentResponse
-    ):
+    ) -> tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool] | AgentResponse:
         extractor = self._get_agent("ExtractorAgent")
         try:
-            response = extractor.process(
-                json.dumps(request.resumeFile.model_dump()), context
-            )
+            response = extractor.process(json.dumps(request.resumeFile.model_dump()), context)
             parsed = response.content or {}
             resume = Resume.model_validate(parsed)
             resume_doc = self._build_resume_doc(resume, "resumeFile")
@@ -306,10 +287,7 @@ class OrchestrationAgent:
 
     def _process_context_resume(
         self, context: SessionContext
-    ) -> (
-        tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool]
-        | AgentResponse
-    ):
+    ) -> tuple[Resume, ResumeDocument, str, float, list[str], list[str], bool] | AgentResponse:
         parsed_from_context = None
         if context.resume_data:
             parsed_from_context = self._parse_resume_data(context.resume_data)
@@ -375,25 +353,19 @@ class OrchestrationAgent:
 
         input_text = self._render_input(state.input)
 
-        logger.log_agent_execution_start(
-            agent_name, input_text, session_id, state.index
-        )
+        logger.log_agent_execution_start(agent_name, input_text, session_id, state.index)
 
         start = time.time()
         response = agent.process(state.input, context)
 
-        logger.log_agent_execution_complete(
-            agent_name, response, session_id, time.time() - start
-        )
+        logger.log_agent_execution_complete(agent_name, response, session_id, time.time() - start)
 
         audited = self.governance.audit(response, input_text)
         self._update_context(context, audited, agent_name)
 
         state.response = audited
         state.artifacts.append(self._build_artifact(audited, agent_name))
-        self._update_state_memory(
-            state, artifacts=[artifact.model_dump() for artifact in state.artifacts]
-        )
+        self._update_state_memory(state, artifacts=[artifact.model_dump() for artifact in state.artifacts])
         state.index += 1
 
         return state
@@ -426,8 +398,6 @@ class OrchestrationAgent:
             audio_data=getattr(request, "audioData", None),
         )
 
-
-
     def _build_review_response(self, state: OrchestrationState) -> AgentResponse:
         payload = {
             "review_payload": state.review_payload or {},
@@ -439,15 +409,9 @@ class OrchestrationAgent:
             agent_name="HITL_REVIEW",
             content=payload,
             reasoning="HITL review required before continuing.",
-            confidence_score=state.review_payload.get("confidence_score")
-            if state.review_payload
-            else 0.0,
+            confidence_score=state.review_payload.get("confidence_score") if state.review_payload else 0.0,
             needs_review=True,
-            low_confidence_fields=(
-                state.review_payload.get("fields_requiring_attention", [])
-                if state.review_payload
-                else []
-            ),
+            low_confidence_fields=(state.review_payload.get("fields_requiring_attention", []) if state.review_payload else []),
             decision_trace=state.context.decision_trace or [],
             sharp_metadata={
                 "review_payload": state.review_payload,
@@ -490,9 +454,7 @@ class OrchestrationAgent:
             return f"{field_name}: url='{url_value}' (invalid)"
         return None
 
-    def _validate_item_dates(
-        self, item: Any, field_name: str, date_fields: list[str]
-    ) -> list[str]:
+    def _validate_item_dates(self, item: Any, field_name: str, date_fields: list[str]) -> list[str]:
         errors: list[str] = []
         for attr_name in date_fields:
             attr_value = getattr(item, attr_name, None)
@@ -513,9 +475,7 @@ class OrchestrationAgent:
         if request.resumeFile:
             extractor = self._get_agent("ExtractorAgent")
             try:
-                response = extractor.process(
-                    json.dumps(request.resumeFile.model_dump()), context
-                )
+                response = extractor.process(json.dumps(request.resumeFile.model_dump()), context)
                 parsed = response.content or {}
                 resume = Resume.model_validate(parsed)
 
@@ -526,9 +486,7 @@ class OrchestrationAgent:
                     extractor_confidence_score=response.confidence_score,
                     extractor_low_confidence_fields=response.low_confidence_fields,
                     extractor_needs_review=response.needs_review,
-                    extractor_validation_errors=sharp_metadata.get(
-                        "validation_errors", []
-                    ),
+                    extractor_validation_errors=sharp_metadata.get("validation_errors", []),
                 )
 
                 logger.info(
@@ -547,9 +505,7 @@ class OrchestrationAgent:
                         needs_review=True,
                     )
             except Exception as e:
-                return self._failure(
-                    "Failed to parse resume file.", str(e), context, needs_review=True
-                )
+                return self._failure("Failed to parse resume file.", str(e), context, needs_review=True)
 
             doc = self._build_resume_doc(resume, "resumeFile")
             self._update_memory(context, current_resume=resume.model_dump())
@@ -596,17 +552,9 @@ class OrchestrationAgent:
         context.add_to_history(response)
 
     def _render_input(self, agent_input: AgentInput) -> str:
-        data = (
-            agent_input.resume.model_dump(exclude_none=True)
-            if agent_input.resume is not None
-            else {}
-        )
+        data = agent_input.resume.model_dump(exclude_none=True) if agent_input.resume is not None else {}
         # Handle cases where agent_input.intent might be an Enum or a string
-        intent_value = (
-            agent_input.intent.value
-            if hasattr(agent_input.intent, "value")
-            else agent_input.intent
-        )
+        intent_value = agent_input.intent.value if hasattr(agent_input.intent, "value") else agent_input.intent
         if intent_value == Intent.ALIGNMENT.value:
             return f"{json.dumps(data, indent=2)}\nJD: {agent_input.job_description}"
         return json.dumps(data, indent=2)

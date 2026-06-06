@@ -46,12 +46,7 @@ async def list_agents(
                     detail="Orchestration service unavailable",
                 )
 
-        result = {
-            name: agent.get_system_prompt()
-            for name, agent in orchestrator.get_agents().items()
-        }
+        result = {name: agent.get_system_prompt() for name, agent in orchestrator.get_agents().items()}
 
-        langfuse.update_current_span(
-            output={"success": True, "agent_count": len(result)}
-        )
+        langfuse.update_current_span(output={"success": True, "agent_count": len(result)})
         return result

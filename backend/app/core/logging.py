@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.core.config import settings
+from app.core.constants import PREVIEW_MAX_LENGTH
 
 
 class OrchestrationLogger:
@@ -51,9 +52,7 @@ class OrchestrationLogger:
         if self._should_log("ERROR"):
             self._format_message("ERROR", message, **kwargs)
 
-    def log_orchestration_start(
-        self, input_text: str, session_id: str, user_id: str | None = None
-    ) -> None:
+    def log_orchestration_start(self, input_text: str, session_id: str, user_id: str | None = None) -> None:
         """Log orchestration request start."""
         self.info(
             "Orchestration request started",
@@ -61,9 +60,7 @@ class OrchestrationLogger:
             session_id=session_id,
             user_id=user_id,
             input_length=len(input_text),
-            input_preview=input_text[:100] + "..."
-            if len(input_text) > 100
-            else input_text,
+            input_preview=input_text[:PREVIEW_MAX_LENGTH] + "..." if len(input_text) > PREVIEW_MAX_LENGTH else input_text,
         )
 
     def log_intent_analysis(
@@ -83,9 +80,7 @@ class OrchestrationLogger:
             input_length=len(input_text),
         )
 
-    def log_agent_execution_start(
-        self, agent_name: str, input_text: str, session_id: str, agent_index: int
-    ) -> None:
+    def log_agent_execution_start(self, agent_name: str, input_text: str, session_id: str, agent_index: int) -> None:
         """Log agent execution start."""
         self.info(
             f"Agent execution started: {agent_name}",
@@ -94,14 +89,10 @@ class OrchestrationLogger:
             agent_name=agent_name,
             agent_index=agent_index,
             input_length=len(input_text),
-            input_preview=input_text[:100] + "..."
-            if len(input_text) > 100
-            else input_text,
+            input_preview=input_text[:PREVIEW_MAX_LENGTH] + "..." if len(input_text) > PREVIEW_MAX_LENGTH else input_text,
         )
 
-    def log_agent_execution_complete(
-        self, agent_name: str, response: Any, session_id: str, execution_time: float
-    ) -> None:
+    def log_agent_execution_complete(self, agent_name: str, response: Any, session_id: str, execution_time: float) -> None:
         """Log agent execution completion."""
         response_content = getattr(response, "content", str(response))
         confidence_score = getattr(response, "confidence_score", None)
@@ -114,14 +105,12 @@ class OrchestrationLogger:
             execution_time_ms=round(execution_time * 1000, 2),
             response_length=len(response_content) if response_content else 0,
             confidence_score=confidence_score,
-            response_preview=response_content[:100] + "..."
-            if response_content and len(response_content) > 100
+            response_preview=response_content[:PREVIEW_MAX_LENGTH] + "..."
+            if response_content and len(response_content) > PREVIEW_MAX_LENGTH
             else response_content,
         )
 
-    def log_agent_error(
-        self, agent_name: str, error: Exception, session_id: str
-    ) -> None:
+    def log_agent_error(self, agent_name: str, error: Exception, session_id: str) -> None:
         """Log agent execution error."""
         self.error(
             f"Agent execution failed: {agent_name}",
@@ -132,9 +121,7 @@ class OrchestrationLogger:
             error_message=str(error),
         )
 
-    def log_orchestration_complete(
-        self, session_id: str, total_time: float, agent_sequence: list[str]
-    ) -> None:
+    def log_orchestration_complete(self, session_id: str, total_time: float, agent_sequence: list[str]) -> None:
         """Log orchestration completion."""
         self.info(
             "Orchestration request completed",
@@ -145,9 +132,7 @@ class OrchestrationLogger:
             agent_count=len(agent_sequence),
         )
 
-    def log_state_transition(
-        self, from_state: str, to_state: str, session_id: str, **kwargs
-    ) -> None:
+    def log_state_transition(self, from_state: str, to_state: str, session_id: str, **kwargs) -> None:
         """Log state transition."""
         self.debug(
             f"State transition: {from_state} -> {to_state}",
@@ -158,9 +143,7 @@ class OrchestrationLogger:
             **kwargs,
         )
 
-    def log_api_call(
-        self, service: str, operation: str, session_id: str, **kwargs
-    ) -> None:
+    def log_api_call(self, service: str, operation: str, session_id: str, **kwargs) -> None:
         """Log external API call."""
         self.debug(
             f"API call: {service}.{operation}",

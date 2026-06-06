@@ -9,6 +9,7 @@ from threading import RLock
 from app.models import SessionContext
 
 SESSION_EXPIRY_SECONDS = 3600
+_MAX_SESSION_ID_ATTEMPTS = 100
 
 
 class SessionStore:
@@ -23,9 +24,8 @@ class SessionStore:
     def _generate_session_id(self) -> str:
         """Generate a unique session ID that is not currently in use."""
 
-
         attempts = 0
-        while attempts < 100:
+        while attempts < _MAX_SESSION_ID_ATTEMPTS:
             session_id = f"session_{uuid.uuid4().hex[:16]}"
             if session_id not in self._used_session_ids:
                 self._used_session_ids.add(session_id)
@@ -57,9 +57,7 @@ class SessionStore:
         """Remove expired sessions and return count of removed sessions."""
         current_time = time.time()
         expired_session_ids = [
-            sid
-            for sid, ts in self._session_timestamps.items()
-            if current_time - ts > SESSION_EXPIRY_SECONDS
+            sid for sid, ts in self._session_timestamps.items() if current_time - ts > SESSION_EXPIRY_SECONDS
         ]
 
         for session_id in expired_session_ids:

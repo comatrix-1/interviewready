@@ -97,12 +97,10 @@ Provide a JSON response with:
         try:
             usage_details: dict[str, int] | None = None
             if hasattr(self.gemini_service, "generate_response_with_usage"):
-                response, usage_details = (
-                    self.gemini_service.generate_response_with_usage(
-                        system_prompt=system_prompt,
-                        user_input=judge_input,
-                        temperature=self.temperature,
-                    )
+                response, usage_details = self.gemini_service.generate_response_with_usage(
+                    system_prompt=system_prompt,
+                    user_input=judge_input,
+                    temperature=self.temperature,
                 )
             else:
                 response = self.gemini_service.generate_response(
@@ -146,9 +144,7 @@ Provide a JSON response with:
             return evaluation
 
         except Exception as e:
-            logger.error(
-                "LLM-as-a-judge evaluation failed", agent_name=agent_name, error=str(e)
-            )
+            logger.error("LLM-as-a-judge evaluation failed", agent_name=agent_name, error=str(e))
             return JudgeEvaluation(
                 quality_score=0.5,
                 accuracy_score=0.5,
@@ -203,7 +199,6 @@ Provide your evaluation as valid JSON."""
     def _parse_judge_response(self, response: str) -> JudgeEvaluation:
         """Parse the judge's JSON response into a JudgeEvaluation."""
 
-
         parsed = parse_json_object(response)
 
         if not parsed:
@@ -223,9 +218,7 @@ Provide your evaluation as valid JSON."""
             concerns=parsed.get("concerns", []),
         )
 
-    def _build_cost_details(
-        self, usage_details: dict[str, int]
-    ) -> dict[str, float] | None:
+    def _build_cost_details(self, usage_details: dict[str, int]) -> dict[str, float] | None:
         prompt_rate = settings.JUDGE_PROMPT_COST_PER_1K_USD
         completion_rate = settings.JUDGE_COMPLETION_COST_PER_1K_USD
         if prompt_rate is None and completion_rate is None:
@@ -291,8 +284,13 @@ Provide your evaluation as valid JSON."""
         model_name = getattr(self.gemini_service, "model_name", None)
         cost_details = self._build_cost_details(usage_details)
         metadata = self._build_judge_metadata(
-            agent_name, usage_details, cost_details, model_name,
-            intent=intent, session_id=session_id, run_name=run_name,
+            agent_name,
+            usage_details,
+            cost_details,
+            model_name,
+            intent=intent,
+            session_id=session_id,
+            run_name=run_name,
         )
         input_payload = {
             "system_prompt": system_prompt[:2000],
@@ -306,7 +304,9 @@ Provide your evaluation as valid JSON."""
             current_trace_id = None
 
         if current_trace_id == trace_id:
-            self._try_update_generation(metadata, input_payload, output_payload, usage_details, cost_details, model_name, trace_id)
+            self._try_update_generation(
+                metadata, input_payload, output_payload, usage_details, cost_details, model_name, trace_id
+            )
         else:
             self._try_create_event(trace_id, metadata, input_payload, output_payload)
 

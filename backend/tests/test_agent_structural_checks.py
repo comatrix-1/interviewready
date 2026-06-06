@@ -73,9 +73,7 @@ def test_agent_structural_checks(case) -> None:
     assert output, f"{case.agent} returned blank content"
 
     min_len, max_len = LENGTH_BOUNDS[case.agent]
-    assert min_len <= len(output) <= max_len, (
-        f"{case.agent} output length {len(output)} outside bounds {min_len}-{max_len}"
-    )
+    assert min_len <= len(output) <= max_len, f"{case.agent} output length {len(output)} outside bounds {min_len}-{max_len}"
 
     if case.agent in JSON_MODELS:
         parsed = parse_json_payload(output, allow_array=False)
@@ -84,6 +82,6 @@ def test_agent_structural_checks(case) -> None:
     elif case.agent == "InterviewCoachAgent":
         parsed = parse_json_payload(output, allow_array=False)
         assert isinstance(parsed, dict), "InterviewCoachAgent returned invalid JSON"
-        assert "current_question_number" in parsed or parsed.get(
-            "interview_complete", False
-        ), "InterviewCoachAgent response missing interview state"
+        assert "current_question_number" in parsed or parsed.get("interview_complete", False), (
+            "InterviewCoachAgent response missing interview state"
+        )

@@ -22,9 +22,7 @@ class AgentResponse(BaseModel):
     needs_review: bool | None = None
     low_confidence_fields: list[str] | None = Field(default_factory=list)
     decision_trace: list[str] | None = Field(default_factory=list)  # Auditability
-    sharp_metadata: dict[str, Any] | None = Field(
-        default_factory=dict
-    )  # SHARP Compliance Data
+    sharp_metadata: dict[str, Any] | None = Field(default_factory=dict)  # SHARP Compliance Data
 
 
 class ChatApiResponse(BaseModel):
@@ -179,6 +177,8 @@ class ResumeCriticIssue(BaseModel):
     type: Literal["ats", "structure", "impact", "readability"]
     severity: Literal["HIGH", "MEDIUM", "LOW"]
     description: str
+
+
 class ResumeCriticReport(BaseModel):
     """Resume critic analysis report."""
 

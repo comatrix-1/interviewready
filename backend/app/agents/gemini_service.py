@@ -17,9 +17,7 @@ MAX_OUTPUT_TOKENS = 8192
 class GeminiService:
     """Service for interacting with Google Gemini API."""
 
-    def __init__(
-        self, api_key: str | None = None, model_name: str = "gemini-2.5-flash"
-    ):
+    def __init__(self, api_key: str | None = None, model_name: str = "gemini-2.5-flash"):
         """Initialize Gemini service.
 
         Args:
@@ -117,9 +115,7 @@ class GeminiService:
             config_kwargs["temperature"] = temperature
         if tools:
             config_kwargs["tools"] = tools
-            config_kwargs["automatic_function_calling"] = (
-                types.AutomaticFunctionCallingConfig()
-            )
+            config_kwargs["automatic_function_calling"] = types.AutomaticFunctionCallingConfig()
         return self.client.models.generate_content(
             model=self.model_name,
             contents=user_input,
@@ -147,11 +143,7 @@ class GeminiService:
     def _extract_text_from_candidates(self, response: Any) -> str | None:
         candidates = getattr(response, "candidates", None)
         if not candidates:
-            return (
-                getattr(response, "text", None)
-                if isinstance(getattr(response, "text", None), str)
-                else None
-            )
+            return getattr(response, "text", None) if isinstance(getattr(response, "text", None), str) else None
 
         parts_text = self._collect_parts_from_candidates(candidates)
         return "".join(parts_text) if parts_text else None
@@ -191,21 +183,15 @@ class GeminiService:
         return self._build_usage_dict(token_counts)
 
     def _get_usage_metadata(self, response: Any) -> Any:
-        return getattr(response, "usage_metadata", None) or getattr(
-            response, "usage", None
-        )
+        return getattr(response, "usage_metadata", None) or getattr(response, "usage", None)
 
     def _extract_token_counts(self, usage: Any) -> dict[str, int | None]:
         return {
-            "prompt_tokens": self._find_token_value(
-                usage, ["prompt_token_count", "prompt_tokens", "input_tokens"]
-            ),
+            "prompt_tokens": self._find_token_value(usage, ["prompt_token_count", "prompt_tokens", "input_tokens"]),
             "completion_tokens": self._find_token_value(
                 usage, ["candidates_token_count", "completion_tokens", "output_tokens"]
             ),
-            "total_tokens": self._find_token_value(
-                usage, ["total_token_count", "total_tokens"]
-            ),
+            "total_tokens": self._find_token_value(usage, ["total_token_count", "total_tokens"]),
         }
 
     def _find_token_value(self, usage: Any, keys: list[str]) -> int | None:
@@ -230,19 +216,13 @@ class GeminiService:
         except (TypeError, ValueError):
             return None
 
-    def _build_usage_dict(
-        self, token_counts: dict[str, int | None]
-    ) -> dict[str, int] | None:
+    def _build_usage_dict(self, token_counts: dict[str, int | None]) -> dict[str, int] | None:
         prompt_tokens = token_counts["prompt_tokens"]
         completion_tokens = token_counts["completion_tokens"]
         total_tokens = token_counts["total_tokens"]
 
         # Calculate total if missing
-        if (
-            total_tokens is None
-            and prompt_tokens is not None
-            and completion_tokens is not None
-        ):
+        if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
             total_tokens = prompt_tokens + completion_tokens
 
         usage_details = {}
@@ -270,7 +250,8 @@ class GeminiService:
             lowered_input = user_input.lower()
             normalized_words = set(re.findall(r"[a-zA-Z']+", lowered_input))
             token_list = re.findall(r"[a-zA-Z']+", lowered_input)
-            looks_like_gibberish = len(token_list) == 1 and len(token_list[0]) >= 10
+            _GIBBERISH_MIN_LENGTH = 10
+            looks_like_gibberish = len(token_list) == 1 and len(token_list[0]) >= _GIBBERISH_MIN_LENGTH
             low_effort_phrases = [
                 "ignore previous instructions",
                 "i don't know",
@@ -455,9 +436,7 @@ class GeminiLiveService:
         except Exception as e:
             return f"Error in Gemini Audio: {e!s}"
 
-    def send_text_and_wait_response(
-        self, text: str, system_prompt: str = ""
-    ) -> str | None:
+    def send_text_and_wait_response(self, text: str, system_prompt: str = "") -> str | None:
         """Send text and wait for response using Gemini API.
 
         Args:
@@ -471,8 +450,6 @@ class GeminiLiveService:
             return None
 
         try:
-
-
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=text,

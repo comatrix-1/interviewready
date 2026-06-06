@@ -40,9 +40,7 @@ def _build_system_instruction(context) -> str:
     if getattr(context, "job_description", None):
         system_instruction += f"\n\nTarget Job Description:\n{context.job_description}"
 
-    if not getattr(context, "resume_data", None) and not getattr(
-        context, "job_description", None
-    ):
+    if not getattr(context, "resume_data", None) and not getattr(context, "job_description", None):
         system_instruction += (
             "\n\nDIAGNOSTIC MODE: This is a system connectivity test. "
             "Greet the user warmly, confirm you are InterviewReady AI, "
@@ -72,9 +70,7 @@ async def interview_live_websocket(
 ):
     """WebSocket relay between the browser and Gemini Live."""
     await websocket.accept()
-    logger.info(
-        f"[VOICE_BACKEND] WebSocket connection accepted for session {session_id}"
-    )
+    logger.info(f"[VOICE_BACKEND] WebSocket connection accepted for session {session_id}")
 
     user_id = "dev-user"
     try:
@@ -109,130 +105,34 @@ async def interview_live_websocket(
     async def audio_interrupt_callback():
         await websocket.send_json({"type": "interrupted"})
 
-    async def receive_from_client():
-        try:
-            while True:
-                message = await websocket.receive()
-
-                if message.get("bytes"):
-                    await audio_input_queue.put(message["bytes"])
-                    continue
-
-                raw_text = message.get("text")
-                if not raw_text:
-                    continue
-
-                try:
-                    payload = json.loads(raw_text)
-                except json.JSONDecodeError:
-                    await text_input_queue.put(raw_text)
-                    continue
-
-                if not isinstance(payload, dict):
-                    continue
-
-                event_type = payload.get("event") or payload.get("type")
-
-                if event_type == "ping":
-                    await websocket.send_json({"event": "pong"})
-                    continue
-
-                if event_type == "interrupt":
-                    logger.info("[VOICE_BACKEND] Interrupt received from frontend")
-                    # Gemini Live handles true interruption from incoming audio.
-                    await websocket.send_json({"type": "interrupted"})
-                    continue
-
-                if event_type == "audio_stream_end":
-                    logger.info(
-                        "[VOICE_BACKEND] Audio stream end received from frontend"
-                    )
-                    await control_input_queue.put("audio_stream_end")
-                    continue
-
-                if payload.get("audioData"):
-                    await audio_input_queue.put(base64.b64decode(payload["audioData"]))
-                    continue
-
-                if payload.get("type") == "image" and payload.get("data"):
-                    await video_input_queue.put(base64.b64decode(payload["data"]))
-                    continue
-
-                if payload.get("text"):
-                    await text_input_queue.put(payload["text"])
-        except WebSocketDisconnect:
-            logger.info(f"[VOICE_BACKEND] Client disconnected for session {session_id}")
-            raise
-        except Exception as exc:
-            if "disconnect message has been received" in str(exc):
-                logger.info(
-                    f"[VOICE_BACKEND] Client receive loop closed for session {session_id}"
-                )
-                raise WebSocketDisconnect from exc
-            logger.error(f"[VOICE_BACKEND] Error receiving from client: {exc}")
-            await websocket.send_json({"error": f"Client communication error: {exc!s}"})
-
-    async def run_session():
-        await websocket.send_json(
-            {
-                "type": "textStream",
-                "data": "Voice session active. AI is initializing...",
-            }
+    receive_task = asyncio.create_task(
+        _receive_from_client(
+            websocket=websocket,
+            session_id=session_id,
+            audio_input_queue=audio_input_queue,
+            video_input_queue=video_input_queue,
+            text_input_queue=text_input_queue,
+            control_input_queue=control_input_queue,
         )
+    )
 
-        async for event in gemini_client.start_session(
+    try:
+        await _run_gemini_session(
+            gemini_client=gemini_client,
+            websocket=websocket,
             audio_input_queue=audio_input_queue,
             video_input_queue=video_input_queue,
             text_input_queue=text_input_queue,
             control_input_queue=control_input_queue,
             audio_output_callback=audio_output_callback,
             audio_interrupt_callback=audio_interrupt_callback,
-        ):
-            if not event:
-                continue
-
-            event_type = event.get("type")
-
-            if event_type == "user":
-                await websocket.send_json(
-                    {"type": "inputTranscription", "data": event.get("text", "")}
-                )
-                continue
-
-            if event_type == "gemini":
-                await websocket.send_json(
-                    {"type": "textStream", "data": event.get("text", "")}
-                )
-                continue
-
-            if event_type == "turn_complete":
-                await websocket.send_json({"type": "turn_complete"})
-                continue
-
-            if event_type == "interrupted":
-                await websocket.send_json({"type": "interrupted"})
-                continue
-
-            if event_type == "error":
-                await websocket.send_json(
-                    {"error": event.get("error", "Unknown error")}
-                )
-                continue
-
-            await websocket.send_json(event)
-
-    receive_task = asyncio.create_task(receive_from_client())
-
-    try:
-        await run_session()
+        )
     except asyncio.CancelledError:
         logger.info(f"[VOICE_BACKEND] Session task cancelled for session {session_id}")
     except WebSocketDisconnect:
         logger.info(f"[VOICE_BACKEND] WebSocket disconnected for session {session_id}")
     except Exception as exc:
-        logger.error(
-            f"[VOICE_BACKEND] WebSocket Error in session {session_id}: {type(exc).__name__}: {exc}"
-        )
+        logger.error(f"[VOICE_BACKEND] WebSocket Error in session {session_id}: {type(exc).__name__}: {exc}")
         logger.error(traceback.format_exc())
         if websocket.client_state.name != "DISCONNECTED":
             with contextlib.suppress(Exception):
@@ -244,15 +144,149 @@ async def interview_live_websocket(
                 )
     finally:
         receive_task.cancel()
-        # Shield the cleanup to ensure it completes even if the main task is being cancelled
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await asyncio.shield(receive_task)
 
         if websocket.client_state.name != "DISCONNECTED":
-            try:
-                logger.info(
-                    f"[VOICE_BACKEND] Closing WebSocket for session {session_id}"
-                )
+            with contextlib.suppress(Exception):
                 await websocket.close()
-            except Exception as e:
-                logger.debug(f"[VOICE_BACKEND] Error during final websocket close: {e}")
+
+
+async def _receive_from_client(
+    websocket: WebSocket,
+    session_id: str,
+    audio_input_queue: asyncio.Queue[bytes],
+    video_input_queue: asyncio.Queue[bytes],
+    text_input_queue: asyncio.Queue[str],
+    control_input_queue: asyncio.Queue[str],
+) -> None:
+    """Read WebSocket messages and dispatch them to the appropriate queue."""
+    try:
+        while True:
+            message = await websocket.receive()
+
+            if message.get("bytes"):
+                await audio_input_queue.put(message["bytes"])
+                continue
+
+            raw_text = message.get("text")
+            if not raw_text:
+                continue
+
+            try:
+                payload = json.loads(raw_text)
+            except json.JSONDecodeError:
+                await text_input_queue.put(raw_text)
+                continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            await _dispatch_ws_payload(
+                payload=payload,
+                websocket=websocket,
+                audio_input_queue=audio_input_queue,
+                video_input_queue=video_input_queue,
+                text_input_queue=text_input_queue,
+                control_input_queue=control_input_queue,
+            )
+    except WebSocketDisconnect:
+        logger.info(f"[VOICE_BACKEND] Client disconnected for session {session_id}")
+        raise
+    except Exception as exc:
+        if "disconnect message has been received" in str(exc):
+            logger.info(f"[VOICE_BACKEND] Client receive loop closed for session {session_id}")
+            raise WebSocketDisconnect from exc
+        logger.error(f"[VOICE_BACKEND] Error receiving from client: {exc}")
+        await websocket.send_json({"error": f"Client communication error: {exc!s}"})
+
+
+async def _dispatch_ws_payload(
+    payload: dict,
+    websocket: WebSocket,
+    audio_input_queue: asyncio.Queue[bytes],
+    video_input_queue: asyncio.Queue[bytes],
+    text_input_queue: asyncio.Queue[str],
+    control_input_queue: asyncio.Queue[str],
+) -> None:
+    """Dispatch a parsed WebSocket payload to the appropriate queue."""
+    event_type = payload.get("event") or payload.get("type")
+
+    if event_type == "ping":
+        await websocket.send_json({"event": "pong"})
+        return
+
+    if event_type == "interrupt":
+        logger.info("[VOICE_BACKEND] Interrupt received from frontend")
+        await websocket.send_json({"type": "interrupted"})
+        return
+
+    if event_type == "audio_stream_end":
+        logger.info("[VOICE_BACKEND] Audio stream end received from frontend")
+        await control_input_queue.put("audio_stream_end")
+        return
+
+    if payload.get("audioData"):
+        await audio_input_queue.put(base64.b64decode(payload["audioData"]))
+        return
+
+    if payload.get("type") == "image" and payload.get("data"):
+        await video_input_queue.put(base64.b64decode(payload["data"]))
+        return
+
+    if payload.get("text"):
+        await text_input_queue.put(payload["text"])
+
+
+async def _run_gemini_session(
+    gemini_client: GeminiLive,
+    websocket: WebSocket,
+    audio_input_queue: asyncio.Queue[bytes],
+    video_input_queue: asyncio.Queue[bytes],
+    text_input_queue: asyncio.Queue[str],
+    control_input_queue: asyncio.Queue[str],
+    audio_output_callback,
+    audio_interrupt_callback,
+) -> None:
+    """Run the Gemini Live session, forwarding events to the WebSocket."""
+    await websocket.send_json(
+        {
+            "type": "textStream",
+            "data": "Voice session active. AI is initializing...",
+        }
+    )
+
+    async for event in gemini_client.start_session(
+        audio_input_queue=audio_input_queue,
+        video_input_queue=video_input_queue,
+        text_input_queue=text_input_queue,
+        control_input_queue=control_input_queue,
+        audio_output_callback=audio_output_callback,
+        audio_interrupt_callback=audio_interrupt_callback,
+    ):
+        if not event:
+            continue
+
+        event_type = event.get("type")
+
+        if event_type == "user":
+            await websocket.send_json({"type": "inputTranscription", "data": event.get("text", "")})
+            continue
+
+        if event_type == "gemini":
+            await websocket.send_json({"type": "textStream", "data": event.get("text", "")})
+            continue
+
+        if event_type == "turn_complete":
+            await websocket.send_json({"type": "turn_complete"})
+            continue
+
+        if event_type == "interrupted":
+            await websocket.send_json({"type": "interrupted"})
+            continue
+
+        if event_type == "error":
+            await websocket.send_json({"error": event.get("error", "Unknown error")})
+            continue
+
+        await websocket.send_json(event)

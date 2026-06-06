@@ -1,6 +1,5 @@
 """Test script for agent implementations."""
 
-
 from dotenv import load_dotenv
 
 from app.agents import (
@@ -113,9 +112,7 @@ def test_agents():
 
             # Show first 200 characters of content
             if response.content:
-                response.content[:200] + "..." if len(
-                    response.content
-                ) > 200 else response.content
+                response.content[:200] + "..." if len(response.content) > 200 else response.content
 
         except Exception:
             pass

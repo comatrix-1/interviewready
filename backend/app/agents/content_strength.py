@@ -7,7 +7,7 @@ from typing import Any
 from langfuse import observe
 
 from app.core.config import settings
-from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
+from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, PREVIEW_MAX_LENGTH, RESUME_SCHEMA
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, ContentStrengthReport
 from app.models.session import SessionContext
@@ -21,7 +21,6 @@ class ContentStrengthAgent(BaseAgent):
 
     USE_MOCK_RESPONSE = settings.MOCK_CONTENT_STRENGTH_AGENT
     MOCK_RESPONSE_KEY = "ContentStrengthAgent"
-
 
     SYSTEM_PROMPT = (
         """
@@ -66,6 +65,10 @@ class ContentStrengthAgent(BaseAgent):
         + ANTI_JAILBREAK_DIRECTIVE
     )
 
+    # Threshold constants
+    _CONFIDENCE_LOW_THRESHOLD = 0.3
+    _HALLUCINATION_HIGH_THRESHOLD = 0.7
+
     _EVIDENCE_WEIGHTS = {"HIGH": 1.0, "MEDIUM": 0.65, "LOW": 0.3}
     _SUGGESTION_RISK = {
         "action_verb": 0.0,
@@ -73,7 +76,6 @@ class ContentStrengthAgent(BaseAgent):
         "structure": 0.05,
         "specificity": 0.2,
     }
-
 
     def __init__(self, gemini_service):
         """Initialize Content Strength Agent.
@@ -86,7 +88,6 @@ class ContentStrengthAgent(BaseAgent):
             system_prompt=self.SYSTEM_PROMPT,
             name="ContentStrengthAgent",
         )
-
 
     @observe(name="content_strength_process", as_type="agent")
     def process(self, input_data: AgentInput, context: SessionContext) -> AgentResponse:
@@ -113,14 +114,14 @@ class ContentStrengthAgent(BaseAgent):
             "ContentStrengthAgent processing started",
             session_id=session_id,
             input_length=len(input_text),
-            input_preview=input_text[:100] + "..."
-            if len(input_text) > 100
-            else input_text,
+            input_preview=input_text[:PREVIEW_MAX_LENGTH] + "..." if len(input_text) > PREVIEW_MAX_LENGTH else input_text,
         )
         try:
             validated, _ = self._process_llm_result(
-                input_text, context,
-                self.MOCK_RESPONSE_KEY, self.USE_MOCK_RESPONSE,
+                input_text,
+                context,
+                self.MOCK_RESPONSE_KEY,
+                self.USE_MOCK_RESPONSE,
                 ContentStrengthReport,
             )
             structured_result = validated.model_dump()
@@ -130,9 +131,7 @@ class ContentStrengthAgent(BaseAgent):
                 resume_payload = input_data.resume.model_dump(exclude_none=True)
 
             suggestions = structured_result.get("suggestions") or []
-            valid_suggestions, removed = self._filter_by_location(
-                suggestions, resume_payload, "location"
-            )
+            valid_suggestions, removed = self._filter_by_location(suggestions, resume_payload, "location")
             structured_result["suggestions"] = valid_suggestions
 
             processing_time = time.time() - processing_start_time
@@ -167,7 +166,8 @@ class ContentStrengthAgent(BaseAgent):
                 content=structured_result,
                 reasoning=summary,
                 confidence_score=confidence_score,
-                needs_review=(confidence_score < 0.3) or (hallucination_risk >= 0.7),
+                needs_review=(confidence_score < self._CONFIDENCE_LOW_THRESHOLD)
+                or (hallucination_risk >= self._HALLUCINATION_HIGH_THRESHOLD),
                 low_confidence_fields=[],
                 decision_trace=decision_trace,
                 sharp_metadata=sharp_metadata,
@@ -237,16 +237,10 @@ class ContentStrengthAgent(BaseAgent):
 
     def _calculate_hallucination_risk(self, result: dict[str, Any]) -> float:
         suggestions = result.get("suggestions") or []
-        risks = [
-            self._SUGGESTION_RISK.get(s.get("type", ""), 0.1)
-            for s in suggestions
-            if isinstance(s, dict)
-        ]
+        risks = [self._SUGGESTION_RISK.get(s.get("type", ""), 0.1) for s in suggestions if isinstance(s, dict)]
         return round(max(risks, default=0.0), 3)
 
-    def _calculate_array_average(
-        self, parent: dict[str, Any], array_name: str, field_name: str
-    ) -> float:
+    def _calculate_array_average(self, parent: dict[str, Any], array_name: str, field_name: str) -> float:
         """Calculate average of a field in an array.
 
         Args:

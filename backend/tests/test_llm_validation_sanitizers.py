@@ -14,17 +14,17 @@ balance_brackets = llm_mod.balance_brackets
 
 
 def test_extract_json_simple_object():
-    text = "Response:\nHere is the payload: {\"a\": 1, \"b\": [1,2,3]}\nThanks"
+    text = 'Response:\nHere is the payload: {"a": 1, "b": [1,2,3]}\nThanks'
     assert extract_json_substring(text) == '{"a": 1, "b": [1,2,3]}'
 
 
 def test_extract_json_with_extra_text():
-    text = "Ignore this {not json} but here is real: {\"x\": {\"y\": 2}} end"
+    text = 'Ignore this {not json} but here is real: {"x": {"y": 2}} end'
     assert extract_json_substring(text) == '{"x": {"y": 2}}'
 
 
 def test_extract_json_array():
-    text = "Start [1, 2, {\"a\":3}] trailing"
+    text = 'Start [1, 2, {"a":3}] trailing'
     assert extract_json_substring(text) == '[1, 2, {"a":3}]'
 
 
@@ -50,8 +50,8 @@ def test_remove_trailing_commas():
 
 
 def test_remove_trailing_commas_in_array():
-    text = '[1,2,3,]'
-    assert remove_trailing_commas(text) == '[1,2,3]'
+    text = "[1,2,3,]"
+    assert remove_trailing_commas(text) == "[1,2,3]"
 
 
 def test_remove_trailing_commas_preserves_commas_in_string():
@@ -83,7 +83,7 @@ def test_balance_brackets_appends_missing_closers():
     text = '{"a": [1,2'
     out = balance_brackets(text)
     # Should append ] then }
-    assert out.endswith(']}')
+    assert out.endswith("]}")
 
 
 def test_balance_brackets_no_change_on_balanced():
@@ -98,6 +98,6 @@ def test_chain_fixers_on_malformed_json():
     s = fix_single_quotes(s)
     s = remove_trailing_commas(s)
     s = balance_brackets(s)
-    assert s.startswith('{') and s.endswith('}')
+    assert s.startswith("{") and s.endswith("}")
     # final should be valid-ish JSON structure
     assert '"items"' in s

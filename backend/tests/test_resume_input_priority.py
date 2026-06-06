@@ -34,9 +34,7 @@ class StubAgent:
     def get_system_prompt(self) -> str:
         return self.system_prompt
 
-    def process(
-        self, input_data: AgentInput | str | bytes, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput | str | bytes, context: SessionContext) -> AgentResponse:
         self.inputs.append(input_data, context)
         return AgentResponse(
             agent_name=self._name,
@@ -54,9 +52,7 @@ class StubExtractorAgent(StubAgent):
         self.calls = 0
         self.needs_review = False
 
-    def process(
-        self, input_data: AgentInput | str | bytes, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput | str | bytes, context: SessionContext) -> AgentResponse:
         self.calls += 1
         self.inputs.append(input_data, context)
         return AgentResponse(
@@ -67,11 +63,7 @@ class StubExtractorAgent(StubAgent):
             needs_review=self.needs_review,
             low_confidence_fields=["work[0].name"] if self.needs_review else [],
             decision_trace=[],
-            sharp_metadata={
-                "validation_errors": ["Missing endDate for work[0]"]
-                if self.needs_review
-                else []
-            },
+            sharp_metadata={"validation_errors": ["Missing endDate for work[0]"] if self.needs_review else []},
         )
 
 
@@ -155,9 +147,7 @@ def test_extractor_agent_extracts_pdf_payload() -> None:
     payload = json.dumps({"data": "any-base64", "fileType": "pdf"})
 
     with (
-        patch(
-            "app.agents.extractor.parse_pdf_base64", return_value="Jane Doe Resume Text"
-        ),
+        patch("app.agents.extractor.parse_pdf_base64", return_value="Jane Doe Resume Text"),
         patch(
             "app.agents.extractor.ExtractorAgent._generate_llm_response",
             return_value=(
@@ -196,9 +186,3 @@ def test_normalization_failure_returns_action_plan() -> None:
     assert payload.get("summary") == "Resume normalization failed."
     assert payload.get("actions")
     assert not resume_agent.inputs
-
-
-
-
-
-

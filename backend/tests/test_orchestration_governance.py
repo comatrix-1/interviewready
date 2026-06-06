@@ -31,9 +31,7 @@ class StubAgent:
     def get_system_prompt(self) -> str:
         return self.system_prompt
 
-    def process(
-        self, input_data: AgentInput | str | bytes, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput | str | bytes, context: SessionContext) -> AgentResponse:
         self.inputs.append(input_data, context)
         return AgentResponse(
             agent_name=self._name,
@@ -73,9 +71,7 @@ def test_governance_content_strength_audit_flags_unfaithful() -> None:
         agent_name="ContentStrengthAgent",
         content={
             "skills": [{"name": "Python", "evidenceStrength": "HIGH"}],
-            "achievements": [
-                {"description": "Increased throughput", "quantifiable": True}
-            ],
+            "achievements": [{"description": "Increased throughput", "quantifiable": True}],
             "suggestions": [
                 {
                     "original": "did things",
@@ -123,9 +119,7 @@ def test_governance_preserves_interview_metadata_and_flags_sensitive_content() -
 
     audited = governance.audit(response, "resume input")
 
-    assert audited.sharp_metadata["responsible_ai"]["explainability"][
-        "decision_basis"
-    ] == ["job alignment"]
+    assert audited.sharp_metadata["responsible_ai"]["explainability"]["decision_basis"] == ["job alignment"]
     assert audited.sharp_metadata["governance_audit"] == "flagged"
     assert "sensitive_interview_content" in audited.sharp_metadata["audit_flags"]
     assert "bias_review_required" in audited.sharp_metadata["audit_flags"]
