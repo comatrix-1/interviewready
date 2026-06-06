@@ -1,0 +1,11 @@
+{
+  "name": "interviewready",
+  "version": "1.0.0",
+  "description": "A production-grade multi-agent system for structured evaluation of human inputs (resumes, interview responses, and job alignment tasks), designed to simulate real-world decision workflows with governance, traceability, and observability.",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "portless": "^0.14.0"
+  }
+}
