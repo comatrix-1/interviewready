@@ -38,6 +38,13 @@ Instead of using a single LLM to "answer," this system decomposes reasoning into
 
 This mimics how structured human review processes work in real organizations.
 
+### Run the Application
+```bash
+npm run dev
+```
+
+The application will start at `http://interviewready-frontend.localhost:1355/`
+
 ## System architecture
 
 The system is composed of three layers:
