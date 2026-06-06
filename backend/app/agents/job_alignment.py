@@ -175,23 +175,7 @@ class JobAlignmentAgent(BaseAgent):
             )
             structured_result = validated.model_dump()
 
-            if self.USE_MOCK_RESPONSE and raw_result is None:
-                logger.warning(
-                    "Mock enabled but response key not found",
-                    session_id=session_id,
-                    mock_response_key=self.MOCK_RESPONSE_KEY,
-                )
 
-            raw_result = raw_result or self.call_gemini(input_text, context)
-
-            parse_json_object(raw_result) or {}
-            structured_result = self.parse_and_validate(
-                raw_result, AlignmentReport
-            ).model_dump()
-
-            if not raw_result or not raw_result.strip():
-                msg = "Empty response received from Gemini API"
-                raise ValueError(msg)
 
             processing_time = time.time() - processing_start_time
             logger.debug(

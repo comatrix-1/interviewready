@@ -775,19 +775,11 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
             Agent response with single interview question or feedback
         """
         session_id = getattr(context, "session_id", "unknown")
-        agent_name = self.get_name()
-        processing_start_time = time.time()
-        is_follow_up = False
-        user_answer = ""
-        evaluation_result: dict | None = None
-        model_answer_score: float | None = None
-        model_can_proceed: bool | None = None
-        precomputed_result: str | None = None
-        method_used = "uninitialized"
+        self.get_name()
+        time.time()
         state = self._get_interview_state(context)
         security_findings: list[str] = []
         bias_flags: list[str] = []
-        prompt_injection_issues: list[str] = []
 
         # Extract input
         if isinstance(input_data, AgentInput):
@@ -1482,166 +1474,11 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
                     and model_can_proceed is not False
                 ):
                     self._store_question_if_new(response_json["question"], context)
-                result = json.dumps(response_json)
+                json.dumps(response_json)
                 if state["current_question_index"] >= state["total_questions"]:
                     self._set_interview_complete(context)
 
-            # Build decision trace for auditability
-            input_type = "audio" if isinstance(input_text, bytes) else "text"
-            state = self._get_interview_state(context)
-            current_question_number = min(
-                state["current_question_index"] + 1,
-                state["total_questions"],
-            )
-            decision_trace = [
-                f"InterviewCoachAgent: Processing interview question {current_question_number} of {state['total_questions']}",
-                f"InterviewCoachAgent: Generated targeted interview question for {input_type} input",
-                f"InterviewCoachAgent: Used coaching model with confidence {self.CONFIDENCE_SCORE}",
-                f"InterviewCoachAgent: Method used: {method_used}",
-                "InterviewCoachAgent: Scoring factors include answer relevance, job alignment, detail depth, and STAR-style structure",
-            ]
-
-        # Add method used to trace
-        if method_used == "gemini_live":
-            decision_trace.append(
-                "InterviewCoachAgent: Used Gemini Live for real-time response"
-            )
-        elif method_used == "gemini_live_audio":
-            decision_trace.append(
-                "InterviewCoachAgent: Used Gemini Live for audio analysis and feedback"
-            )
-        elif method_used == "mock_response_file":
-            decision_trace.append(
-                "InterviewCoachAgent: Used mock response from backend/mock_responses.json"
-            )
-        else:
-            decision_trace.append(
-                "InterviewCoachAgent: Used standard Gemini API (fallback)"
-            )
-
-        if security_findings:
-            decision_trace.append(
-                "InterviewCoachAgent: Redacted sensitive candidate data before prompt construction"
-            )
-        if prompt_injection_issues:
-            decision_trace.append(
-                "InterviewCoachAgent: Blocked adversarial candidate input before model execution and re-asked the same question"
-            )
-        if bias_flags:
-            decision_trace.append(
-                "InterviewCoachAgent: Detected potentially biased hiring-language signals and excluded them from coaching logic"
-            )
-
-            # Create SHARP metadata
-            analysis_type = (
-                "interview_coaching_audio"
-                if input_type == "audio"
-                else "interview_coaching"
-            )
-            sharp_metadata = {
-                "analysis_type": analysis_type,
-                "confidence_score": self.CONFIDENCE_SCORE,
-                "gemini_live_available": (
-                    method_used in ["gemini_live", "gemini_live_audio"]
-                ),
-                "method_used": method_used,
-                "input_type": input_type,
-                "current_question_number": current_question_number,
-                "total_questions": state["total_questions"],
-                "prompt_injection_blocked": bool(prompt_injection_issues),
-                "prompt_injection_signals": prompt_injection_issues,
-                "agent_security_risks": [
-                    "prompt_injection_via_candidate_input",
-                    "pii_exposure_in_resume_or_answers",
-                    "biased_or_discriminatory_questioning",
-                    "unsafe_retention_of_sensitive_interview_content",
-                ],
-                "security_mitigations": {
-                    "code_level": [
-                        "BaseAgent prompt-injection scanning before model calls",
-                        "output sanitization for prompt leakage and dangerous content",
-                        "PII redaction before interview prompts and completion summaries",
-                    ],
-                    "workflow_level": [
-                        "governance audit after orchestration",
-                        "human review recommendation when bias or sensitive-content signals appear",
-                        "CI checks for interview security and governance tests",
-                    ],
-                },
-                "responsible_ai": {
-                    "development_alignment": [
-                        "schema-constrained JSON outputs for predictable behavior",
-                        "defense-in-depth scanning in the base agent",
-                        "auditable decision traces and structured metadata",
-                    ],
-                    "deployment_alignment": [
-                        "post-response governance audit",
-                        "deployment workflow includes security scanning and targeted backend tests",
-                        "Langfuse-compatible tracing for traceability",
-                    ],
-                    "explainability": {
-                        "decision_basis": [
-                            "resume-job alignment",
-                            "question relevance",
-                            "answer completeness",
-                            "STAR-method structure",
-                        ],
-                        "user_visible_fields": [
-                            "feedback",
-                            "answer_score",
-                            "can_proceed",
-                            "next_challenge",
-                        ],
-                    },
-                    "bias_mitigation": [
-                        "do not infer protected attributes",
-                        "detect biased job-description signals",
-                        "focus coaching on evidence and job-relevant behavior",
-                    ],
-                    "sensitive_content_handling": [
-                        "direct identifiers are redacted before model prompts",
-                        "redacted answers are used for completion summaries",
-                        "sensitive-content signals trigger governance review metadata",
-                    ],
-                    "governance_alignment": [
-                        "SHARP metadata attached to each response",
-                        "governance service can flag human review needs",
-                    ],
-                    "imda_model_ai_governance_framework_alignment": {
-                        "internal_governance_structures_and_measures": [
-                            "agent-specific risks and mitigations are attached as structured metadata",
-                            "security and governance tests are enforced in CI before deployment",
-                        ],
-                        "human_involvement_in_ai_augmented_decision_making": [
-                            "human review is recommended for sensitive or bias-related cases",
-                            "agent output is advisory coaching rather than autonomous hiring action",
-                        ],
-                        "operations_management": [
-                            "prompt-injection screening and output sanitization",
-                            "PII redaction before prompts and redacted summary generation",
-                            "governance audit after orchestration",
-                        ],
-                        "stakeholder_interaction_and_communication": [
-                            "reasoning, feedback, answer_score, and can_proceed expose decision basis",
-                            "decision_trace captures method path and safety interventions",
-                        ],
-                    },
-                },
-            }
-            sharp_metadata["sensitive_input_detected"] = bool(security_findings)
-            sharp_metadata["sensitive_input_types"] = sorted(set(security_findings))
-            sharp_metadata["bias_review_required"] = bool(bias_flags)
-            sharp_metadata["bias_flags"] = sorted(set(bias_flags))
-            sharp_metadata["human_review_recommended"] = bool(
-                security_findings or bias_flags or prompt_injection_issues
-            )
-            if model_answer_score is not None:
-                sharp_metadata["answer_score"] = round(float(model_answer_score), 2)
-
-            if model_can_proceed is not None:
-                sharp_metadata["can_proceed"] = model_can_proceed
-
-        return sharp_metadata
+                    return response_json
 
     def _process_input_data(
         self,

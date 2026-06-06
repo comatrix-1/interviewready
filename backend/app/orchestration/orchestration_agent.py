@@ -113,8 +113,6 @@ class OrchestrationAgent:
     def _resolve_state(
         self, request: ChatRequest, context: SessionContext, intent: Intent
     ) -> OrchestrationState:
-        control = getattr(request, "control", None)
-        session_id = getattr(context, "session_id", "unknown")
         sequence = INTENT_TO_AGENTS[intent]
 
 
