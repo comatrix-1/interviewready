@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  ReactNode,
-  useMemo,
-} from "react";
+import React, { createContext, useContext, useState, ReactNode, useMemo } from "react";
 
 interface LoadingContextType {
   isLoading: boolean;
@@ -36,9 +30,7 @@ interface LoadingProviderProps {
   children: ReactNode;
 }
 
-export const LoadingProvider: React.FC<LoadingProviderProps> = ({
-  children,
-}) => {
+export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("Processing...");
   const [progress, setProgress] = useState(0);
@@ -96,7 +88,5 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({
     ],
   );
 
-  return (
-    <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>
-  );
+  return <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>;
 };

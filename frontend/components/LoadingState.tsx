@@ -52,12 +52,8 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
 
         {/* Main Message */}
         <div className="text-center mb-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">
-            {message}
-          </h3>
-          <p className="text-sm text-slate-500">
-            AI agents are analyzing your request
-          </p>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">{message}</h3>
+          <p className="text-sm text-slate-500">AI agents are analyzing your request</p>
         </div>
 
         {/* Progress Bar */}
@@ -86,16 +82,10 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
               {steps.map((step, index) => {
                 const isComplete = index < currentStep;
                 const isCurrent = index === currentStep;
-                const { textColorClass, badgeClass } = getStepStyles(
-                  isComplete,
-                  isCurrent,
-                );
+                const { textColorClass, badgeClass } = getStepStyles(isComplete, isCurrent);
 
                 return (
-                  <div
-                    key={step}
-                    className={`flex items-center gap-3 text-sm ${textColorClass}`}
-                  >
+                  <div key={step} className={`flex items-center gap-3 text-sm ${textColorClass}`}>
                     <div
                       className={`w-4 h-4 rounded-full flex items-center justify-center ${badgeClass}`}
                     >
@@ -111,9 +101,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
 
         {/* Cancel Hint */}
         <div className="mt-6 pt-4 border-t border-slate-100">
-          <p className="text-xs text-slate-400 text-center">
-            This may take a few moments...
-          </p>
+          <p className="text-xs text-slate-400 text-center">This may take a few moments...</p>
         </div>
       </div>
     </div>

@@ -14,10 +14,7 @@ const steps = [
   { status: WorkflowStatus.INTERVIEWING, label: "Interview" },
 ];
 
-export const StepIndicator: React.FC<StepIndicatorProps> = ({
-  currentStatus,
-  onStepClick,
-}) => {
+export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStatus, onStepClick }) => {
   const getStepIndex = (status: WorkflowStatus) => {
     if (status === WorkflowStatus.AWAITING_CRITIC_APPROVAL) return 1;
     if (status === WorkflowStatus.AWAITING_CONTENT_APPROVAL) return 2;
@@ -86,8 +83,9 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
             </button>
             {idx < steps.length - 1 && (
               <div
-                className={`w-8 md:w-16 lg:w-20 h-[1px] transition-colors duration-500 ${idx < currentIndex ? "bg-slate-300" : "bg-slate-200"
-                  }`}
+                className={`w-8 md:w-16 lg:w-20 h-[1px] transition-colors duration-500 ${
+                  idx < currentIndex ? "bg-slate-300" : "bg-slate-200"
+                }`}
               ></div>
             )}
           </React.Fragment>

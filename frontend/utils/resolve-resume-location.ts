@@ -20,12 +20,10 @@ const traverseResume = (
   let current: unknown = resume;
   for (const token of tokens) {
     if (typeof token === "string") {
-      if (!current || typeof current !== "object" || !(token in current))
-        return null;
+      if (!current || typeof current !== "object" || !(token in current)) return null;
       current = (current as Record<string, unknown>)[token];
     } else {
-      if (!Array.isArray(current) || token < 0 || token >= current.length)
-        return null;
+      if (!Array.isArray(current) || token < 0 || token >= current.length) return null;
       current = current[token];
     }
   }

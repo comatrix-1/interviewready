@@ -1,6 +1,6 @@
-﻿import React from 'react';
-import { AlignmentReport, ResumeSchema } from '../../types';
-import { resolveResumeLocation } from '@/utils/resolve-resume-location';
+﻿import React from "react";
+import { AlignmentReport, ResumeSchema } from "../../types";
+import { resolveResumeLocation } from "@/utils/resolve-resume-location";
 
 export const AlignmentReportStep: React.FC<{
   report: AlignmentReport;
@@ -13,25 +13,18 @@ export const AlignmentReportStep: React.FC<{
         const resolved = resolveResumeLocation(resume, path);
         return resolved.isValid && resolved.display ? resolved.display : "";
       })
-      .filter(
-        (value): value is string =>
-          typeof value === "string" && value.trim().length > 0,
-      );
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
 
   const matchedSkills = resolveEvidence(report.skillsMatch);
   const experienceEvidence = resolveEvidence(report.experienceMatch);
-  const missingSkills = Array.isArray(report.missingSkills)
-    ? report.missingSkills
-    : [];
+  const missingSkills = Array.isArray(report.missingSkills) ? report.missingSkills : [];
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-400 space-y-6">
       <div className="flex items-start justify-between border-b border-slate-100 pb-4">
         <div>
           <h3 className="text-lg font-semibold">Job Alignment Report</h3>
-          <p className="text-[11px] text-slate-500">
-            Match based on resume and job description.
-          </p>
+          <p className="text-[11px] text-slate-500">Match based on resume and job description.</p>
         </div>
       </div>
 
@@ -60,9 +53,7 @@ export const AlignmentReportStep: React.FC<{
                 </span>
               ))
             ) : (
-              <span className="text-[10px] text-slate-400">
-                No matched skill was identified.
-              </span>
+              <span className="text-[10px] text-slate-400">No matched skill was identified.</span>
             )}
           </div>
         </div>
@@ -81,9 +72,7 @@ export const AlignmentReportStep: React.FC<{
                 </span>
               ))
             ) : (
-              <span className="text-[10px] text-slate-400">
-                No missing skill was identified.
-              </span>
+              <span className="text-[10px] text-slate-400">No missing skill was identified.</span>
             )}
           </div>
         </div>

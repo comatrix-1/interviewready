@@ -1,5 +1,4 @@
-﻿import React, { useState } from 'react';
-import { ResumeSchema } from '../../types';
+﻿import React, { useState } from "react";
 
 export const UploadStep: React.FC<{
   onUploadSubmit: (file: File | null) => void; // null = use manual resume from preview panel
@@ -31,15 +30,11 @@ export const UploadStep: React.FC<{
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-400">
       <div className="mb-8">
-        <h3 className="text-xl font-semibold text-slate-900 mb-1.5">
-          Resume Discovery
-        </h3>
+        <h3 className="text-xl font-semibold text-slate-900 mb-1.5">Resume Discovery</h3>
         <p className="text-[13px] text-slate-500 leading-relaxed">
-          Upload a resume or use your edited resume preview. Analysis only runs
-          when you trigger it.
+          Upload a resume or use your edited resume preview. Analysis only runs when you trigger it.
         </p>
       </div>
-
 
       <label className="flex flex-col items-center justify-center border border-slate-200 rounded-xl p-12 cursor-pointer hover:bg-slate-50/50 hover:border-slate-300 transition-all group">
         <div className="w-12 h-12 bg-white border border-slate-100 rounded-lg flex items-center justify-center mb-4 shadow-sm group-hover:scale-105 transition-transform">
@@ -57,18 +52,9 @@ export const UploadStep: React.FC<{
             ></path>
           </svg>
         </div>
-        <span className="text-xs font-semibold text-slate-900 mb-1">
-          Upload Resume
-        </span>
-        <span className="text-[11px] text-slate-400">
-          PDF, TXT, or MD up to 10MB
-        </span>
-        <input
-          type="file"
-          className="hidden"
-          onChange={handleUpload}
-          accept=".pdf,.txt,.md"
-        />
+        <span className="text-xs font-semibold text-slate-900 mb-1">Upload Resume</span>
+        <span className="text-[11px] text-slate-400">PDF, TXT, or MD up to 10MB</span>
+        <input type="file" className="hidden" onChange={handleUpload} accept=".pdf,.txt,.md" />
       </label>
 
       {uploadedFile && (
@@ -111,9 +97,7 @@ export const UploadStep: React.FC<{
             className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-mono text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900"
             placeholder="Paste edited resume JSON here..."
           />
-          {manualResumeError && (
-            <div className="text-[11px] text-red-600">{manualResumeError}</div>
-          )}
+          {manualResumeError && <div className="text-[11px] text-red-600">{manualResumeError}</div>}
           <button
             onClick={onManualSubmit}
             className="w-full bg-slate-900 text-white text-[12px] font-semibold py-2.5 rounded-lg shadow-sm hover:bg-slate-800 transition-all"

@@ -1,8 +1,8 @@
-﻿import React from 'react';
-import { ResumeCriticReport, ResumeSchema } from '../../types';
-import { resolveResumeLocation } from '@/utils/resolve-resume-location';
-import { capitalizeFirst } from '@/utils/text';
-import { ReportHeader } from '../ReportHeader';
+﻿import React from "react";
+import { ResumeCriticReport, ResumeSchema } from "../../types";
+import { resolveResumeLocation } from "@/utils/resolve-resume-location";
+import { capitalizeFirst } from "@/utils/text";
+import { ReportHeader } from "../ReportHeader";
 
 export const CriticStep: React.FC<{
   report: ResumeCriticReport;
@@ -10,16 +10,14 @@ export const CriticStep: React.FC<{
   onApprove: () => void;
 }> = ({ report, resume, onApprove }) => {
   const issues = Array.isArray(report.issues) ? report.issues : [];
-  const score =
-    typeof report.score === "number" ? Math.round(report.score) : null;
+  const score = typeof report.score === "number" ? Math.round(report.score) : null;
   const summary =
     typeof report.summary === "string" && report.summary.trim()
       ? report.summary
       : "Resume processed successfully.";
   const severityClass = (severity: string) => {
     if (severity === "HIGH") return "bg-red-50 text-red-700 border-red-200";
-    if (severity === "MEDIUM")
-      return "bg-amber-50 text-amber-700 border-amber-200";
+    if (severity === "MEDIUM") return "bg-amber-50 text-amber-700 border-amber-200";
     return "bg-slate-100 text-slate-600 border-slate-200";
   };
 
@@ -52,9 +50,7 @@ export const CriticStep: React.FC<{
                   {issue.severity}
                 </span>
               </div>
-              <p className="text-[12px] text-slate-600 leading-relaxed">
-                {issue.description}
-              </p>
+              <p className="text-[12px] text-slate-600 leading-relaxed">{issue.description}</p>
               {(() => {
                 const resolved = resolveResumeLocation(resume, issue.location);
                 return (

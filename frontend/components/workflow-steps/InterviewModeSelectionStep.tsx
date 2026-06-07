@@ -1,17 +1,14 @@
-﻿import React from 'react';
-import { InterviewMode } from '../../types';
+﻿import React from "react";
+import { InterviewMode } from "../../types";
 
 export const InterviewModeSelectionStep: React.FC<{
   onSelect: (mode: InterviewMode) => void;
 }> = ({ onSelect }) => (
   <div className="animate-in fade-in slide-in-from-bottom-2 duration-400 space-y-8">
     <div className="text-center">
-      <h3 className="text-xl font-bold text-slate-900 mb-2">
-        Select Interview Format
-      </h3>
+      <h3 className="text-xl font-bold text-slate-900 mb-2">Select Interview Format</h3>
       <p className="text-sm text-slate-500">
-        Choose how you'd like to practice today. This choice is final for this
-        session.
+        Choose how you'd like to practice today. This choice is final for this session.
       </p>
     </div>
 
@@ -21,12 +18,7 @@ export const InterviewModeSelectionStep: React.FC<{
         className="flex flex-col items-center p-8 bg-white border border-slate-200 rounded-2xl hover:border-slate-900 hover:shadow-md transition-all group text-center"
       >
         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-slate-900 group-hover:text-white transition-colors">
-          <svg
-            className="w-8 h-8"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -37,8 +29,7 @@ export const InterviewModeSelectionStep: React.FC<{
         </div>
         <h4 className="font-bold text-lg mb-2">Text Chat</h4>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Standard text-based interface. Best for quick practice or public
-          spaces.
+          Standard text-based interface. Best for quick practice or public spaces.
         </p>
       </button>
 
@@ -47,12 +38,7 @@ export const InterviewModeSelectionStep: React.FC<{
         className="flex flex-col items-center p-8 bg-white border border-slate-200 rounded-2xl hover:border-slate-900 hover:shadow-md transition-all group text-center"
       >
         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-6 group-hover:bg-slate-900 group-hover:text-white transition-colors">
-          <svg
-            className="w-8 h-8"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -63,8 +49,7 @@ export const InterviewModeSelectionStep: React.FC<{
         </div>
         <h4 className="font-bold text-lg mb-2">Organic Voice</h4>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Immersive voice simulation. Hands-free conversation with real-time
-          audio analysis.
+          Immersive voice simulation. Hands-free conversation with real-time audio analysis.
         </p>
       </button>
     </div>

@@ -97,30 +97,30 @@ export interface AlignmentReport {
 }
 
 export enum WorkflowStatus {
-  IDLE = 'IDLE',
-  EXTRACTING = 'EXTRACTING',
-  ROUTING = 'ROUTING',
-  CRITIQUING = 'CRITIQUING',
-  AWAITING_CRITIC_APPROVAL = 'AWAITING_CRITIC_APPROVAL',
-  ANALYZING_CONTENT = 'ANALYZING_CONTENT',
-  AWAITING_CONTENT_APPROVAL = 'AWAITING_CONTENT_APPROVAL',
-  ALIGNING_JD = 'ALIGNING_JD',
-  AWAITING_ALIGNMENT_APPROVAL = 'AWAITING_ALIGNMENT_APPROVAL',
-  INTERVIEWING = 'INTERVIEWING',
-  SELECTING_INTERVIEW_MODE = 'SELECTING_INTERVIEW_MODE',
-  DEBUG_VOICE = 'DEBUG_VOICE',
-  COMPLETED = 'COMPLETED'
+  IDLE = "IDLE",
+  EXTRACTING = "EXTRACTING",
+  ROUTING = "ROUTING",
+  CRITIQUING = "CRITIQUING",
+  AWAITING_CRITIC_APPROVAL = "AWAITING_CRITIC_APPROVAL",
+  ANALYZING_CONTENT = "ANALYZING_CONTENT",
+  AWAITING_CONTENT_APPROVAL = "AWAITING_CONTENT_APPROVAL",
+  ALIGNING_JD = "ALIGNING_JD",
+  AWAITING_ALIGNMENT_APPROVAL = "AWAITING_ALIGNMENT_APPROVAL",
+  INTERVIEWING = "INTERVIEWING",
+  SELECTING_INTERVIEW_MODE = "SELECTING_INTERVIEW_MODE",
+  DEBUG_VOICE = "DEBUG_VOICE",
+  COMPLETED = "COMPLETED",
 }
 
-export type InterviewMode = 'CHAT' | 'VOICE';
+export type InterviewMode = "CHAT" | "VOICE";
 
 export interface ResumeFile {
   data: string;
-  fileType: 'pdf';
+  fileType: "pdf";
 }
 
 export interface ChatRequest {
-  intent: 'RESUME_CRITIC' | 'CONTENT_STRENGTH' | 'ALIGNMENT' | 'INTERVIEW_COACH';
+  intent: "RESUME_CRITIC" | "CONTENT_STRENGTH" | "ALIGNMENT" | "INTERVIEW_COACH";
   resumeData?: ResumeSchema | null;
   jobDescription: string;
   messageHistory: InterviewMessage[];
@@ -129,7 +129,7 @@ export interface ChatRequest {
 }
 
 export interface InterviewMessage {
-  role: 'user' | 'agent';
+  role: "user" | "agent";
   text: string;
 }
 
