@@ -6,7 +6,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
   return {
     fmt: {},
-    lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
+    lint: {
+      jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+      rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+      options: { typeAware: true, typeCheck: true },
+    },
     server: {
       port: Number(process.env.PORT) || 3000,
       host: "0.0.0.0",
@@ -21,5 +25,5 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "."),
       },
     },
-  }
+  };
 });

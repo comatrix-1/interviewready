@@ -27,12 +27,12 @@
     "jsdom": "^28.1.0",
     "typescript": "~5.8.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
-  "packageManager": "npm@11.16.0",
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  }
+  },
+  "packageManager": "npm@11.16.0"
 }
