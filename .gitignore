@@ -111,3 +111,6 @@ __pycache__
 # Kilo Code
 .kilo
 .compound-engineering/*.yaml
+
+# VS Code
+.vscode
