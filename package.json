@@ -9,5 +9,6 @@
   },
   "dependencies": {
     "portless": "^0.14.0"
-  }
+  },
+  "packageManager": "npm@11.16.0"
 }
