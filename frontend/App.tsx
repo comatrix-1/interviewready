@@ -53,10 +53,10 @@ const AppContent: React.FC = () => {
         await backendService.initialize();
         setSessionReady(true);
       } catch (err) {
-        setError(`Failed to initialize session: ${err}`);
+        setError(`Failed to initialize session: ${String(err)}`);
       }
     };
-    initSession();
+    void initSession();
   }, []);
 
   useEffect(() => {
@@ -273,7 +273,7 @@ const WorkflowController: React.FC<{
     try {
       responseData = response.payload || JSON.parse(response.content || "{}");
     } catch (parseErr) {
-      throw new Error(`Invalid response from backend: ${parseErr}`);
+      throw new Error(`Invalid response from backend: ${String(parseErr)}`);
     }
 
     updateProgress(90, 3);

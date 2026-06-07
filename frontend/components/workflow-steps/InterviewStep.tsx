@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import { InterviewMessage, InterviewMode } from "../../types";
 
 // Custom hook for WebSocket setup to reduce cognitive complexity
@@ -108,7 +108,7 @@ const useWebSocketConnection = (
       }
     };
 
-    initializeRelaySession();
+    void initializeRelaySession();
 
     return () => {
       isComponentMounted = false;
@@ -125,15 +125,11 @@ const useWebSocketConnection = (
 };
 
 // Extracted markdown components to reduce inline definitions
-const markdownComponents = {
-  p: ({ children }: { children: React.ReactNode }) => <p className="mb-2 last:mb-0">{children}</p>,
-  ul: ({ children }: { children: React.ReactNode }) => (
-    <ul className="list-disc pl-4 mb-2">{children}</ul>
-  ),
-  li: ({ children }: { children: React.ReactNode }) => <li className="mb-0.5">{children}</li>,
-  strong: ({ children }: { children: React.ReactNode }) => (
-    <span className="font-bold">{children}</span>
-  ),
+const markdownComponents: Components = {
+  p: ({ node: _node, ...props }) => <p className="mb-2 last:mb-0">{props.children}</p>,
+  ul: ({ node: _node, ...props }) => <ul className="list-disc pl-4 mb-2">{props.children}</ul>,
+  li: ({ node: _node, ...props }) => <li className="mb-0.5">{props.children}</li>,
+  strong: ({ node: _node, ...props }) => <strong className="font-bold">{props.children}</strong>,
 };
 
 export const InterviewStep: React.FC<{
@@ -325,7 +321,7 @@ export const InterviewStep: React.FC<{
       }
 
       if (!isQueueProcessingRef.current) {
-        processPlaybackQueue();
+        void processPlaybackQueue();
       }
     },
     onInterrupted: () => {
@@ -334,10 +330,21 @@ export const InterviewStep: React.FC<{
       isVoiceActiveRef.current = false;
       setIsVoiceActive(false);
       if (playbackContextRef.current?.state === "running") {
-        playbackContextRef.current.suspend().then(() => {
-          nextStartTimeRef.current = 0;
-          playbackContextRef.current?.resume();
-        });
+        void playbackContextRef.current
+          .suspend()
+          .then(async () => {
+            nextStartTimeRef.current = 0;
+            try {
+              if (playbackContextRef.current) {
+                await playbackContextRef.current.resume();
+              }
+            } catch (e) {
+              console.warn("Playback Context resume failed", e);
+            }
+          })
+          .catch((e) => {
+            console.warn("Playback Context suspend failed", e);
+          });
       }
       isSpeakingRef.current = false;
       aiTurnActiveRef.current = false;
@@ -467,7 +474,7 @@ export const InterviewStep: React.FC<{
       if (mode === "VOICE" && !isRecordingRef.current) {
         // Delay slightly to avoid catching the end of the AI's own voice
         setTimeout(() => {
-          if (!isSpeakingRef.current) startRecording();
+          if (!isSpeakingRef.current) void startRecording();
         }, 500);
       }
     };
@@ -929,14 +936,14 @@ export const InterviewStep: React.FC<{
       console.log("[VOICE_FRONTEND] Manual Override: Forcing AI to stop and opening mic");
       stopPlaybackImmediately();
       aiTurnActiveRef.current = false;
-      startRecording();
+      void startRecording();
       return;
     }
 
     if (isRecordingRef.current) {
       stopRecording(true);
     } else {
-      startRecording();
+      void startRecording();
     }
   };
 
