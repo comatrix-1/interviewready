@@ -8,7 +8,7 @@ export const InterviewModeSelectionStep: React.FC<{
     <div className="text-center">
       <h3 className="text-xl font-bold text-slate-900 mb-2">Select Interview Format</h3>
       <p className="text-sm text-slate-500">
-        Choose how you'd like to practice today. This choice is final for this session.
+        Choose how you&apos;d like to practice today. This choice is final for this session.
       </p>
     </div>
 

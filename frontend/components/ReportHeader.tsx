@@ -1,3 +1,5 @@
+import React from "react";
+
 export const ReportHeader: React.FC<{
   title: string;
   summary: string;

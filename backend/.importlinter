@@ -1,0 +1,27 @@
+[importlinter]
+root_packages =
+    app
+include_external_packages = False
+
+# ─────────────────────────────────────────────
+# Layer ordering (low → high):
+#   core → utils → models → db → security
+#        → agents/orchestration/governance (services) → api → main
+# Each layer may only import from layers below it.
+# ─────────────────────────────────────────────
+
+[importlinter:contract:layers]
+name = Enforce layered architecture
+type = layers
+layers =
+    app.main
+    app.api
+    app.orchestration
+    app.agents
+    app.governance
+    app.security
+    app.db
+    app.models
+    app.utils
+    app.core
+independent_layers = False

@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { SharedState, WorkflowStatus, ChatRequest, InterviewMode, Resume } from "./types";
-
-const DEFAULT_RESUME: Resume = {
-  work: [],
-  education: [],
-  awards: [],
-  certificates: [],
-  skills: [],
-  projects: [],
-};
-import { contentStrengthAgent, alignmentAgent, backendService } from "./backendService";
+import React, { useState, useRef } from "react";
+import { WorkflowStatus, InterviewMode } from "./types/workflow";
+import type { SharedState } from "./types/workflow";
+import type { Resume } from "./types/resume";
+import type { ChatRequest } from "./types/api";
+import { DEFAULT_RESUME } from "./config/constants";
+import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
+import { callChatEndpoint, fetchCurrentResume } from "./api";
+import { resumeCriticAgent } from "@/api/chat-endpoints/resumeCritic";
+import { contentStrengthAgent } from "@/api/chat-endpoints/contentStrength";
+import { alignmentAgent } from "@/api/chat-endpoints/alignment";
+import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
+import { BackendServiceProvider, useBackendService } from "./providers/BackendServiceProvider";
+import { useWorkflowState } from "./hooks/useWorkflowState";
 import { StepIndicator } from "./components/StepIndicator";
 import { ResumePreview } from "./components/ResumePreview";
 import { LoadingState } from "./components/LoadingState";
@@ -24,93 +26,19 @@ import {
   InterviewModeSelectionStep,
 } from "./components/WorkflowSteps";
 
-const isInterviewCompleteResponse = (text: string) =>
-  text.toLowerCase().includes("interview complete");
-
 const AppContent: React.FC = () => {
-  const [state, setState] = useState<SharedState>(() => {
-    const saved = localStorage.getItem("interview_ready_state");
-    if (saved) return JSON.parse(saved);
-    return {
-      currentResume: DEFAULT_RESUME,
-      history: [],
-      jobDescription: "",
-      status: WorkflowStatus.IDLE,
-      criticReport: null,
-      contentReport: null,
-      alignmentReport: null,
-      interviewHistory: [],
-    };
-  });
+  const {
+    sessionId,
+    authToken,
+    sessionReady,
+    sessionError: sessionInitError,
+  } = useBackendService();
+  const { state, updateState, resetSession, handleStepClick } = useWorkflowState();
+  const [error, setError] = useState<string | null>(sessionInitError);
 
-  const [error, setError] = useState<string | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const initSession = async () => {
-      try {
-        await backendService.initialize();
-        setSessionReady(true);
-      } catch (err) {
-        setError(`Failed to initialize session: ${String(err)}`);
-      }
-    };
-    void initSession();
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("interview_ready_state", JSON.stringify(state));
-  }, [state]);
-
-  const resetSession = useCallback(() => {
-    if (confirm("Reset current progress? This will clear all data and start over.")) {
-      localStorage.removeItem("interview_ready_state");
-      setState({
-        currentResume: DEFAULT_RESUME,
-        history: [],
-        jobDescription: "",
-        status: WorkflowStatus.IDLE,
-        criticReport: null,
-        contentReport: null,
-        alignmentReport: null,
-        interviewHistory: [],
-      });
-      setError(null);
-    }
-  }, []);
-
-  // FIX S7735: replaced negated guard with positive condition wrapping the body
-  const handleStepClick = useCallback(
-    (status: WorkflowStatus) => {
-      const canNavigate: Partial<Record<WorkflowStatus, boolean>> = {
-        [WorkflowStatus.IDLE]: true,
-        [WorkflowStatus.CRITIQUING]: !!state.currentResume,
-        [WorkflowStatus.ANALYZING_CONTENT]: !!state.criticReport,
-        [WorkflowStatus.ALIGNING_JD]: !!state.contentReport,
-        [WorkflowStatus.INTERVIEWING]: !!state.alignmentReport,
-      };
-
-      if (canNavigate[status]) {
-        const completedStatus: Partial<Record<WorkflowStatus, WorkflowStatus>> = {
-          [WorkflowStatus.CRITIQUING]: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
-          [WorkflowStatus.ANALYZING_CONTENT]: WorkflowStatus.AWAITING_CONTENT_APPROVAL,
-          [WorkflowStatus.ALIGNING_JD]: WorkflowStatus.AWAITING_ALIGNMENT_APPROVAL,
-        };
-
-        const reportAvailable: Partial<Record<WorkflowStatus, boolean>> = {
-          [WorkflowStatus.CRITIQUING]: !!state.criticReport,
-          [WorkflowStatus.ANALYZING_CONTENT]: !!state.contentReport,
-          [WorkflowStatus.ALIGNING_JD]: !!state.alignmentReport,
-        };
-
-        const targetStatus = (reportAvailable[status] && completedStatus[status]) || status;
-
-        setState((prev) => ({ ...prev, status: targetStatus }));
-      }
-    },
-    [state.currentResume, state.criticReport, state.contentReport, state.alignmentReport],
-  );
+  const displayError = error || sessionInitError;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white text-slate-950">
@@ -153,7 +81,7 @@ const AppContent: React.FC = () => {
         {/* Left Panel: Analysis & Actions */}
         <aside className="w-[450px] border-r border-slate-200 bg-white flex flex-col z-20 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-thin scrollbar-thumb-slate-200">
-            {error && (
+            {displayError && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start justify-between gap-3 text-red-700 animate-in fade-in slide-in-from-top-1">
                 <div className="flex items-start gap-3 flex-1">
                   <div className="mt-0.5 text-red-500">
@@ -165,7 +93,7 @@ const AppContent: React.FC = () => {
                       />
                     </svg>
                   </div>
-                  <div className="text-xs font-medium">{error}</div>
+                  <div className="text-xs font-medium">{displayError}</div>
                 </div>
                 <button
                   type="button"
@@ -189,9 +117,11 @@ const AppContent: React.FC = () => {
               <div className="relative">
                 <WorkflowController
                   state={state}
-                  setState={setState}
+                  updateState={updateState}
                   setError={setError}
                   chatEndRef={chatEndRef}
+                  sessionId={sessionId}
+                  authToken={authToken}
                 />
               </div>
             )}
@@ -214,7 +144,6 @@ const AppContent: React.FC = () => {
         {/* Right Panel: Resume Preview */}
         <main className="flex-1 bg-slate-100/30 overflow-hidden flex flex-col relative">
           <div className="flex-1 overflow-y-auto">
-            {/* FIX TS2322: fallback to DEFAULT_RESUME so resume is never null */}
             <ResumePreview resume={state.currentResume ?? DEFAULT_RESUME} />
           </div>
         </main>
@@ -226,31 +155,17 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Separate component to handle loading context
 const WorkflowController: React.FC<{
   state: SharedState;
-  setState: React.Dispatch<React.SetStateAction<SharedState>>;
+  updateState: (updater: SharedState | ((prev: SharedState) => SharedState)) => void;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   chatEndRef: React.RefObject<HTMLDivElement | null>;
-}> = ({ state, setState, setError, chatEndRef }) => {
+  sessionId: string;
+  authToken: string;
+}> = ({ state, updateState, setError, chatEndRef, sessionId, authToken }) => {
   const { startLoading, updateProgress, stopLoading } = useLoading();
   const [manualResumeText, setManualResumeText] = useState("");
   const [manualResumeError, setManualResumeError] = useState<string | null>(null);
-
-  const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      if (file.size > MAX_FILE_SIZE) {
-        reject(new Error(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`));
-        return;
-      }
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-    });
-  };
 
   const processPdfFile = async (file: File) => {
     updateProgress(25, 0);
@@ -266,27 +181,26 @@ const WorkflowController: React.FC<{
     };
 
     updateProgress(75, 2);
-    const response = await backendService.callChatEndpoint(request);
-    const parsedResume = await backendService.fetchCurrentResume();
+    const response = await callChatEndpoint(sessionId, authToken, request);
+    const parsedResume = await fetchCurrentResume(sessionId, authToken);
 
     let responseData;
     try {
       responseData = response.payload || JSON.parse(response.content || "{}");
     } catch (parseErr) {
-      throw new Error(`Invalid response from backend: ${String(parseErr)}`);
+      throw new Error(`Invalid response from backend: ${String(parseErr)}`, { cause: parseErr });
     }
 
     updateProgress(90, 3);
-
     return { responseData, parsedResume };
   };
 
-  const handleSuccessfulProcessing = (responseData: any, parsedResume: Resume | null) => {
-    setState((prev) => ({
+  const handleSuccessfulProcessing = (responseData: unknown, parsedResume: Resume | null) => {
+    updateState((prev) => ({
       ...prev,
       currentResume: parsedResume || prev.currentResume,
       history: parsedResume ? [...prev.history, parsedResume] : prev.history,
-      criticReport: responseData,
+      criticReport: responseData as SharedState["criticReport"],
       status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
     }));
     setManualResumeText("");
@@ -303,16 +217,16 @@ const WorkflowController: React.FC<{
     try {
       updateProgress(50, 1);
       if (!state.currentResume) throw new Error("Current resume is null");
-      const report = await backendService.resumeCriticAgent(state.currentResume);
+      const report = await resumeCriticAgent(sessionId, authToken, state.currentResume);
       updateProgress(100, 2);
 
-      setState((prev) => ({
+      updateState((prev) => ({
         ...prev,
         criticReport: report,
         status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
       }));
-    } catch (err: any) {
-      setError(err.message || "Failed to analyze resume");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to analyze resume");
     } finally {
       stopLoading();
     }
@@ -335,8 +249,8 @@ const WorkflowController: React.FC<{
           const { responseData, parsedResume } = await processPdfFile(file);
           handleSuccessfulProcessing(responseData, parsedResume);
         }
-      } catch (err: any) {
-        setError(err.message || "Failed to process resume");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to process resume");
       } finally {
         stopLoading();
       }
@@ -353,7 +267,7 @@ const WorkflowController: React.FC<{
 
   const submitManualResume = async () => {
     setManualResumeError(null);
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(manualResumeText);
     } catch {
@@ -373,25 +287,27 @@ const WorkflowController: React.FC<{
     ]);
     try {
       updateProgress(35, 0);
-      const report = await backendService.resumeCriticAgent(parsed);
+      const report = await resumeCriticAgent(sessionId, authToken, parsed as Resume);
       updateProgress(100, 2);
-      setState((prev) => ({
+      updateState((prev) => ({
         ...prev,
-        currentResume: parsed,
-        history: [...prev.history, parsed],
+        currentResume: parsed as Resume,
+        history: [...prev.history, parsed as Resume],
         criticReport: report,
         status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
       }));
       setManualResumeText("");
-    } catch (err: any) {
-      setManualResumeError(err.message || "Failed to process manual resume data.");
+    } catch (err: unknown) {
+      setManualResumeError(
+        err instanceof Error ? err.message : "Failed to process manual resume data.",
+      );
     } finally {
       stopLoading();
     }
   };
 
   const approveCritic = async () => {
-    setState((prev) => ({ ...prev, status: WorkflowStatus.ANALYZING_CONTENT }));
+    updateState((prev) => ({ ...prev, status: WorkflowStatus.ANALYZING_CONTENT }));
     startLoading("Analyzing content strength...", [
       "Extracting skills",
       "Analyzing achievements",
@@ -399,22 +315,22 @@ const WorkflowController: React.FC<{
     ]);
     try {
       updateProgress(50, 1);
-      const report = await contentStrengthAgent(state.currentResume);
+      const report = await contentStrengthAgent(sessionId, authToken, state.currentResume);
       updateProgress(100, 2);
-      setState((prev) => ({
+      updateState((prev) => ({
         ...prev,
         contentReport: report,
         status: WorkflowStatus.AWAITING_CONTENT_APPROVAL,
       }));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to analyze content");
     } finally {
       stopLoading();
     }
   };
 
   const approveContent = () =>
-    setState((prev) => ({ ...prev, status: WorkflowStatus.ALIGNING_JD }));
+    updateState((prev) => ({ ...prev, status: WorkflowStatus.ALIGNING_JD }));
 
   const runAlignment = async () => {
     if (!state.jobDescription) return;
@@ -426,22 +342,27 @@ const WorkflowController: React.FC<{
     ]);
     try {
       updateProgress(25, 0);
-      const report = await alignmentAgent(state.currentResume, state.jobDescription);
+      const report = await alignmentAgent(
+        sessionId,
+        authToken,
+        state.currentResume,
+        state.jobDescription,
+      );
       updateProgress(100, 3);
-      setState((prev) => ({
+      updateState((prev) => ({
         ...prev,
         alignmentReport: report,
         status: WorkflowStatus.AWAITING_ALIGNMENT_APPROVAL,
       }));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to run alignment");
     } finally {
       stopLoading();
     }
   };
 
   const startInterviewSelection = () => {
-    setState((prev) => ({
+    updateState((prev) => ({
       ...prev,
       status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
       interviewHistory: [],
@@ -449,7 +370,7 @@ const WorkflowController: React.FC<{
   };
 
   const startInterview = async (mode: InterviewMode) => {
-    setState((prev) => ({
+    updateState((prev) => ({
       ...prev,
       interviewMode: mode,
       status: WorkflowStatus.INTERVIEWING,
@@ -458,7 +379,7 @@ const WorkflowController: React.FC<{
 
     if (mode === "VOICE") {
       setError(null);
-      return; // Handled by WebSocket auto-start
+      return;
     }
 
     startLoading("Starting interview...", [
@@ -468,20 +389,22 @@ const WorkflowController: React.FC<{
     setError(null);
     try {
       updateProgress(50, 0);
-      const openingQuestion = await backendService.interviewCoachAgent(
+      const openingQuestion = await interviewCoachAgent(
+        sessionId,
+        authToken,
         state.currentResume,
         state.jobDescription,
         [],
       );
       updateProgress(100, 1);
-      setState((prev) => ({
+      updateState((prev) => ({
         ...prev,
         status: WorkflowStatus.INTERVIEWING,
         interviewHistory: [{ role: "agent", text: openingQuestion }],
       }));
-    } catch (err: any) {
-      setError(err.message);
-      setState((prev) => ({
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to start interview");
+      updateState((prev) => ({
         ...prev,
         status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
         interviewHistory: [],
@@ -493,56 +416,53 @@ const WorkflowController: React.FC<{
 
   const handleInterviewMessage = async (msg: string) => {
     const updatedHistory = [...state.interviewHistory, { role: "user" as const, text: msg }];
-    setState((prev) => ({ ...prev, interviewHistory: updatedHistory }));
+    updateState((prev) => ({ ...prev, interviewHistory: updatedHistory }));
     startLoading("Coach is thinking...", ["Analyzing your response", "Generating feedback"]);
     try {
       updateProgress(50, 0);
-      const responseText = await backendService.interviewCoachAgent(
+      const responseText = await interviewCoachAgent(
+        sessionId,
+        authToken,
         state.currentResume,
         state.jobDescription,
         updatedHistory,
       );
       const interviewComplete = isInterviewCompleteResponse(responseText);
       updateProgress(100, 1);
-      setState((prev) => ({
+      updateState((prev) => ({
         ...prev,
         interviewHistory: [...updatedHistory, { role: "agent", text: responseText }],
         status: interviewComplete ? WorkflowStatus.COMPLETED : prev.status,
       }));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to get interview response");
     } finally {
       stopLoading();
     }
   };
 
   const handleInterviewAudioMessage = async (audio: Uint8Array) => {
-    // This is the legacy audio path used only in CHAT mode for voice-to-text
     const updatedHistory = [
       ...state.interviewHistory,
       { role: "user" as const, text: "[Analyzing audio...]" },
     ];
-    setState((prev) => ({ ...prev, interviewHistory: updatedHistory }));
+    updateState((prev) => ({ ...prev, interviewHistory: updatedHistory }));
 
     try {
-      const request: ChatRequest = {
-        intent: "INTERVIEW_COACH",
-        resumeData: state.currentResume,
-        jobDescription: state.jobDescription,
-        messageHistory: updatedHistory,
-        audioData: audio,
-      };
-
-      const response = await backendService.callChatEndpoint(request);
-      const responseText = backendService.formatInterviewCoachPayload(
-        response.payload ?? response.content,
+      const { responseText, transcription } = await sendAudioMessage(
+        sessionId,
+        authToken,
+        state.currentResume,
+        state.jobDescription,
+        updatedHistory,
+        audio,
       );
       const interviewComplete = isInterviewCompleteResponse(responseText);
 
-      setState((prev) => {
+      updateState((prev) => {
         const newHistory = prev.interviewHistory.map((msg, i) =>
           i === prev.interviewHistory.length - 1 && msg.text === "[Analyzing audio...]"
-            ? { ...msg, text: response.transcription || "[Audio response]" }
+            ? { ...msg, text: transcription || "[Audio response]" }
             : msg,
         );
         return {
@@ -551,9 +471,9 @@ const WorkflowController: React.FC<{
           status: interviewComplete ? WorkflowStatus.COMPLETED : prev.status,
         };
       });
-    } catch (err: any) {
-      setError(err.message || "Failed to process audio");
-      setState((prev) => ({
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to process audio");
+      updateState((prev) => ({
         ...prev,
         interviewHistory: prev.interviewHistory.filter(
           (msg) => msg.text !== "[Analyzing audio...]",
@@ -564,9 +484,8 @@ const WorkflowController: React.FC<{
 
   const handleLiveEvent = (event: { type: string; text?: string }) => {
     if (event.type === "user" && event.text) {
-      setState((prev) => {
+      updateState((prev) => {
         const history = [...prev.interviewHistory];
-        // FIX S7755 + S6582: use .at(-1) and optional chaining
         const last = history.at(-1);
         if (last?.role === "user") {
           return {
@@ -580,9 +499,8 @@ const WorkflowController: React.FC<{
         };
       });
     } else if (event.type === "gemini" && event.text) {
-      setState((prev) => {
+      updateState((prev) => {
         const history = [...prev.interviewHistory];
-        // FIX S7755 + S6582: use .at(-1) and optional chaining
         const last = history.at(-1);
         if (last?.role === "agent") {
           return {
@@ -630,7 +548,7 @@ const WorkflowController: React.FC<{
       {state.status === WorkflowStatus.ALIGNING_JD && (
         <AlignmentStep
           jd={state.jobDescription}
-          onChangeJD={(val) => setState((prev) => ({ ...prev, jobDescription: val }))}
+          onChangeJD={(val) => updateState((prev) => ({ ...prev, jobDescription: val }))}
           onAnalyze={runAlignment}
           isLoading={false}
         />
@@ -657,10 +575,10 @@ const WorkflowController: React.FC<{
           mode={
             state.status === WorkflowStatus.DEBUG_VOICE ? "VOICE" : state.interviewMode || "CHAT"
           }
-          sessionId={backendService.getSessionId()}
+          sessionId={sessionId}
           isComplete={state.status === WorkflowStatus.COMPLETED}
           onExit={() =>
-            setState((prev) => ({ ...prev, status: WorkflowStatus.SELECTING_INTERVIEW_MODE }))
+            updateState((prev) => ({ ...prev, status: WorkflowStatus.SELECTING_INTERVIEW_MODE }))
           }
           onLiveEvent={handleLiveEvent}
         />
@@ -669,7 +587,6 @@ const WorkflowController: React.FC<{
   );
 };
 
-// Loading wrapper component
 const LoadingStateWrapper: React.FC = () => {
   const { isLoading, message, progress, steps, currentStep } = useLoading();
 
@@ -684,12 +601,13 @@ const LoadingStateWrapper: React.FC = () => {
   );
 };
 
-// Main App component with provider
 const App: React.FC = () => {
   return (
-    <LoadingProvider>
-      <AppContent />
-    </LoadingProvider>
+    <BackendServiceProvider>
+      <LoadingProvider>
+        <AppContent />
+      </LoadingProvider>
+    </BackendServiceProvider>
   );
 };
 

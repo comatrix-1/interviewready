@@ -792,6 +792,8 @@ backend/
 │   │   └── orchestration_agent.py
 │   ├── governance/         # SHARP governance framework
 │   │   └── sharp_governance_service.py
+│   ├── security/           # Cross-cutting security infra
+│   │   └── llm_guard_scanner.py
 │   ├── utils/              # Helper functions
 │   └── main.py             # FastAPI application entry point
 ├── tests/                  # Test suite
@@ -811,6 +813,29 @@ Enable mock responses for development and testing:
 - JSON-formatted logs with session tracking
 - Performance monitoring and error context
 - Configurable log levels and output formats
+
+### Import Linter (Layered Architecture)
+
+Package imports are enforced by [`import-linter`](https://github.com/seddonym/import-linter) via `uv run lint-imports`. The contract lives in `backend/.importlinter`.
+
+**Layer order (low → high):**
+
+```
+core → utils → models → db → security → governance → agents → orchestration → api → main
+```
+
+Each layer may only import from layers below it. In particular:
+
+- `utils` and `models` are leaf nodes — no upward imports.
+- `agents`, `orchestration`, `governance` are the business-logic (services) tier. `orchestration` sits above `agents` and `governance` and may import both; `agents` and `governance` do not import each other.
+- `api` (routers) may use any service/model/util/core layer but never reaches across to another router or down to `db` directly.
+- `security` sits below the service tier — currently only `agents` uses it.
+
+Run locally:
+
+```bash
+uv run lint-imports
+```
 
 ### Session Management
 - Stateful conversations with session persistence

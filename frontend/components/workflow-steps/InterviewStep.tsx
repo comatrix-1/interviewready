@@ -374,7 +374,7 @@ export const InterviewStep: React.FC<{
     let currentCtx = playbackContextRef.current;
     if (!currentCtx || currentCtx.state === "closed") {
       console.log("[VOICE_DEBUG] Creating new playback AudioContext at 24000Hz");
-      currentCtx = new (globalThis.AudioContext || (globalThis as any).webkitAudioContext)({
+      currentCtx = new (globalThis.AudioContext || globalThis.webkitAudioContext)({
         sampleRate: 24000,
       });
       playbackContextRef.current = currentCtx;
@@ -516,7 +516,7 @@ export const InterviewStep: React.FC<{
     let context = recordingContextRef.current;
     if (!context || context.state === "closed") {
       console.log("[VOICE_DEBUG] Creating new recording AudioContext");
-      context = new (globalThis.AudioContext || (globalThis as any).webkitAudioContext)({
+      context = new (globalThis.AudioContext || globalThis.webkitAudioContext)({
         sampleRate: 16000,
       });
       recordingContextRef.current = context;
@@ -908,7 +908,7 @@ export const InterviewStep: React.FC<{
     try {
       if (!playbackContextRef.current || playbackContextRef.current.state === "closed") {
         playbackContextRef.current = new (
-          globalThis.AudioContext || (globalThis as any).webkitAudioContext
+          globalThis.AudioContext || globalThis.webkitAudioContext
         )({ sampleRate: 24000 });
       }
       if (playbackContextRef.current.state === "suspended") {
@@ -918,7 +918,7 @@ export const InterviewStep: React.FC<{
 
       if (!recordingContextRef.current || recordingContextRef.current.state === "closed") {
         recordingContextRef.current = new (
-          globalThis.AudioContext || (globalThis as any).webkitAudioContext
+          globalThis.AudioContext || globalThis.webkitAudioContext
         )({ sampleRate: 16000 });
       }
       if (recordingContextRef.current.state === "suspended") {

@@ -1,12 +1,10 @@
-interface ViteTypeOptions {
-  // By adding this line, you can make the type of ImportMetaEnv strict
-  // to disallow unknown keys.
-  // strictImportMetaEnv: unknown
+// Extend Window with vendor-prefixed Web Audio API for browser compatibility
+interface Window {
+  webkitAudioContext?: typeof AudioContext;
 }
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string;
-  // more env variables...
 }
 
 interface ImportMeta {
