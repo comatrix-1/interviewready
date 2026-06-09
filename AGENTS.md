@@ -59,3 +59,14 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## 5. Architecture
 
 This project uses `roam` for codebase comprehension. Always prefer roam over Glob/Grep/Read exploration. Refer to `/ROAM.md`
+
+## 6. Auto-Lint After Changes
+
+**Always run the linter after making code changes.**
+
+After completing any implementation:
+```bash
+npm run lint:all
+```
+
+If linting reveals issues you introduced, fix them immediately. If it flags pre-existing issues unrelated to your changes, mention them but don't fix unless asked.
