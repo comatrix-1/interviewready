@@ -20,6 +20,12 @@ const useWebSocketConnection = (
   >("connecting");
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Store callbacks in a ref so the WebSocket effect doesn't re-run when identities change.
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
+  const onLiveEventRef = useRef(onLiveEvent);
+  onLiveEventRef.current = onLiveEvent;
+
   useEffect(() => {
     if (mode !== "VOICE") return;
 
@@ -41,7 +47,7 @@ const useWebSocketConnection = (
           if (!isComponentMounted) return;
           console.log("[VOICE_FRONTEND] Relay Connection Established");
           setConnectionStatus("connected");
-          callbacks?.onConnectionChange("connected");
+          callbacksRef.current?.onConnectionChange("connected");
 
           if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
           heartbeatIntervalRef.current = setInterval(() => {
@@ -61,22 +67,22 @@ const useWebSocketConnection = (
             for (let i = 0; i < float32.length; i++) {
               float32[i] = dataView.getInt16(i * 2, true) / 32768;
             }
-            callbacks?.onAudioData(float32);
+            callbacksRef.current?.onAudioData(float32);
           } else if (typeof event.data === "string") {
             try {
               const msg = JSON.parse(event.data);
 
               if (msg.type === "interrupted") {
                 console.log("[VOICE_FRONTEND] Interruption signal from relay");
-                callbacks?.onInterrupted();
+                callbacksRef.current?.onInterrupted();
               }
 
               if (msg.type === "turn_complete") {
-                callbacks?.onTurnComplete();
+                callbacksRef.current?.onTurnComplete();
               }
 
-              if (onLiveEvent) {
-                onLiveEvent(msg);
+              if (onLiveEventRef.current) {
+                onLiveEventRef.current(msg);
               }
             } catch (e) {
               console.error("Relay message parse error:", e);
@@ -87,7 +93,7 @@ const useWebSocketConnection = (
         ws.onerror = (error) => {
           console.error("[VOICE_FRONTEND] Relay WebSocket Error:", error);
           setConnectionStatus("error");
-          callbacks?.onConnectionChange("error");
+          callbacksRef.current?.onConnectionChange("error");
         };
 
         ws.onclose = (event) => {
@@ -95,7 +101,7 @@ const useWebSocketConnection = (
             `[VOICE_FRONTEND] Relay Connection Closed (Code: ${event.code}, Reason: ${event.reason || "none"})`,
           );
           setConnectionStatus("closed");
-          callbacks?.onConnectionChange("closed");
+          callbacksRef.current?.onConnectionChange("closed");
           if (heartbeatIntervalRef.current) {
             clearInterval(heartbeatIntervalRef.current);
             heartbeatIntervalRef.current = null;
@@ -104,7 +110,7 @@ const useWebSocketConnection = (
       } catch (err) {
         console.error("[VOICE_FRONTEND] Relay initialization failed:", err);
         setConnectionStatus("error");
-        callbacks?.onConnectionChange("error");
+        callbacksRef.current?.onConnectionChange("error");
       }
     };
 
@@ -119,7 +125,7 @@ const useWebSocketConnection = (
         clearInterval(heartbeatIntervalRef.current);
       }
     };
-  }, [mode, sessionId, callbacks, onLiveEvent]);
+  }, [mode, sessionId]);
 
   return { socketRef, connectionStatus };
 };
@@ -1002,7 +1008,7 @@ export const InterviewStep: React.FC<{
       <div className="flex-1 overflow-y-auto space-y-4 pr-3 mb-4 scrollbar-thin scrollbar-thumb-slate-200">
         {history.map((msg, i) => (
           <div
-            key={`${msg.role}-${i}-${msg.text.slice(0, 20)}`}
+            key={`${msg.role}-${i}`}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div

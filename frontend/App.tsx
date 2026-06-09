@@ -5,6 +5,7 @@ import type { Resume } from "./types/resume";
 import type { ChatRequest } from "./types/api";
 import { DEFAULT_RESUME } from "./config/constants";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
+import { toErrorMessage } from "./utils/errors";
 import { callChatEndpoint, fetchCurrentResume } from "./api";
 import { resumeCriticAgent } from "@/api/chat-endpoints/resumeCritic";
 import { contentStrengthAgent } from "@/api/chat-endpoints/contentStrength";
@@ -188,7 +189,7 @@ const WorkflowController: React.FC<{
     try {
       responseData = response.payload || JSON.parse(response.content || "{}");
     } catch (parseErr) {
-      throw new Error(`Invalid response from backend: ${String(parseErr)}`, { cause: parseErr });
+      throw new Error(`Invalid response from backend: ${toErrorMessage(parseErr)}`, { cause: parseErr });
     }
 
     updateProgress(90, 3);
@@ -226,7 +227,7 @@ const WorkflowController: React.FC<{
         status: WorkflowStatus.AWAITING_CRITIC_APPROVAL,
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to analyze resume");
+      setError(toErrorMessage(err) || "Failed to analyze resume");
     } finally {
       stopLoading();
     }
@@ -245,12 +246,21 @@ const WorkflowController: React.FC<{
       ]);
 
       try {
-        if (file.type === "application/pdf") {
-          const { responseData, parsedResume } = await processPdfFile(file);
-          handleSuccessfulProcessing(responseData, parsedResume);
+        const isPdf =
+          file.type === "application/pdf" ||
+          file.type === "application/x-pdf" ||
+          file.name.toLowerCase().endsWith(".pdf");
+
+        if (!isPdf) {
+          setError("Unsupported file type. Please upload a PDF resume.");
+          stopLoading();
+          return;
         }
+
+        const { responseData, parsedResume } = await processPdfFile(file);
+        handleSuccessfulProcessing(responseData, parsedResume);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to process resume");
+        setError(toErrorMessage(err) || "Failed to process resume");
       } finally {
         stopLoading();
       }
@@ -298,9 +308,7 @@ const WorkflowController: React.FC<{
       }));
       setManualResumeText("");
     } catch (err: unknown) {
-      setManualResumeError(
-        err instanceof Error ? err.message : "Failed to process manual resume data.",
-      );
+      setManualResumeError(toErrorMessage(err) || "Failed to process manual resume data.");
     } finally {
       stopLoading();
     }
@@ -323,7 +331,7 @@ const WorkflowController: React.FC<{
         status: WorkflowStatus.AWAITING_CONTENT_APPROVAL,
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to analyze content");
+      setError(toErrorMessage(err) || "Failed to analyze content");
     } finally {
       stopLoading();
     }
@@ -355,7 +363,7 @@ const WorkflowController: React.FC<{
         status: WorkflowStatus.AWAITING_ALIGNMENT_APPROVAL,
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to run alignment");
+      setError(toErrorMessage(err) || "Failed to run alignment");
     } finally {
       stopLoading();
     }
@@ -403,7 +411,7 @@ const WorkflowController: React.FC<{
         interviewHistory: [{ role: "agent", text: openingQuestion }],
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to start interview");
+      setError(toErrorMessage(err) || "Failed to start interview");
       updateState((prev) => ({
         ...prev,
         status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
@@ -435,7 +443,7 @@ const WorkflowController: React.FC<{
         status: interviewComplete ? WorkflowStatus.COMPLETED : prev.status,
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to get interview response");
+      setError(toErrorMessage(err) || "Failed to get interview response");
     } finally {
       stopLoading();
     }
@@ -472,7 +480,7 @@ const WorkflowController: React.FC<{
         };
       });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to process audio");
+      setError(toErrorMessage(err) || "Failed to process audio");
       updateState((prev) => ({
         ...prev,
         interviewHistory: prev.interviewHistory.filter(
@@ -483,34 +491,36 @@ const WorkflowController: React.FC<{
   };
 
   const handleLiveEvent = (event: { type: string; text?: string }) => {
-    if (event.type === "user" && event.text) {
+    if (!event.text) return;
+
+    if (event.type === "user") {
       updateState((prev) => {
         const history = [...prev.interviewHistory];
         const last = history.at(-1);
         if (last?.role === "user") {
           return {
             ...prev,
-            interviewHistory: [...history.slice(0, -1), { role: "user", text: event.text || "" }],
+            interviewHistory: [...history.slice(0, -1), { role: "user", text: event.text! }],
           };
         }
         return {
           ...prev,
-          interviewHistory: [...history, { role: "user", text: event.text || "" }],
+          interviewHistory: [...history, { role: "user", text: event.text! }],
         };
       });
-    } else if (event.type === "gemini" && event.text) {
+    } else if (event.type === "gemini") {
       updateState((prev) => {
         const history = [...prev.interviewHistory];
         const last = history.at(-1);
         if (last?.role === "agent") {
           return {
             ...prev,
-            interviewHistory: [...history.slice(0, -1), { role: "agent", text: event.text || "" }],
+            interviewHistory: [...history.slice(0, -1), { role: "agent", text: event.text! }],
           };
         }
         return {
           ...prev,
-          interviewHistory: [...history, { role: "agent", text: event.text || "" }],
+          interviewHistory: [...history, { role: "agent", text: event.text! }],
         };
       });
     }

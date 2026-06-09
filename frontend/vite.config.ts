@@ -1,9 +1,7 @@
 import path from "path";
-import { defineConfig, loadEnv } from "vite-plus";
+import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
 import eslint from "vite-plugin-eslint2";
-
-const env = loadEnv(process.env.NODE_ENV || "development", ".", "");
 
 export default defineConfig({
   fmt: {},
@@ -26,10 +24,6 @@ export default defineConfig({
       lintOnStart: true,
     }),
   ],
-  define: {
-    "process.env.API_KEY": JSON.stringify(env.GEMINI_API_KEY),
-    "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
