@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "doctor": "node scripts/doctor.mjs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint:frontend": "cd frontend && vp check --fix",
+    "lint:backend": "cd backend && uv run ruff check --fix",
+    "lint:backend:imports": "cd backend && uv run lint-imports",
+    "lint:all": "npm run lint:frontend && npm run lint:backend && npm run lint:backend:imports"
   },
   "dependencies": {
     "portless": "^0.14.0"

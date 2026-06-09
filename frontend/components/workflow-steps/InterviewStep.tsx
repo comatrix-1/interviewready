@@ -380,7 +380,7 @@ export const InterviewStep: React.FC<{
     let currentCtx = playbackContextRef.current;
     if (!currentCtx || currentCtx.state === "closed") {
       console.log("[VOICE_DEBUG] Creating new playback AudioContext at 24000Hz");
-      currentCtx = new (globalThis.AudioContext || globalThis.webkitAudioContext)({
+      currentCtx = new (window.AudioContext || window.webkitAudioContext!)({
         sampleRate: 24000,
       });
       playbackContextRef.current = currentCtx;
@@ -522,7 +522,7 @@ export const InterviewStep: React.FC<{
     let context = recordingContextRef.current;
     if (!context || context.state === "closed") {
       console.log("[VOICE_DEBUG] Creating new recording AudioContext");
-      context = new (globalThis.AudioContext || globalThis.webkitAudioContext)({
+      context = new (window.AudioContext || window.webkitAudioContext!)({
         sampleRate: 16000,
       });
       recordingContextRef.current = context;
@@ -913,9 +913,9 @@ export const InterviewStep: React.FC<{
     // Crucial: AudioContext must be resumed from a user gesture
     try {
       if (!playbackContextRef.current || playbackContextRef.current.state === "closed") {
-        playbackContextRef.current = new (
-          globalThis.AudioContext || globalThis.webkitAudioContext
-        )({ sampleRate: 24000 });
+        playbackContextRef.current = new (window.AudioContext || window.webkitAudioContext!)({
+          sampleRate: 24000,
+        });
       }
       if (playbackContextRef.current.state === "suspended") {
         console.log("[VOICE_FRONTEND] Resuming playback context from mic click");
@@ -923,9 +923,9 @@ export const InterviewStep: React.FC<{
       }
 
       if (!recordingContextRef.current || recordingContextRef.current.state === "closed") {
-        recordingContextRef.current = new (
-          globalThis.AudioContext || globalThis.webkitAudioContext
-        )({ sampleRate: 16000 });
+        recordingContextRef.current = new (window.AudioContext || window.webkitAudioContext!)({
+          sampleRate: 16000,
+        });
       }
       if (recordingContextRef.current.state === "suspended") {
         console.log("[VOICE_FRONTEND] Resuming recording context from mic click");

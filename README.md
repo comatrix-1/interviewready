@@ -38,6 +38,28 @@ Instead of using a single LLM to "answer," this system decomposes reasoning into
 
 This mimics how structured human review processes work in real organizations.
 
+## Development & Code Quality
+
+### Linting
+
+Run all linters from the project root:
+
+```bash
+# Run all linters with auto-fix (ESLint + Ruff + import linter)
+npm run lint:all
+```
+
+Individual commands are also available:
+
+```bash
+# Frontend only
+npm run lint:frontend    # Vite+ check with auto-fix (linter + formatter)
+
+# Backend only
+npm run lint:backend           # Ruff with auto-fix
+npm run lint:backend:imports   # Import linter
+```
+
 ### Run the Application
 ```bash
 npm run dev

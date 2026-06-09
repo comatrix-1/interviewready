@@ -75,13 +75,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
       updateProgress,
       stopLoading,
     }),
-    [
-      isLoading,
-      message,
-      progress,
-      steps,
-      currentStep,
-    ],
+    [isLoading, message, progress, steps, currentStep],
   );
 
   return <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>;

@@ -189,7 +189,9 @@ const WorkflowController: React.FC<{
     try {
       responseData = response.payload || JSON.parse(response.content || "{}");
     } catch (parseErr) {
-      throw new Error(`Invalid response from backend: ${toErrorMessage(parseErr)}`, { cause: parseErr });
+      throw new Error(`Invalid response from backend: ${toErrorMessage(parseErr)}`, {
+        cause: parseErr,
+      });
     }
 
     updateProgress(90, 3);
