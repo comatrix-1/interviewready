@@ -6,6 +6,7 @@ import { defineConfig } from "eslint/config";
 import boundaries from "eslint-plugin-boundaries";
 
 export default defineConfig([
+  { ignores: ["dist/**", "node_modules/**"] },
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
     plugins: { js, boundaries },
@@ -98,6 +99,8 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
   js.configs.recommended,
+  tseslint.configs.recommended,
+  pluginReact.configs.flat.recommended,
   // Disable prop-types — TypeScript provides full type safety
   { rules: { "react/prop-types": "off" } },
   // Disable react-in-jsx-scope — React 19 JSX transform handles this
@@ -123,6 +126,4 @@ export default defineConfig([
       ],
     },
   },
-  tseslint.configs.recommended,
-  pluginReact.configs.flat.recommended,
 ]);
