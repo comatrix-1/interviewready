@@ -16,6 +16,7 @@ from .agent import (
     ResumeFile,
     WorkflowStatus,
 )
+from .ats import ATSAnalysisRequest, ATSAnalysisResponse, BulletAnalysis, SectionAnalysis
 from .base import Award, Certificate, Education, Project, Skill, Source, Work
 from .database import (
     AwardModel,
@@ -36,9 +37,13 @@ __all__ = [
     "AgentResponse",
     "AlignmentReport",
     "AnalysisArtifact",
+    # ATS models
+    "ATSAnalysisRequest",
+    "ATSAnalysisResponse",
     "Award",
     "AwardModel",
     "Base",
+    "BulletAnalysis",
     "Certificate",
     "CertificationModel",
     "ChatApiResponse",
@@ -58,6 +63,7 @@ __all__ = [
     "ResumeFile",
     # SQLAlchemy models (optional)
     "ResumeModel",
+    "SectionAnalysis",
     # Session models
     "SessionContext",
     "SharedState",
