@@ -19,6 +19,7 @@ class BulletAnalysis(BaseModel):
     pass_: PassStatus = Field(alias="pass")
     bullet_to_highlight: list[int] | None = None
     message: str | None = None
+    suggestions: list[str] | None = None
 
 
 class SectionAnalysis(BaseModel):
@@ -28,10 +29,29 @@ class SectionAnalysis(BaseModel):
     checks: dict[str, BulletAnalysis]
 
 
+class CriticIssue(BaseModel):
+    """An issue surfaced by the ResumeCriticAgent."""
+
+    location: str
+    type: Literal["ats", "structure", "impact", "readability"]
+    severity: Literal["HIGH", "MEDIUM", "LOW"]
+    description: str
+
+
+class KeywordMatchResult(BaseModel):
+    """Result of JD keyword matching against the resume."""
+
+    match_percentage: float = Field(ge=0, le=100)
+    matched_keywords: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+
+
 class ATSAnalysisRequest(BaseModel):
     """Request body for ``POST /api/v1/ats/analyze``."""
 
     resume: Resume
+    job_description: str | None = None
+    critic_issues: list[CriticIssue] | None = None
 
 
 class ATSAnalysisResponse(BaseModel):
@@ -40,3 +60,6 @@ class ATSAnalysisResponse(BaseModel):
     ats_score: int = Field(ge=0, le=100)
     sections: list[SectionAnalysis]
     detailed_results: dict[str, BulletAnalysis]
+    keyword_match: KeywordMatchResult | None = None
+    critic_penalty: int | None = None
+    critic_issues_applied: list[CriticIssue] | None = None

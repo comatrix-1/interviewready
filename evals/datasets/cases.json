@@ -167,6 +167,41 @@
       "history_id": "history_t1",
       "notes": "Edge case with career change context.",
       "edge_case": true
+    },
+
+    {
+      "id": "ats_strong_resume",
+      "agent": "ATSEngine",
+      "intent": "ATS_SCORE",
+      "resume_id": "resume_strong_swe",
+      "notes": "Strong resume with metrics. Expected score: 50-70.",
+      "tags": ["ats", "structural"]
+    },
+    {
+      "id": "ats_weak_resume",
+      "agent": "ATSEngine",
+      "intent": "ATS_SCORE",
+      "resume_id": "resume_sparse_metrics",
+      "notes": "Weak resume with vague bullets, no metrics. Expected score: 15-35.",
+      "tags": ["ats"],
+      "edge_case": true
+    },
+    {
+      "id": "ats_career_changer",
+      "agent": "ATSEngine",
+      "intent": "ATS_SCORE",
+      "resume_id": "resume_career_changer",
+      "notes": "Career changer with mixed experience. Expected score: 30-55.",
+      "tags": ["ats"]
+    },
+    {
+      "id": "ats_with_jd_match",
+      "agent": "ATSEngine",
+      "intent": "ATS_SCORE",
+      "resume_id": "resume_strong_swe",
+      "job_description_id": "jd_backend_api",
+      "notes": "Strong resume + matching JD. Expected score: 55-75 (keyword bonus).",
+      "tags": ["ats", "jd-aware"]
     }
   ]
 }
