@@ -18,6 +18,7 @@ Scoring Philosophy (v3):
 
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from datetime import date
@@ -172,15 +173,26 @@ _CRITIC_SEVERITY_PENALTIES = {"HIGH": -5, "MEDIUM": -2, "LOW": -1}
 # Stopwords for keyword extraction (no NLTK dependency)
 # ---------------------------------------------------------------------------
 
+_STEM_SUFFIXES = [
+    "ational", "tional", "enci", "anci", "izer", "isation", "ization",
+    "ation", "ator", "alism", "aliti", "alli", "entli", "eli", "ousli",
+    "bling", "ing", "tion", "sion", "ment", "ness", "able", "ible",
+    "ful", "less", "ous", "ive", "ly", "er", "or", "ed", "es", "s",
+]
+
+_MIN_STEM_LEN = 3
+
+
 def _stem_word(word: str) -> str:
-    """Simple suffix-stripping stemmer for keyword normalization."""
-    word = word.lower()
-    if len(word) <= 3:  # noqa: PLR2004
+    """Improved suffix-stripping stemmer with ordered suffix rules."""
+    word = word.lower().strip()
+    if len(word) <= _MIN_STEM_LEN:
         return word
-    # Common suffixes (order matters - check longer suffixes first)
-    for suffix in ["ing", "tion", "sion", "ment", "ness", "able", "ible", "ful", "less", "ous", "ive", "ly", "er", "or", "ed", "es", "s"]:
-        if word.endswith(suffix) and len(word) > len(suffix) + 2:
-            return word[:-len(suffix)]
+    for suffix in _STEM_SUFFIXES:
+        if word.endswith(suffix):
+            stem = word[: -len(suffix)]
+            if len(stem) >= _MIN_STEM_LEN:
+                return stem
     return word
 
 
@@ -301,16 +313,37 @@ def _check_bullet_quantified(bullet: str) -> bool:
     return _has_meaningful_number(bullet)
 
 
+_PASSIVE_PARTICIPLE_SUFFIXES = ("ed", "en", "wn", "ne", "lt", "pt", "nt")
+_PASSIVE_FALSE_POSITIVES = frozenset({
+    "responsible", "able", "interested", "experienced", "dedicated",
+    "motivated", "organized", "determined", "talented", "qualified",
+    "prepared", "based", "used", "focused", "needed", "required",
+    "named", "known", "given", "leading", "working", "building",
+    "managing", "running", "going", "becoming", "having",
+})
+
+
+def _is_likely_past_participle(word: str) -> bool:
+    """Heuristic check if a word is likely a past participle."""
+    w = word.lower()
+    if w in _PAST_PARTICIPLES:
+        return True
+    if w in _PASSIVE_FALSE_POSITIVES:
+        return False
+    if len(w) <= 3:  # noqa: PLR2004
+        return False
+    return any(w.endswith(suffix) for suffix in _PASSIVE_PARTICIPLE_SUFFIXES)
+
+
 def _check_passive_voice(bullets: list[str]) -> dict:
-    """Detect passive voice: be-verb followed by a past participle (exact match)."""
+    """Detect passive voice: be-verb followed by a likely past participle."""
     fail = []
     for i, b in enumerate(bullets):
         for bv in _BE_VERBS:
             match = re.search(rf"\b{bv}\b\s+(\w+)", b, re.IGNORECASE)
             if match:
                 next_word = match.group(1).lower()
-                # Exact match only (no prefix matching to avoid false positives)
-                if next_word in _PAST_PARTICIPLES:
+                if _is_likely_past_participle(next_word):
                     fail.append(i)
                     break
     status = "ok" if not fail else "no"
@@ -452,15 +485,36 @@ def _check_entry_completeness(entries: list, prefix: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _extract_keywords(text: str, top_n: int = 30) -> list[str]:
-    """Extract top keywords from text using tokenization + frequency ranking.
-
-    Simple approach: split on non-alpha, lowercase, remove stopwords and
-    very short tokens, return top_n by frequency.
-    """
+def _extract_ngrams(text: str, n: int) -> list[str]:
+    """Extract n-grams from text after stopword removal."""
     tokens = re.findall(r"[a-zA-Z][a-zA-Z+#./-]{1,}", text.lower())
     filtered = [t for t in tokens if t not in _STOPWORDS and len(t) > 2]  # noqa: PLR2004
-    counts = Counter(filtered)
+    if len(filtered) < n:
+        return []
+    return [" ".join(filtered[i : i + n]) for i in range(len(filtered) - n + 1)]
+
+
+def _extract_keywords(text: str, top_n: int = 30) -> list[str]:
+    """Extract top keywords with n-gram support (unigrams + bigrams + trigrams).
+
+    Multi-word terms get a frequency boost when they appear 2+ times.
+    """
+    if not text or not text.strip():
+        return []
+
+    unigrams = _extract_ngrams(text, 1)
+    bigrams = _extract_ngrams(text, 2)
+    trigrams = _extract_ngrams(text, 3)
+
+    counts: Counter = Counter()
+    counts.update(unigrams)
+    # Bigrams/trigrams: count occurrences, add with a weight boost
+    for ngram_list, weight in [(bigrams, 1.5), (trigrams, 2.0)]:
+        ngram_counts = Counter(ngram_list)
+        for ngram, freq in ngram_counts.items():
+            # Include any n-gram (weighted count > 1 ensures it ranks above rare unigrams)
+            counts[ngram] = round(freq * weight)
+
     return [word for word, _ in counts.most_common(top_n)]
 
 
@@ -513,6 +567,66 @@ def _compute_keyword_match(
         "matchedKeywords": sorted(matched),
         "missingKeywords": sorted(missing),
     }
+
+
+# ---------------------------------------------------------------------------
+# Semantic similarity (cosine similarity)
+# ---------------------------------------------------------------------------
+
+
+def _tokenize_to_bag(text: str) -> dict[str, float]:
+    """Tokenize text into a normalized term-frequency bag."""
+    tokens = re.findall(r"[a-zA-Z][a-zA-Z+#./-]{1,}", text.lower())
+    filtered = [t for t in tokens if t not in _STOPWORDS and len(t) > 2]  # noqa: PLR2004
+    if not filtered:
+        return {}
+    counts = Counter(filtered)
+    total = len(filtered)
+    return {term: count / total for term, count in counts.items()}
+
+
+def _cosine_similarity(a: dict[str, float], b: dict[str, float]) -> float:
+    """Compute cosine similarity between two TF vectors."""
+    common_keys = set(a.keys()) & set(b.keys())
+    if not common_keys:
+        return 0.0
+    dot = sum(a[k] * b[k] for k in common_keys)
+    mag_a = math.sqrt(sum(v * v for v in a.values()))
+    mag_b = math.sqrt(sum(v * v for v in b.values()))
+    if mag_a == 0 or mag_b == 0:
+        return 0.0
+    return dot / (mag_a * mag_b)
+
+
+def _collect_resume_text(resume: Any) -> str:
+    """Flatten all resume text into a single string."""
+    parts: list[str] = []
+    for skill in (getattr(resume, "skills", None) or []):
+        if getattr(skill, "name", None):
+            parts.append(skill.name)
+    for entry in (getattr(resume, "work", None) or []):
+        for h in (getattr(entry, "highlights", None) or []):
+            parts.append(h)
+    for entry in (getattr(resume, "projects", None) or []):
+        desc = getattr(entry, "description", None)
+        if desc:
+            parts.append(desc)
+        for h in (getattr(entry, "highlights", None) or []):
+            parts.append(h)
+    return " ".join(parts)
+
+
+def _compute_semantic_similarity(job_description: str, resume: Any) -> float:
+    """Compute cosine similarity between JD and resume text.
+
+    Returns a float between 0.0 and 1.0 representing semantic alignment.
+    """
+    if not job_description or not job_description.strip():
+        return 0.0
+    jd_bag = _tokenize_to_bag(job_description)
+    resume_text = _collect_resume_text(resume)
+    resume_bag = _tokenize_to_bag(resume_text)
+    return round(_cosine_similarity(jd_bag, resume_bag), 4)
 
 
 # ---------------------------------------------------------------------------
@@ -656,7 +770,7 @@ def _process_entries(  # noqa: PLR0912
             is_passive = False
             for bv in _BE_VERBS:
                 m = re.search(rf"\b{bv}\b\s+(\w+)", bullet, re.IGNORECASE)
-                if m and m.group(1).lower() in _PAST_PARTICIPLES:
+                if m and _is_likely_past_participle(m.group(1)):
                     is_passive = True
                     break
             if not is_passive:
@@ -723,43 +837,40 @@ def _recency_weight(entry: Any) -> float:
 
 
 def _check_contact_presence(resume: Any) -> dict:
-    """Check if the resume has basic identifying information.
+    """Check if the resume has substantive content beyond just metadata.
 
-    A resume should have at least some identifying info (work entries,
-    education, skills, or projects). An empty resume suggests missing
-    contact/summary information.
+    A resume with work experience or projects is considered complete.
+    A resume with only skills or education is minimal (may lack context).
+    An empty resume fails.
     """
-    has_any = bool(
-        getattr(resume, "work", None)
-        or getattr(resume, "education", None)
-        or getattr(resume, "skills", None)
-        or getattr(resume, "projects", None)
-    )
-    if has_any:
-        return {"pass": "ok", "bullet_to_highlight": None, "message": "Resume has content"}
-    return {"pass": "no", "bullet_to_highlight": None, "message": "Resume appears empty; ensure contact info and summary are present"}
+    has_work_or_projects = bool(getattr(resume, "work", None) or getattr(resume, "projects", None))
+    has_skills = bool(getattr(resume, "skills", None))
+    has_education = bool(getattr(resume, "education", None))
+
+    if has_work_or_projects:
+        return {"pass": "ok", "bullet_to_highlight": None, "message": "Resume has substantive content"}
+    if has_skills or has_education:
+        return {"pass": "min", "bullet_to_highlight": None, "message": "Resume has only skills/education; add work experience or projects for stronger ATS performance"}
+    return {"pass": "no", "bullet_to_highlight": None, "message": "Resume appears empty; ensure work experience and contact info are present"}
 
 
 def _check_section_ordering(resume: Any) -> dict:
     """Check if sections appear in conventional ATS-friendly order.
 
     Standard order: work experience → projects → skills → education.
-    Only checks relative ordering of sections that exist.
+    Note: The structured Resume model doesn't preserve original document
+    section ordering. This check validates that the expected sections
+    exist (presence) rather than their document-level ordering.
+    A dedicated parser would be needed for true ordering validation.
     """
     expected_order = ["work", "projects", "skills", "education"]
-    present_sections = []
-    for section in expected_order:
-        items = getattr(resume, section, None)
-        if items:
-            present_sections.append(section)
+    present_sections = [s for s in expected_order if getattr(resume, s, None)]
 
     if len(present_sections) < 2:  # noqa: PLR2004
         return {"pass": "ok", "bullet_to_highlight": None, "message": "Not enough sections to evaluate ordering"}
 
-    # Check if present sections are in the expected relative order
-    # (they already are since we iterate expected_order in order)
-    # The check passes if sections appear in this iteration order
-    return {"pass": "ok", "bullet_to_highlight": None, "message": "Sections are in standard order"}
+    # Without document-level order metadata, we can only confirm presence
+    return {"pass": "ok", "bullet_to_highlight": None, "message": "Required sections present"}
 
 
 def _check_keyword_stuffing(resume: Any) -> dict:
@@ -799,6 +910,54 @@ def _check_keyword_stuffing(resume: Any) -> dict:
     return {"pass": "ok", "bullet_to_highlight": None, "message": "No keyword stuffing detected"}
 
 
+def _check_skills_relevance(job_description: str | None, resume: Any) -> dict:
+    """Cross-reference skills section against JD keywords.
+
+    Returns relevant/irrelevant skill names and a pass status.
+    """
+    skills = getattr(resume, "skills", None) or []
+    skill_names = [s.name for s in skills if getattr(s, "name", None)]
+
+    if not skill_names:
+        return {
+            "pass": "min",
+            "bullet_to_highlight": None,
+            "message": "No skills listed",
+            "relevant_skills": [],
+            "irrelevant_skills": [],
+        }
+
+    if not job_description:
+        return {
+            "pass": "ok",
+            "bullet_to_highlight": None,
+            "message": "Skills listed (no JD to compare against)",
+            "relevant_skills": skill_names,
+            "irrelevant_skills": [],
+        }
+
+    jd_keywords = {_stem_word(k) for k in _extract_keywords(job_description)}
+    relevant = []
+    irrelevant = []
+    for name in skill_names:
+        skill_stems = {_stem_word(t) for t in _extract_keywords(name)}
+        if skill_stems & jd_keywords:
+            relevant.append(name)
+        else:
+            irrelevant.append(name)
+
+    ratio = len(relevant) / len(skill_names) if skill_names else 0
+    status = "ok" if ratio >= 0.3 else "no"  # noqa: PLR2004
+
+    return {
+        "pass": status,
+        "bullet_to_highlight": None,
+        "message": f"{len(relevant)}/{len(skill_names)} skills match JD keywords",
+        "relevant_skills": relevant,
+        "irrelevant_skills": irrelevant,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -824,7 +983,8 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
     Returns:
         ``{ "atsScore": int, "sections": [...], "detailedResults": {...},
            "keywordResult": {...}|None, "criticPenalty": int|None,
-           "criticIssuesApplied": [...]|None }``
+           "criticIssuesApplied": [...]|None,
+           "semanticScore": float|None, "scoreBreakdown": {...} }``
     """
     sections: list[dict] = []
     detailed_results: dict[str, dict] = {}
@@ -832,24 +992,35 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
     all_bullets: list[str] = []
     has_jd = bool(job_description)
 
+    # --- Score breakdown tracker -------------------------------------------
+    breakdown: dict[str, float] = {
+        "section_presence": 0.0,
+        "bullet_quality": 0.0,
+        "jd_keyword_match": 0.0,
+        "semantic_match": 0.0,
+        "bonuses": 0.0,
+        "penalties": 0.0,
+    }
+
     # --- Section presence bonuses -------------------------------------------
     quality = 0.0
 
     if resume.work:
-        score += _SECTION_BONUSES["work"]
+        breakdown["section_presence"] += _SECTION_BONUSES["work"]
         quality += _process_entries(resume.work, "experience", sections, detailed_results)
         for entry in resume.work:
             all_bullets.extend(entry.highlights)
 
     if resume.projects:
-        score += _SECTION_BONUSES["projects"]
+        breakdown["section_presence"] += _SECTION_BONUSES["projects"]
         quality += _process_entries(resume.projects, "project", sections, detailed_results)
         for entry in resume.projects:
             all_bullets.extend(entry.highlights)
 
     # Cap total bullet quality globally
     if resume.work or resume.projects:
-        score += min(quality, _BULLET_QUALITY_CAP)
+        capped_quality = min(quality, _BULLET_QUALITY_CAP)
+        breakdown["bullet_quality"] = capped_quality
 
     for attr, section_name in [
         ("skills", "skills"),
@@ -859,39 +1030,57 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
     ]:
         items = getattr(resume, attr, [])
         if items:
-            score += _SECTION_BONUSES[section_name]
+            breakdown["section_presence"] += _SECTION_BONUSES[section_name]
             _process_simple_section(items, section_name, sections, detailed_results)
+
+    score += breakdown["section_presence"] + breakdown["bullet_quality"]
 
     # --- Resume-level structural checks ------------------------------------
     contact_check = _check_contact_presence(resume)
     if contact_check["pass"] == "ok":
-        score += _CONTACT_PRESENCE_BONUS
+        breakdown["bonuses"] += _CONTACT_PRESENCE_BONUS
     sections.append({"section": "contact", "checks": {"contactPresence": contact_check}, "suggestions": []})
     detailed_results["contact_contactPresence"] = contact_check
 
     order_check = _check_section_ordering(resume)
-    if order_check["pass"] == "ok" and order_check["message"] == "Sections are in standard order":
-        score += _SECTION_ORDER_BONUS
+    # Don't award ordering bonus — the structured model can't validate true document ordering
     sections.append({"section": "ordering", "checks": {"sectionOrdering": order_check}, "suggestions": []})
     detailed_results["ordering_sectionOrdering"] = order_check
 
     stuffing_check = _check_keyword_stuffing(resume)
     if stuffing_check["pass"] == "no":
-        score += _KEYWORD_STUFFING_PENALTY
+        breakdown["penalties"] += _KEYWORD_STUFFING_PENALTY
     sections.append({"section": "keywords", "checks": {"keywordStuffing": stuffing_check}, "suggestions": []})
     detailed_results["keywords_keywordStuffing"] = stuffing_check
+
+    score += breakdown["bonuses"]
 
     # --- JD keyword matching ------------------------------------------------
     keyword_result = None
     if has_jd:
         keyword_result = _compute_keyword_match(job_description, resume)
         keyword_points = round(keyword_result["matchPercentage"] / 100 * _JD_KEYWORD_MAX_POINTS)
+        breakdown["jd_keyword_match"] = float(keyword_points)
         score += keyword_points
+
+    # --- Semantic similarity (when JD provided) ----------------------------
+    semantic_score: float | None = None
+    if has_jd:
+        semantic_score = _compute_semantic_similarity(job_description, resume)
+        semantic_points = round(semantic_score * 10)
+        breakdown["semantic_match"] = float(semantic_points)
+        score += semantic_points
+
+    # --- Skills relevance check (when JD provided) -------------------------
+    if has_jd:
+        skills_check = _check_skills_relevance(job_description, resume)
+        sections.append({"section": "skills_relevance", "checks": {"skillsRelevance": skills_check}, "suggestions": []})
+        detailed_results["skills_relevance_skillsRelevance"] = skills_check
 
     # --- Penalty pass -------------------------------------------------------
     # Duplicate bullets across entries
     duplicates = _count_duplicate_bullets(all_bullets)
-    score += _PENALTY_DUPLICATE_BULLETS * duplicates
+    breakdown["penalties"] += _PENALTY_DUPLICATE_BULLETS * duplicates
 
     # Bullet count penalties
     for sec in sections:
@@ -899,9 +1088,9 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
         if bc and bc["pass"] == "min":
             msg = bc.get("message", "")
             if "Too few" in msg:
-                score += _PENALTY_TOO_FEW_BULLETS
+                breakdown["penalties"] += _PENALTY_TOO_FEW_BULLETS
             elif "Too many" in msg:
-                score += _PENALTY_TOO_MANY_BULLETS
+                breakdown["penalties"] += _PENALTY_TOO_MANY_BULLETS
 
     # --- Date and completeness checks ---------------------------------------
     for entries, prefix in [
@@ -911,19 +1100,19 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
         for flag in _check_date_presence(entries, prefix):
             sections.append({"section": flag["entry"], "checks": {flag["check"]: flag}, "suggestions": []})
             detailed_results[f"{flag['entry']}_{flag['check']}"] = flag
-            score += _DATE_PENALTY
+            breakdown["penalties"] += _DATE_PENALTY
         for flag in _check_date_consistency(entries, prefix):
             sections.append({"section": flag["entry"], "checks": {flag["check"]: flag}, "suggestions": []})
             detailed_results[f"{flag['entry']}_{flag['check']}"] = flag
-            score += _DATE_PENALTY
+            breakdown["penalties"] += _DATE_PENALTY
 
     for flag in _check_entry_completeness(resume.work or [], "experience"):
         sections.append({"section": flag["entry"], "checks": {flag["check"]: flag}, "suggestions": []})
         detailed_results[f"{flag['entry']}_{flag['check']}"] = flag
-        score += _COMPLETENESS_PENALTY
+        breakdown["penalties"] += _COMPLETENESS_PENALTY
 
     # --- Critic issue penalties ---------------------------------------------
-    critic_penalty = None
+    critic_penalty: int | None = None
     applied_issues: list[dict] | None = None
     if critic_issues:
         critic_penalty = 0
@@ -933,14 +1122,21 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
             penalty = _CRITIC_SEVERITY_PENALTIES.get(sev, 0)
             critic_penalty += penalty
             applied_issues.append(issue if isinstance(issue, dict) else issue.model_dump())
-        score += critic_penalty
+        breakdown["penalties"] += float(critic_penalty)
+
+    # Apply all penalties to score
+    score += breakdown["penalties"]
 
     # --- Score normalisation -------------------------------------------------
     # Normalise to 0-100 so scores are comparable with or without a JD
-    max_possible = 100.0 + _CONTACT_PRESENCE_BONUS + _SECTION_ORDER_BONUS
+    max_possible = 100.0 + _CONTACT_PRESENCE_BONUS  # ordering bonus removed
     if has_jd:
-        max_possible += _JD_KEYWORD_MAX_POINTS
+        max_possible += _JD_KEYWORD_MAX_POINTS + 10  # +10 for semantic
     ats_score = max(0, min(100, round(score / max_possible * 100)))
+
+    breakdown["raw_score"] = score
+    breakdown["max_possible"] = max_possible
+
     return {
         "atsScore": ats_score,
         "sections": sections,
@@ -948,4 +1144,6 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
         "keywordResult": keyword_result,
         "criticPenalty": critic_penalty,
         "criticIssuesApplied": applied_issues,
+        "semanticScore": semantic_score,
+        "scoreBreakdown": breakdown,
     }

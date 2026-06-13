@@ -46,6 +46,19 @@ class KeywordMatchResult(BaseModel):
     missing_keywords: list[str] = Field(default_factory=list)
 
 
+class ScoreBreakdown(BaseModel):
+    """Human-readable breakdown of how the ATS score was calculated."""
+
+    section_presence: float = Field(ge=0, description="Points from having expected sections")
+    bullet_quality: float = Field(ge=0, description="Points from bullet point quality")
+    jd_keyword_match: float = Field(ge=0, description="Points from JD keyword overlap")
+    semantic_match: float = Field(ge=0, description="Points from semantic similarity")
+    bonuses: float = Field(ge=0, description="Contact presence and structural bonuses")
+    penalties: float = Field(le=0, description="Deductions for issues found")
+    raw_score: float = Field(ge=0, description="Total raw score before normalization")
+    max_possible: float = Field(gt=0, description="Maximum possible raw score")
+
+
 class ATSAnalysisRequest(BaseModel):
     """Request body for ``POST /api/v1/ats/analyze``."""
 
@@ -63,3 +76,5 @@ class ATSAnalysisResponse(BaseModel):
     keyword_match: KeywordMatchResult | None = None
     critic_penalty: int | None = None
     critic_issues_applied: list[CriticIssue] | None = None
+    score_breakdown: ScoreBreakdown | None = None
+    semantic_score: float | None = Field(default=None, ge=0, le=1, description="Cosine similarity score (0-1) when JD provided")

@@ -10,6 +10,7 @@ from app.models.ats import (
     ATSAnalysisResponse,
     BulletAnalysis,
     KeywordMatchResult,
+    ScoreBreakdown,
     SectionAnalysis,
 )
 from app.utils.ats_engine import analyze_resume
@@ -62,6 +63,11 @@ async def analyze(request: Request, body: ATSAnalysisRequest) -> ATSAnalysisResp
             missing_keywords=kr["missingKeywords"],
         )
 
+    # Build optional score breakdown
+    score_breakdown = None
+    if raw.get("scoreBreakdown"):
+        score_breakdown = ScoreBreakdown(**raw["scoreBreakdown"])
+
     return ATSAnalysisResponse(
         ats_score=raw["atsScore"],
         sections=sections,
@@ -69,4 +75,6 @@ async def analyze(request: Request, body: ATSAnalysisRequest) -> ATSAnalysisResp
         keyword_match=keyword_match,
         critic_penalty=raw.get("criticPenalty"),
         critic_issues_applied=raw.get("criticIssuesApplied"),
+        score_breakdown=score_breakdown,
+        semantic_score=raw.get("semanticScore"),
     )
