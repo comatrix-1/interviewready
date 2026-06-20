@@ -30,7 +30,7 @@ dependencies = [
     "websockets>=13.0",
     "slowapi>=0.1.9",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12, <3.14"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -61,11 +61,11 @@ allow-direct-references = true
 
 [tool.black]
 line-length = 128
-target-version = ['py311']
+target-version = ['py312']
 
 [tool.ruff]
 line-length = 128
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.
@@ -116,7 +116,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

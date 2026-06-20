@@ -1,5 +1,5 @@
 # Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 # Set the working directory
 WORKDIR /app
@@ -14,7 +14,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --no-install-project --no-dev
 
 # Final stage
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
