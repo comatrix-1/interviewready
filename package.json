@@ -6,13 +6,17 @@
     "dev": "node scripts/dev.mjs",
     "doctor": "node scripts/doctor.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint:frontend": "cd frontend && vp check --fix",
-    "lint:backend": "cd backend && uv run ruff check --fix",
-    "lint:backend:imports": "cd backend && uv run lint-imports",
-    "lint:all": "npm run lint:frontend && npm run lint:backend && npm run lint:backend:imports"
+    "lint:frontend": "cd frontend && npx vp check --fix",
+    "lint:backend": "cd backend && uv run --no-sync ruff check --fix",
+    "lint:backend:imports": "cd backend && uv run --no-sync lint-imports",
+    "lint:all": "npm run lint:frontend && npm run lint:backend && npm run lint:backend:imports",
+    "prepare": "husky"
   },
   "dependencies": {
     "portless": "^0.14.0"
   },
-  "packageManager": "npm@11.16.0"
+  "packageManager": "npm@11.16.0",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
 }
