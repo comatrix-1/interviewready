@@ -158,6 +158,12 @@ _QUANTIFICATION_THRESHOLD = 0.3  # flag only if fewer than 30% of bullets have n
 _MIN_BULLETS_PER_ENTRY = 2
 _MAX_BULLETS_PER_ENTRY = 8
 
+# Input validation limits
+_MAX_BULLET_LENGTH = 500
+_MAX_ENTRIES_PER_SECTION = 20
+_MAX_BULLETS_PER_ENTRY_LIMIT = 20
+_HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+
 # JD weighting
 _JD_KEYWORD_MAX_POINTS = 20
 
@@ -227,6 +233,10 @@ _PRONOUN_PATTERN = _build_word_patterns(_PRONOUNS)
 _BUZZWORD_PATTERN = _build_word_patterns(_BUZZWORDS)
 _ACTION_VERB_SET = frozenset(_ACTION_VERBS)
 _WEAK_VERB_SET = frozenset(_WEAK_VERBS)
+_BE_VERB_PATTERN = re.compile(
+    r"\b(?:" + "|".join(_BE_VERBS) + r")\b\s+(\w+)",
+    re.IGNORECASE,
+)
 
 # ---------------------------------------------------------------------------
 # Individual checks
@@ -244,18 +254,6 @@ def _make_result(
         "message": message,
     }
 
-
-def _word_in_text(words: list[str], text: str) -> bool:
-    """Check if any word/phrase from the list appears in text with proper boundaries.
-
-    Handles hyphens and multi-word phrases correctly.
-    """
-    for w in words:
-        escaped = re.escape(w)
-        pattern = rf"(?<![a-zA-Z]){escaped}(?![a-zA-Z])"
-        if re.search(pattern, text, re.IGNORECASE):
-            return True
-    return False
 
 
 def _phrase_in_text(phrases: list[str], text: str) -> bool:
@@ -339,13 +337,11 @@ def _check_passive_voice(bullets: list[str]) -> dict:
     """Detect passive voice: be-verb followed by a likely past participle."""
     fail = []
     for i, b in enumerate(bullets):
-        for bv in _BE_VERBS:
-            match = re.search(rf"\b{bv}\b\s+(\w+)", b, re.IGNORECASE)
-            if match:
-                next_word = match.group(1).lower()
-                if _is_likely_past_participle(next_word):
-                    fail.append(i)
-                    break
+        match = _BE_VERB_PATTERN.search(b)
+        if match:
+            next_word = match.group(1).lower()
+            if _is_likely_past_participle(next_word):
+                fail.append(i)
     status = "ok" if not fail else "no"
     return _make_result(status, fail, "Passive voice detected")
 
@@ -397,7 +393,7 @@ def _count_duplicate_bullets(bullets: list[str]) -> int:
     seen: set[str] = set()
     duplicates = 0
     for b in bullets:
-        normalized = b.strip().lower()
+        normalized = b.strip().lower().rstrip(".,;:!?")
         if normalized in seen:
             duplicates += 1
         seen.add(normalized)
@@ -521,6 +517,7 @@ def _extract_keywords(text: str, top_n: int = 30) -> list[str]:
 def _compute_keyword_match(
     job_description: str,
     resume: Any,
+    jd_keywords: set[str] | None = None,
 ) -> dict:
     """Compute keyword overlap between JD and resume with stemming normalization.
 
@@ -530,7 +527,8 @@ def _compute_keyword_match(
     Returns:
         ``{"matchPercentage": float, "matchedKeywords": list, "missingKeywords": list}``
     """
-    jd_keywords = set(_extract_keywords(job_description))
+    if jd_keywords is None:
+        jd_keywords = set(_extract_keywords(job_description))
     if not jd_keywords:
         return {"matchPercentage": 100.0, "matchedKeywords": [], "missingKeywords": []}
 
@@ -647,10 +645,10 @@ def _generate_suggestions(bullets: list[str], checks: dict[str, dict]) -> list[s
                 f"Bullet {i + 1}: Replace '{first_word}' with a stronger verb like {alt_str}"
             )
         # Filler word suggestion
-        elif _word_in_text(_FILLER_WORDS, b) or _phrase_in_text(_FILLER_PHRASES, b):
+        elif _FILLER_PATTERN.search(b) or _phrase_in_text(_FILLER_PHRASES, b):
             suggestions.append(f"Bullet {i + 1}: Remove filler words to strengthen this point")
         # Buzzword suggestion
-        elif _word_in_text(_BUZZWORDS, b) or _phrase_in_text(_BUZZWORDS, b):
+        elif _BUZZWORD_PATTERN.search(b) or _phrase_in_text(_BUZZWORDS, b):
             suggestions.append(f"Bullet {i + 1}: Replace buzzwords with concrete, specific language")
     return suggestions
 
@@ -688,19 +686,6 @@ def _run_bullet_checks(bullets: list[str]) -> dict[str, dict]:
     for name, fn in _TIER2_CHECKS:
         checks[name] = fn(bullets)
     return checks
-
-
-def _score_bullet(checks: dict[str, dict]) -> int:
-    """Score a single bullet (0 to _BULLET_MAX_POINTS) based on check results."""
-    score = 0
-    # Tier 1: 2 pts each
-    for name, _ in _TIER1_CHECKS:
-        if checks[name]["pass"] == "ok":
-            score += 2
-    # Tier 2: 1 pt each, but only 3 pts available across 5 checks
-    tier2_pass = sum(1 for name, _ in _TIER2_CHECKS if checks[name]["pass"] == "ok")
-    score += min(tier2_pass, 3)
-    return min(score, _BULLET_MAX_POINTS)
 
 
 def _content_depth_bonus(bullets: list[str]) -> int:
@@ -768,11 +753,9 @@ def _process_entries(  # noqa: PLR0912
                 pass  # short bullet fails weakBullets
             # passive voice per-bullet
             is_passive = False
-            for bv in _BE_VERBS:
-                m = re.search(rf"\b{bv}\b\s+(\w+)", bullet, re.IGNORECASE)
-                if m and _is_likely_past_participle(m.group(1)):
-                    is_passive = True
-                    break
+            m = _BE_VERB_PATTERN.search(bullet)
+            if m and _is_likely_past_participle(m.group(1)):
+                is_passive = True
             if not is_passive:
                 t2 += 1
             if not _FILLER_PATTERN.search(bullet) and not _phrase_in_text(_FILLER_PHRASES, bullet):
@@ -910,7 +893,11 @@ def _check_keyword_stuffing(resume: Any) -> dict:
     return {"pass": "ok", "bullet_to_highlight": None, "message": "No keyword stuffing detected"}
 
 
-def _check_skills_relevance(job_description: str | None, resume: Any) -> dict:
+def _check_skills_relevance(
+    job_description: str | None,
+    resume: Any,
+    jd_keywords: set[str] | None = None,
+) -> dict:
     """Cross-reference skills section against JD keywords.
 
     Returns relevant/irrelevant skill names and a pass status.
@@ -936,12 +923,15 @@ def _check_skills_relevance(job_description: str | None, resume: Any) -> dict:
             "irrelevant_skills": [],
         }
 
-    jd_keywords = {_stem_word(k) for k in _extract_keywords(job_description)}
+    if jd_keywords is None:
+        jd_keywords_stemmed = {_stem_word(k) for k in _extract_keywords(job_description)}
+    else:
+        jd_keywords_stemmed = {_stem_word(k) for k in jd_keywords}
     relevant = []
     irrelevant = []
     for name in skill_names:
         skill_stems = {_stem_word(t) for t in _extract_keywords(name)}
-        if skill_stems & jd_keywords:
+        if skill_stems & jd_keywords_stemmed:
             relevant.append(name)
         else:
             irrelevant.append(name)
@@ -956,6 +946,46 @@ def _check_skills_relevance(job_description: str | None, resume: Any) -> dict:
         "relevant_skills": relevant,
         "irrelevant_skills": irrelevant,
     }
+
+
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+
+def _sanitize_text(text: str) -> str:
+    """Strip HTML tags and truncate to max bullet length."""
+    text = _HTML_TAG_PATTERN.sub("", text)
+    if len(text) > _MAX_BULLET_LENGTH:
+        text = text[:_MAX_BULLET_LENGTH]
+    return text.strip()
+
+
+def _validate_and_sanitize_resume(resume: Any) -> list[str]:
+    """Validate and sanitize resume inputs. Returns list of warnings."""
+    warnings: list[str] = []
+    for section_attr in ("work", "projects"):
+        entries = getattr(resume, section_attr, None) or []
+        if len(entries) > _MAX_ENTRIES_PER_SECTION:
+            warnings.append(
+                f"{section_attr}: truncated from {len(entries)} to {_MAX_ENTRIES_PER_SECTION} entries"
+            )
+            setattr(resume, section_attr, entries[:_MAX_ENTRIES_PER_SECTION])
+            entries = getattr(resume, section_attr)
+        for entry in entries:
+            highlights = getattr(entry, "highlights", None) or []
+            if len(highlights) > _MAX_BULLETS_PER_ENTRY_LIMIT:
+                warnings.append(
+                    f"{section_attr} entry: truncated from {len(highlights)} to {_MAX_BULLETS_PER_ENTRY_LIMIT} bullets"
+                )
+                entry.highlights = highlights[:_MAX_BULLETS_PER_ENTRY_LIMIT]
+                highlights = entry.highlights
+            for i, h in enumerate(highlights):
+                sanitized = _sanitize_text(h)
+                if sanitized != h:
+                    warnings.append("Bullet sanitized (HTML stripped or truncated)")
+                    highlights[i] = sanitized
+    return warnings
 
 
 # ---------------------------------------------------------------------------
@@ -991,6 +1021,9 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
     score = 0.0
     all_bullets: list[str] = []
     has_jd = bool(job_description)
+
+    # --- Input validation -------------------------------------------------------
+    validation_warnings = _validate_and_sanitize_resume(resume)
 
     # --- Score breakdown tracker -------------------------------------------
     breakdown: dict[str, float] = {
@@ -1056,9 +1089,13 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
     score += breakdown["bonuses"]
 
     # --- JD keyword matching ------------------------------------------------
+    jd_keywords_raw: list[str] = []
+    if has_jd:
+        jd_keywords_raw = _extract_keywords(job_description)
+
     keyword_result = None
     if has_jd:
-        keyword_result = _compute_keyword_match(job_description, resume)
+        keyword_result = _compute_keyword_match(job_description, resume, jd_keywords=set(jd_keywords_raw))
         keyword_points = round(keyword_result["matchPercentage"] / 100 * _JD_KEYWORD_MAX_POINTS)
         breakdown["jd_keyword_match"] = float(keyword_points)
         score += keyword_points
@@ -1073,7 +1110,7 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
 
     # --- Skills relevance check (when JD provided) -------------------------
     if has_jd:
-        skills_check = _check_skills_relevance(job_description, resume)
+        skills_check = _check_skills_relevance(job_description, resume, jd_keywords=set(jd_keywords_raw))
         sections.append({"section": "skills_relevance", "checks": {"skillsRelevance": skills_check}, "suggestions": []})
         detailed_results["skills_relevance_skillsRelevance"] = skills_check
 
@@ -1146,4 +1183,5 @@ def analyze_resume(  # noqa: PLR0912, PLR0915
         "criticIssuesApplied": applied_issues,
         "semanticScore": semantic_score,
         "scoreBreakdown": breakdown,
+        "validationWarnings": validation_warnings,
     }

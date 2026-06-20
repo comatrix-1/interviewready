@@ -78,3 +78,4 @@ class ATSAnalysisResponse(BaseModel):
     critic_issues_applied: list[CriticIssue] | None = None
     score_breakdown: ScoreBreakdown | None = None
     semantic_score: float | None = Field(default=None, ge=0, le=1, description="Cosine similarity score (0-1) when JD provided")
+    validation_warnings: list[str] = Field(default_factory=list, description="Warnings about sanitized or truncated input")

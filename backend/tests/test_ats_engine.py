@@ -29,10 +29,12 @@ from app.utils.ats_engine import (
     _check_weak_bullets,
     _compute_keyword_match,
     _compute_semantic_similarity,
+    _count_duplicate_bullets,
     _extract_keywords,
     _generate_suggestions,
     _has_meaningful_number,
     _recency_weight,
+    _sanitize_text,
     _stem_word,
     analyze_resume,
 )
@@ -1009,3 +1011,83 @@ class TestScoreBreakdown:
         assert bd["jd_keyword_match"] >= 0
         assert "semanticScore" in result
         assert result["semanticScore"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+
+class TestInputValidation:
+    def test_html_tags_stripped(self):
+        resume = Resume(
+            work=[Work(highlights=["<script>alert('xss')</script>Built platform serving 1M users"])],
+        )
+        result = analyze_resume(resume)
+        assert result["atsScore"] >= 0
+        assert "validationWarnings" in result
+        assert len(result["validationWarnings"]) > 0
+
+    def test_long_bullet_truncated(self):
+        long_bullet = "Built " + "x" * 1000
+        resume = Resume(
+            work=[Work(highlights=[long_bullet])],
+        )
+        result = analyze_resume(resume)
+        assert result["atsScore"] >= 0
+        assert len(result["validationWarnings"]) > 0
+
+    def test_excessive_entries_truncated(self):
+        entries = [Work(highlights=["Built something useful for the team"]) for _ in range(30)]
+        resume = Resume(work=entries)
+        result = analyze_resume(resume)
+        assert result["atsScore"] >= 0
+        assert any("truncated" in w for w in result["validationWarnings"])
+
+    def test_excessive_bullets_truncated(self):
+        bullets = [f"Bullet point number {i} with enough words here" for i in range(30)]
+        resume = Resume(work=[Work(highlights=bullets)])
+        result = analyze_resume(resume)
+        assert result["atsScore"] >= 0
+        assert any("truncated" in w for w in result["validationWarnings"])
+
+    def test_empty_string_bullet(self):
+        resume = Resume(work=[Work(highlights=[""])] )
+        result = analyze_resume(resume)
+        assert result["atsScore"] >= 0
+
+    def test_clean_resume_no_warnings(self):
+        resume = Resume(
+            work=[Work(highlights=["Built platform serving 1M users daily"])],
+        )
+        result = analyze_resume(resume)
+        assert result["validationWarnings"] == []
+
+    def test_sanitize_text_strips_html(self):
+        assert "<script>" not in _sanitize_text("<script>alert(1)</script>Built APIs")
+        assert "Built APIs" in _sanitize_text("<script>alert(1)</script>Built APIs")
+
+    def test_sanitize_text_truncates(self):
+        assert len(_sanitize_text("x" * 600)) == 500
+
+    def test_sanitize_text_clean_unchanged(self):
+        assert _sanitize_text("Built platform serving 1M users") == "Built platform serving 1M users"
+
+
+# ---------------------------------------------------------------------------
+# Duplicate normalization
+# ---------------------------------------------------------------------------
+
+
+class TestDuplicateNormalization:
+    def test_punctuation_normalized(self):
+        count = _count_duplicate_bullets(["Built platform", "Built platform.", "Built platform!"])
+        assert count == 2  # all three are the same after normalization
+
+    def test_exact_duplicates(self):
+        count = _count_duplicate_bullets(["Built platform", "Built platform"])
+        assert count == 1
+
+    def test_different_bullets(self):
+        count = _count_duplicate_bullets(["Built platform", "Different thing"])
+        assert count == 0

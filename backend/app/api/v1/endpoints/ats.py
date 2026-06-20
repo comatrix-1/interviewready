@@ -77,4 +77,5 @@ async def analyze(request: Request, body: ATSAnalysisRequest) -> ATSAnalysisResp
         critic_issues_applied=raw.get("criticIssuesApplied"),
         score_breakdown=score_breakdown,
         semantic_score=raw.get("semanticScore"),
+        validation_warnings=raw.get("validationWarnings", []),
     )
