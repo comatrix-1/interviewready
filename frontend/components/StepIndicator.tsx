@@ -8,24 +8,22 @@ interface StepIndicatorProps {
 
 const steps = [
   { status: WorkflowStatus.IDLE, label: "Upload" },
-  { status: WorkflowStatus.CRITIQUING, label: "Critic" },
-  { status: WorkflowStatus.ANALYZING_CONTENT, label: "Content" },
+  { status: WorkflowStatus.ATS_CHECKING, label: "ATS Check" },
   { status: WorkflowStatus.ALIGNING_JD, label: "Matching" },
   { status: WorkflowStatus.INTERVIEWING, label: "Interview" },
 ];
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStatus, onStepClick }) => {
   const getStepIndex = (status: WorkflowStatus) => {
-    if (status === WorkflowStatus.AWAITING_CRITIC_APPROVAL) return 1;
-    if (status === WorkflowStatus.AWAITING_CONTENT_APPROVAL) return 2;
-    if (status === WorkflowStatus.AWAITING_ALIGNMENT_APPROVAL) return 3;
+    if (status === WorkflowStatus.AWAITING_ATS_APPROVAL) return 1;
+    if (status === WorkflowStatus.AWAITING_ALIGNMENT_APPROVAL) return 2;
     if (
       status === WorkflowStatus.INTERVIEWING ||
       status === WorkflowStatus.COMPLETED ||
       status === WorkflowStatus.SELECTING_INTERVIEW_MODE ||
       status === WorkflowStatus.DEBUG_VOICE
     )
-      return 4;
+      return 3;
     return steps.findIndex((s) => s.status === status);
   };
 
