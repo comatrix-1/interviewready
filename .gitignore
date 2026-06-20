@@ -114,3 +114,7 @@ __pycache__
 
 # VS Code
 .vscode
+
+# Coding Agent-related files (ignore and use setup-symlinks.bat to create symlinks)
+.qoder
+CLAUDE.md
