@@ -23,9 +23,7 @@ const humanizeSectionName = (section: string): string => {
 };
 
 const humanizeCheckName = (name: string): string =>
-  name
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const severityClass = (severity: string) => {
   if (severity === "HIGH") return "bg-red-50 text-red-700 border-red-200";
