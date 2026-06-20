@@ -14,10 +14,20 @@ const defaultState = (): SharedState => ({
   interviewHistory: [],
 });
 
+const VALID_STATUSES = new Set(Object.values(WorkflowStatus));
+
 const loadState = (): SharedState => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved) as SharedState;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Detect stale state from before the ATS Check refactor
+      if (!VALID_STATUSES.has(parsed.status) || !("atsReport" in parsed)) {
+        localStorage.removeItem(STORAGE_KEY);
+        return defaultState();
+      }
+      return parsed as SharedState;
+    }
   } catch (err) {
     console.warn("[useWorkflowState] Corrupt persisted state, resetting to defaults.", err);
     localStorage.removeItem(STORAGE_KEY);

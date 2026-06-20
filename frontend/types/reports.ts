@@ -65,4 +65,8 @@ export interface ATSReport {
     missing_keywords: string[];
   } | null;
   validation_warnings: string[];
+  detailed_results?: Record<string, ATSCheck>;
+  critic_penalty?: number | null;
+  critic_issues_applied?: ResumeCriticIssue[] | null;
+  semantic_score?: number | null;
 }
