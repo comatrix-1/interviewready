@@ -231,6 +231,9 @@ This makes behavior:
 - LLM-based reasoning (Gemini/OpenAI-compatible abstraction)
 - Structured logging and trace capture
 
+## AI-assisted coding
+This project uses the .agents folder and [AGENTS.md](AGENTS.md) as the source of truth. To set up other coding agents, modify [scripts/setup-symlinks.bat](scripts/setup-symlinks.bat) and [gitignore](./.gitignore).
+
 ## Demo
 ![Step: upload](docs/images/step-upload.png)
 ![Step: content strength](docs/images/step-content-strength.png)
