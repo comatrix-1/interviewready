@@ -7,7 +7,7 @@ export interface ResumeFile {
 }
 
 export interface ChatRequest {
-  intent: "RESUME_CRITIC" | "CONTENT_STRENGTH" | "ALIGNMENT" | "INTERVIEW_COACH";
+  intent: "RESUME_CRITIC" | "ALIGNMENT" | "INTERVIEW_COACH";
   resumeData?: ResumeSchema | null;
   jobDescription: string;
   messageHistory: InterviewMessage[];

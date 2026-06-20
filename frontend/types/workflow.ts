@@ -1,14 +1,12 @@
 import type { ResumeSchema } from "./resume";
-import type { ResumeCriticReport, ContentStrengthReport, AlignmentReport } from "./reports";
+import type { ATSReport, ResumeCriticIssue, AlignmentReport } from "./reports";
 
 export enum WorkflowStatus {
   IDLE = "IDLE",
   EXTRACTING = "EXTRACTING",
   ROUTING = "ROUTING",
-  CRITIQUING = "CRITIQUING",
-  AWAITING_CRITIC_APPROVAL = "AWAITING_CRITIC_APPROVAL",
-  ANALYZING_CONTENT = "ANALYZING_CONTENT",
-  AWAITING_CONTENT_APPROVAL = "AWAITING_CONTENT_APPROVAL",
+  ATS_CHECKING = "ATS_CHECKING",
+  AWAITING_ATS_APPROVAL = "AWAITING_ATS_APPROVAL",
   ALIGNING_JD = "ALIGNING_JD",
   AWAITING_ALIGNMENT_APPROVAL = "AWAITING_ALIGNMENT_APPROVAL",
   INTERVIEWING = "INTERVIEWING",
@@ -29,8 +27,8 @@ export interface SharedState {
   history: ResumeSchema[];
   jobDescription: string;
   status: WorkflowStatus;
-  criticReport: ResumeCriticReport | null;
-  contentReport: ContentStrengthReport | null;
+  atsReport: ATSReport | null;
+  criticIssues: ResumeCriticIssue[];
   alignmentReport: AlignmentReport | null;
   interviewHistory: InterviewMessage[];
   interviewMode?: InterviewMode;
