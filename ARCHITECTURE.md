@@ -133,9 +133,12 @@ InterviewReady implements a **Multi-Agent Orchestration** architecture where spe
 │                     API LAYER (FastAPI)                        │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  /api/v1/chat       (Multi-intent endpoint)             │  │
-│  │  /api/v1/agents     (Agent listing & prompts)           │  │
-│  │  /api/v1/health     (System status)                     │  │
+│  │  /api/v1/chat                (Multi-intent endpoint)          │  │
+│  │  /api/v1/agents              (Agent listing & prompts)        │  │
+│  │  /api/v1/sessions            (Session create & resume)        │  │
+│  │  /api/v1/interview           (Live interview token + WS)      │  │
+│  │  /api/v1/ats/analyze         (ATS compatibility analysis)     │  │
+│  │  /health  /info  /metrics    (System status & metadata)       │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
 └──────────────────────────────┬──────────────────────────────────┘
@@ -161,6 +164,11 @@ InterviewReady implements a **Multi-Agent Orchestration** architecture where spe
 │  ┌──────────────────┐  ┌──────────────────┐                   │
 │  │InterviewCoach    │  │ExtractorAgent    │                   │
 │  │Agent             │  │(Resume Normalization) │              │
+│  └──────────────────┘  └──────────────────┘                   │
+│                                                                 │
+│  ┌──────────────────┐  ┌──────────────────┐                   │
+│  │LLMJudge          │  │GeminiLive        │                   │
+│  │(Eval/Judge)      │  │(WebSocket relay) │                   │
 │  └──────────────────┘  └──────────────────┘                   │
 │                                                                 │
 │  All agents extend BaseAgent mixin:                            │
@@ -412,7 +420,7 @@ Manual Approval → Deploy to Production
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| **Frontend** | React 18 + TypeScript | Type-safe, component-driven UI |
+| **Frontend** | React 19 + TypeScript | Type-safe, component-driven UI |
 | **Backend Framework** | FastAPI + Uvicorn | Async-first, auto-validation, OpenAPI docs |
 | **Data Validation** | Pydantic v2 | Strict runtime validation, serialization |
 | **LLM Integration** | Google Gemini API | Multimodal, function-calling, audio support |
@@ -565,9 +573,41 @@ Manual Approval → Deploy to Production
 **Memory Mechanisms:**
 - Orchestration layer caches extractor results in session
 
+**HITL Status (incomplete):**
+- Human-in-the-Loop uncertainty validation is not yet operational.
+- `EXTRACTOR_UNCERTAINTY_VALIDATION_COMPLETE = False` in `core/config.py` is the authoritative flag.
+- `EXTRACTOR_HITL_TIMEOUT_MINUTES` and `EXTRACTOR_HITL_FALLBACK` are configured but the validation flow is a stub.
+
 **Tools Used:**
 - Gemini API (text extraction)
 - Pydantic validation
+
+---
+
+### 10.6 LLMJudge
+
+**Purpose:** LLM-as-judge evaluator used in evaluation pipelines.
+
+**Responsibilities:**
+- Score agent outputs against evaluation rubrics
+- Provide structured judgement results for Langfuse dataset evaluations
+
+**Implementation:** `backend/app/agents/llm_judge.py`
+
+---
+
+### 10.7 GeminiLive (WebSocket Relay)
+
+**Purpose:** Real-time audio interview session management via Gemini Live API.
+
+**Responsibilities:**
+- Maintain persistent WebSocket connection to Gemini Live API
+- Relay bidirectional audio/text between client and Gemini
+- Handle session lifecycle (connect, stream, disconnect)
+
+**Implementation:** `backend/app/agents/gemini_live.py`
+
+**Note:** The live interview endpoint uses a hardcoded model name (`LIVE_MODEL` in `backend/app/api/v1/endpoints/interview.py`) separate from the configurable `GEMINI_MODEL` in `core/config.py`.
 
 ---
 
