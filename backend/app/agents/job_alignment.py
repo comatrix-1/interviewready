@@ -7,7 +7,7 @@ from typing import Any
 from langfuse import observe
 
 from app.core.config import settings
-from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
+from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, PREVIEW_MAX_LENGTH, RESUME_SCHEMA
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, AlignmentReport
 from app.models.session import SessionContext
@@ -22,6 +22,7 @@ class JobAlignmentAgent(BaseAgent):
 
     USE_MOCK_RESPONSE = settings.MOCK_JOB_ALIGNMENT_AGENT
     MOCK_RESPONSE_KEY = "JobAlignmentAgent"
+    _CONFIDENCE_LOW_THRESHOLD = 0.3
 
     SYSTEM_PROMPT = (
         """
@@ -162,36 +163,18 @@ class JobAlignmentAgent(BaseAgent):
             "JobAlignmentAgent processing started",
             session_id=session_id,
             input_length=len(input_text),
-            input_preview=input_text[:100] + "..."
-            if len(input_text) > 100
-            else input_text,
+            input_preview=input_text[:PREVIEW_MAX_LENGTH] + "..." if len(input_text) > PREVIEW_MAX_LENGTH else input_text,
         )
 
         try:
             validated, _ = self._process_llm_result(
-                input_text, context,
-                self.MOCK_RESPONSE_KEY, self.USE_MOCK_RESPONSE,
+                input_text,
+                context,
+                self.MOCK_RESPONSE_KEY,
+                self.USE_MOCK_RESPONSE,
                 AlignmentReport,
             )
             structured_result = validated.model_dump()
-
-            if self.USE_MOCK_RESPONSE and raw_result is None:
-                logger.warning(
-                    "Mock enabled but response key not found",
-                    session_id=session_id,
-                    mock_response_key=self.MOCK_RESPONSE_KEY,
-                )
-
-            raw_result = raw_result or self.call_gemini(input_text, context)
-
-            parse_json_object(raw_result) or {}
-            structured_result = self.parse_and_validate(
-                raw_result, AlignmentReport
-            ).model_dump()
-
-            if not raw_result or not raw_result.strip():
-                msg = "Empty response received from Gemini API"
-                raise ValueError(msg)
 
             processing_time = time.time() - processing_start_time
             logger.debug(
@@ -214,9 +197,7 @@ class JobAlignmentAgent(BaseAgent):
             if input_data.resume is not None:
                 resume_payload = input_data.resume.model_dump(exclude_none=True)
             elif input_data.resume_document is not None:
-                resume_payload = input_data.resume_document.model_dump(
-                    exclude_none=True
-                )
+                resume_payload = input_data.resume_document.model_dump(exclude_none=True)
 
             removed_skills = 0
             removed_experience = 0
@@ -230,9 +211,7 @@ class JobAlignmentAgent(BaseAgent):
                 structured_result["skillsMatch"] = skills_match
                 structured_result["experienceMatch"] = experience_match
 
-            confidence = self._compute_confidence(
-                skills_match, missing_skills, experience_match
-            )
+            confidence = self._compute_confidence(skills_match, missing_skills, experience_match)
             decision_trace = [
                 "Parsed LLM output",
                 f"Identified {len(skills_match)} matching skills",
@@ -256,7 +235,7 @@ class JobAlignmentAgent(BaseAgent):
                 content=structured_result,
                 reasoning=summary,
                 confidence_score=confidence,
-                needs_review=confidence < 0.3,
+                needs_review=confidence < self._CONFIDENCE_LOW_THRESHOLD,
                 low_confidence_fields=[],
                 decision_trace=decision_trace,
                 sharp_metadata=metadata,
@@ -309,7 +288,4 @@ class JobAlignmentAgent(BaseAgent):
             resume_data = input_data.resume_document.model_dump(exclude_none=True)
 
         job_description = input_data.job_description or ""
-        return (
-            f"<resume>{json.dumps(resume_data, indent=2)}</resume>\n"
-            f"<job_description>{job_description}</job_description>"
-        )
+        return f"<resume>{json.dumps(resume_data, indent=2)}</resume>\n<job_description>{job_description}</job_description>"

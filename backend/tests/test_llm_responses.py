@@ -1,7 +1,8 @@
-from pydantic import ValidationError
 import importlib.util
 import pathlib
+
 import pytest
+from pydantic import ValidationError
 
 # Load the model module directly from file to avoid importing the whole `backend` package
 # which pulls many optional dependencies during package import.

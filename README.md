@@ -38,6 +38,35 @@ Instead of using a single LLM to "answer," this system decomposes reasoning into
 
 This mimics how structured human review processes work in real organizations.
 
+## Development & Code Quality
+
+### Linting
+
+Run all linters from the project root:
+
+```bash
+# Run all linters with auto-fix (ESLint + Ruff + import linter)
+npm run lint:all
+```
+
+Individual commands are also available:
+
+```bash
+# Frontend only
+npm run lint:frontend    # Vite+ check with auto-fix (linter + formatter)
+
+# Backend only
+npm run lint:backend           # Ruff with auto-fix
+npm run lint:backend:imports   # Import linter
+```
+
+### Run the Application
+```bash
+npm run dev
+```
+
+The application will start at `http://interviewready-frontend.localhost:1355/`
+
 ## System architecture
 
 The system is composed of three layers:
@@ -201,6 +230,9 @@ This makes behavior:
 - Multi-agent orchestration framework (LangGraph-style architecture)
 - LLM-based reasoning (Gemini/OpenAI-compatible abstraction)
 - Structured logging and trace capture
+
+## AI-assisted coding
+This project uses the .agents folder and [AGENTS.md](AGENTS.md) as the source of truth. To set up other coding agents, modify [scripts/setup-symlinks.bat](scripts/setup-symlinks.bat) and [gitignore](./.gitignore).
 
 ## Demo
 ![Step: upload](docs/images/step-upload.png)

@@ -29,12 +29,8 @@ class OutputSanitizer:
     ]
 
     def __init__(self):
-        self.system_patterns = [
-            re.compile(p, re.DOTALL) for p in self.SYSTEM_PROMPT_PATTERNS
-        ]
-        self.dangerous_execution_patterns = [
-            re.compile(p, re.DOTALL) for p in self.DANGEROUS_PATTERNS
-        ]
+        self.system_patterns = [re.compile(p, re.DOTALL) for p in self.SYSTEM_PROMPT_PATTERNS]
+        self.dangerous_execution_patterns = [re.compile(p, re.DOTALL) for p in self.DANGEROUS_PATTERNS]
 
     def sanitize(self, output: str) -> tuple[bool, str, list[dict[str, Any]]]:
         """Sanitize output and detect system prompt leakage.
@@ -95,12 +91,8 @@ class OutputSanitizer:
         return all(not pattern.search(output) for pattern in self.system_patterns[:5])
 
 
-_output_sanitizer = None
+_output_sanitizer = OutputSanitizer()
 
 
 def get_output_sanitizer() -> OutputSanitizer:
-    """Get or create the global output sanitizer instance."""
-    global _output_sanitizer
-    if _output_sanitizer is None:
-        _output_sanitizer = OutputSanitizer()
     return _output_sanitizer

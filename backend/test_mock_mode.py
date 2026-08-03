@@ -19,9 +19,7 @@ sys.path.insert(0, str(backend_dir))
 class DummyGeminiService:
     """Fallback Gemini service for tests."""
 
-    def generate_response(
-        self, system_prompt: str, user_input: str, tools: list | None = None
-    ) -> str:
+    def generate_response(self, system_prompt: str, user_input: str, tools: list | None = None) -> str:
         if "Resume Critic" in system_prompt:
             return json.dumps(
                 {

@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  ReactNode,
-  useMemo,
-} from "react";
+import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback } from "react";
 
 interface LoadingContextType {
   isLoading: boolean;
@@ -36,36 +30,34 @@ interface LoadingProviderProps {
   children: ReactNode;
 }
 
-export const LoadingProvider: React.FC<LoadingProviderProps> = ({
-  children,
-}) => {
+export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("Processing...");
   const [progress, setProgress] = useState(0);
   const [steps, setSteps] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
-  const setLoading = (loading: boolean) => setIsLoading(loading);
+  const setLoading = useCallback((loading: boolean) => setIsLoading(loading), []);
 
-  const startLoading = (message?: string, steps?: string[]) => {
+  const startLoading = useCallback((message?: string, steps?: string[]) => {
     setIsLoading(true);
     setMessage(message || "Processing...");
     setProgress(0);
     setSteps(steps || []);
     setCurrentStep(0);
-  };
+  }, []);
 
-  const updateProgress = (progress: number, step?: number) => {
+  const updateProgress = useCallback((progress: number, step?: number) => {
     setProgress(progress);
     if (step !== undefined) {
       setCurrentStep(step);
     }
-  };
+  }, []);
 
-  const stopLoading = () => {
+  const stopLoading = useCallback(() => {
     setIsLoading(false);
     setProgress(0);
     setCurrentStep(0);
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -83,20 +75,8 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({
       updateProgress,
       stopLoading,
     }),
-    [
-      isLoading,
-      message,
-      progress,
-      steps,
-      currentStep,
-      setLoading,
-      startLoading,
-      updateProgress,
-      stopLoading,
-    ],
+    [isLoading, message, progress, steps, currentStep],
   );
 
-  return (
-    <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>
-  );
+  return <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>;
 };

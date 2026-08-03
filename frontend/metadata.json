@@ -1,7 +1,5 @@
 {
   "name": "InterviewReady Job Agent",
   "description": "A stateful, multi-agent AI system for resume optimization and job application readiness, featuring interactive mock interviews and HITL validation.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
+  "requestFramePermissions": ["microphone"]
 }

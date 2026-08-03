@@ -50,18 +50,12 @@ def _is_judge_failure(evaluation) -> bool:
     return reason.startswith(("failed to parse", "evaluation failed"))
 
 
-def _assert_threshold(
-    metric: str, score: float, threshold: float, reasoning: str
-) -> None:
+def _assert_threshold(metric: str, score: float, threshold: float, reasoning: str) -> None:
     if score < threshold - 0.1:
-        pytest.fail(
-            f"{metric} score {score:.2f} below hard threshold {threshold - 0.1:.2f}. "
-            f"Reasoning: {reasoning}"
-        )
+        pytest.fail(f"{metric} score {score:.2f} below hard threshold {threshold - 0.1:.2f}. Reasoning: {reasoning}")
     if score < threshold:
         warnings.warn(
-            f"{metric} score {score:.2f} below soft threshold {threshold:.2f}. "
-            f"Reasoning: {reasoning}",
+            f"{metric} score {score:.2f} below soft threshold {threshold:.2f}. Reasoning: {reasoning}",
             stacklevel=2,
         )
 

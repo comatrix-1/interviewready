@@ -106,20 +106,20 @@ Action
 
 ## 2. Technology Stack
 
-| Layer | Technology | Version | Purpose |
-|-------|-----------|---------|---------|
-| **Framework** | React | 18.x | Modern UI framework with concurrent rendering |
-| **Language** | TypeScript | 5.x | Type-safe JavaScript superset |
-| **Build Tool** | Vite | 5.x | Fast ES module build tool with HMR |
-| **Styling** | TailwindCSS | 3.x | Utility-first CSS framework |
-| **Component Library** | Headless UI | Latest | Unstyled, accessible components |
-| **HTTP Client** | Fetch API | Native | Built-in, no additional library needed |
-| **Testing** | Vitest | Latest | Fast unit testing framework for Vite |
-| **State Management** | React Context | Native | Built-in context API for state sharing |
-| **Type Safety** | TypeScript | 5.x | Static type checking & intellisense |
-| **Routing** | React Router | Latest (optional) | Client-side routing if needed |
-| **Package Manager** | npm | Latest | Node package manager |
-| **Environment** | Node.js | 18+ | JavaScript runtime |
+| Layer                 | Technology    | Version           | Purpose                                       |
+| --------------------- | ------------- | ----------------- | --------------------------------------------- |
+| **Framework**         | React         | 18.x              | Modern UI framework with concurrent rendering |
+| **Language**          | TypeScript    | 5.x               | Type-safe JavaScript superset                 |
+| **Build Tool**        | Vite          | 5.x               | Fast ES module build tool with HMR            |
+| **Styling**           | TailwindCSS   | 3.x               | Utility-first CSS framework                   |
+| **Component Library** | Headless UI   | Latest            | Unstyled, accessible components               |
+| **HTTP Client**       | Fetch API     | Native            | Built-in, no additional library needed        |
+| **Testing**           | Vitest        | Latest            | Fast unit testing framework for Vite          |
+| **State Management**  | React Context | Native            | Built-in context API for state sharing        |
+| **Type Safety**       | TypeScript    | 5.x               | Static type checking & intellisense           |
+| **Routing**           | React Router  | Latest (optional) | Client-side routing if needed                 |
+| **Package Manager**   | npm           | Latest            | Node package manager                          |
+| **Environment**       | Node.js       | 18+               | JavaScript runtime                            |
 
 ---
 
@@ -135,17 +135,20 @@ Action
 ### Installation Steps
 
 **1. Install Dependencies**
+
 ```bash
 npm install
 ```
 
 **2. Create Environment File**
+
 ```bash
 cp .env.example .env.local
 ```
 
 **3. Configure Environment Variables**
 Edit `.env.local`:
+
 ```bash
 # Backend API configuration
 VITE_API_BASE_URL=http://localhost:8000
@@ -158,6 +161,7 @@ VITE_ANALYTICS_ID=...
 ```
 
 **4. Start Development Server**
+
 ```bash
 npm run dev
 ```
@@ -165,6 +169,7 @@ npm run dev
 Application available at: `http://localhost:5173` (or shown in terminal)
 
 **5. Build for Production**
+
 ```bash
 npm run build
 ```
@@ -172,6 +177,7 @@ npm run build
 Output in `dist/` directory
 
 **6. Preview Production Build**
+
 ```bash
 npm run preview
 ```
@@ -179,11 +185,13 @@ npm run preview
 ### Docker Development
 
 **Build Docker image:**
+
 ```bash
 docker build -t interviewready-frontend .
 ```
 
 **Run container:**
+
 ```bash
 docker run -p 3000:3000 interviewready-frontend
 ```
@@ -229,6 +237,7 @@ frontend/
 ### Key Files
 
 **App.tsx** - Main application component:
+
 ```typescript
 // Manages:
 // - Resume upload/input
@@ -240,6 +249,7 @@ frontend/
 ```
 
 **backendService.ts** - API integration layer:
+
 ```typescript
 // Exports:
 // - Chat API client
@@ -250,6 +260,7 @@ frontend/
 ```
 
 **LoadingContext.tsx** - Global loading state:
+
 ```typescript
 // Provides:
 // - isLoading: boolean
@@ -265,23 +276,26 @@ frontend/
 ### 1. Multi-Agent Resume Analysis
 
 **Resume Upload & Processing:**
+
 - PDF file upload with client-side parsing
 - Manual resume data entry form
 - Resume preview with formatting
 - Live update to backend
 
 **Agent Selection:**
+
 ```typescript
-type Intent = 
-  | "RESUME_CRITIC"        // Structural & ATS analysis
-  | "CONTENT_STRENGTH"     // Skills & achievements evaluation
-  | "ALIGNMENT"            // Job matching analysis
-  | "INTERVIEW_COACH"      // Multi-turn interview prep
+type Intent =
+  | "RESUME_CRITIC" // Structural & ATS analysis
+  | "CONTENT_STRENGTH" // Skills & achievements evaluation
+  | "ALIGNMENT" // Job matching analysis
+  | "INTERVIEW_COACH"; // Multi-turn interview prep
 ```
 
 ### 2. Multi-Turn Interview Coach
 
 **Interview Workflow:**
+
 ```
 Question 1 (Behavioral)
   ↓ [User answer]
@@ -293,6 +307,7 @@ Total: 5 questions across different types
 ```
 
 **State Persistence:**
+
 - Interview history stored in session
 - Progress tracking (current question #)
 - Answer scoring & feedback
@@ -301,12 +316,14 @@ Total: 5 questions across different types
 ### 3. Real-Time Feedback & Loading States
 
 **Loading Indicators:**
+
 - Skeleton loaders for content areas
 - Progress spinner during API calls
 - Estimated time remaining (optional)
 - Cancel request functionality
 
 **Error Handling:**
+
 - User-friendly error messages
 - Retry logic with exponential backoff
 - Mock response fallback
@@ -315,35 +332,39 @@ Total: 5 questions across different types
 ### 4. Session Management
 
 **Session States:**
+
 - Local session ID generation (client-side)
 - Session persistence via localStorage
 - Multi-turn conversation history
 - Resume data caching
 
 **Session Lifecycle:**
+
 ```typescript
 // Session creation
-const sessionId = generateSessionId();  // UUID
-localStorage.setItem('sessionId', sessionId);
+const sessionId = generateSessionId(); // UUID
+localStorage.setItem("sessionId", sessionId);
 
 // Session persistence
 const resumeData = JSON.stringify(resume);
 localStorage.setItem(`resume_${sessionId}`, resumeData);
 
 // Session cleanup (on logout)
-localStorage.removeItem('sessionId');
+localStorage.removeItem("sessionId");
 sessionStorage.clear();
 ```
 
 ### 5. Responsive & Accessible UI
 
 **Responsive Design:**
+
 - Mobile-first approach (TailwindCSS breakpoints)
 - Tablet optimization
 - Desktop layout
 - Touch-friendly controls
 
 **Accessibility:**
+
 - Semantic HTML structure
 - ARIA labels on interactive elements
 - Keyboard navigation support
@@ -358,6 +379,7 @@ sessionStorage.clear();
 **Purpose:** Display parsed resume in a formatted, readable layout
 
 **Props:**
+
 ```typescript
 interface ResumePre viewProps {
   resume: Resume;
@@ -367,6 +389,7 @@ interface ResumePre viewProps {
 ```
 
 **Features:**
+
 - Sections: Contact, Summary, Experience, Skills, Education
 - Syntax highlighting for different resume sections
 - Live editing capability
@@ -377,6 +400,7 @@ interface ResumePre viewProps {
 **Purpose:** Show progress through multi-step workflow
 
 **Props:**
+
 ```typescript
 interface StepIndicatorProps {
   steps: string[];
@@ -386,6 +410,7 @@ interface StepIndicatorProps {
 ```
 
 **Features:**
+
 - Visual progress bar
 - Step titles & descriptions
 - Completed/current/pending states
@@ -396,6 +421,7 @@ interface StepIndicatorProps {
 **Purpose:** Display loading indicator while async operations complete
 
 **Props:**
+
 ```typescript
 interface LoadingStateProps {
   loading: boolean;
@@ -406,6 +432,7 @@ interface LoadingStateProps {
 ```
 
 **Features:**
+
 - Skeleton loader screen
 - Loading spinner animation
 - Error boundary
@@ -416,6 +443,7 @@ interface LoadingStateProps {
 **Purpose:** Orchestrate multi-agent workflow with step-by-step UI
 
 **Features:**
+
 - Step selection interface
 - Agent routing logic
 - Response rendering (varies by agent type)
@@ -426,6 +454,7 @@ interface LoadingStateProps {
 **Purpose:** Display metadata and confidence scores for analysis results
 
 **Props:**
+
 ```typescript
 interface ReportHeaderProps {
   agent: string;
@@ -436,6 +465,7 @@ interface ReportHeaderProps {
 ```
 
 **Features:**
+
 - Agent name display
 - Confidence score visualization (0-100%)
 - Timestamp
@@ -475,11 +505,11 @@ const normalizeResume = async (text: string): Promise<Resume>
 const makeRequestWithRetry = async (
   url: string,
   options: RequestInit,
-  maxRetries: number = 3
+  maxRetries: number = 3,
 ): Promise<Response> => {
   // Exponential backoff: 1s, 2s, 4s
   // On final failure: return mock response
-}
+};
 ```
 
 **Response Transformation:**
@@ -492,9 +522,9 @@ const transformApiResponse = (raw: any): ChatApiResponse => {
     payload: parseJSON(raw.payload),
     confidence_score: raw.confidence_score || 0,
     needs_review: raw.needs_review || false,
-    decision_trace: raw.decision_trace || []
+    decision_trace: raw.decision_trace || [],
   };
-}
+};
 ```
 
 ### Configuration
@@ -561,6 +591,7 @@ useEffect(() => {
 ### Frontend Security Controls
 
 **1. Input Validation**
+
 ```typescript
 // Validate resume file size & type
 if (file.size > MAX_FILE_SIZE) {
@@ -572,6 +603,7 @@ if (file.type !== "application/pdf") {
 ```
 
 **2. XSS Prevention**
+
 ```typescript
 // React automatically escapes JSX by default
 // Avoid using dangerouslySetInnerHTML
@@ -580,6 +612,7 @@ if (file.type !== "application/pdf") {
 ```
 
 **3. API Key Security**
+
 ```typescript
 // Never expose API keys in frontend code
 // Backend API key passed via environment secrets (GitHub Actions)
@@ -591,6 +624,7 @@ VITE_API_BASE_URL=http://localhost:8000
 ```
 
 **4. Session Security**
+
 ```typescript
 // Use sessionStorage for sensitive data (cleared on browser close)
 sessionStorage.setItem("interviewHistory", JSON.stringify(data));
@@ -600,6 +634,7 @@ sessionStorage.setItem("interviewHistory", JSON.stringify(data));
 ```
 
 **5. CORS Protection**
+
 ```typescript
 // Backend enforces CORS headers
 // Frontend respects same-origin policy
@@ -609,8 +644,9 @@ sessionStorage.setItem("interviewHistory", JSON.stringify(data));
 ### Content Security Policy (CSP)
 
 **Recommended CSP headers** (configure in `nginx.conf` or server):
+
 ```nginx
-Content-Security-Policy: 
+Content-Security-Policy:
   default-src 'self';
   script-src 'self' 'inline';
   style-src 'self' 'unsafe-inline';
@@ -625,6 +661,7 @@ Content-Security-Policy:
 ### Unit Tests with Vitest
 
 **Test Files:**
+
 ```bash
 tests/
 ├── backendService.test.js    # API client tests
@@ -634,6 +671,7 @@ tests/
 ```
 
 **Running Tests:**
+
 ```bash
 # Run all tests
 npm run test
@@ -646,18 +684,15 @@ npm run test:watch
 ```
 
 **Example Test:**
+
 ```typescript
 // tests/backendService.test.js
-import { chatWithAgent } from '../backendService';
+import { chatWithAgent } from "../backendService";
 
-describe('backendService', () => {
-  it('should call /api/v1/chat with correct payload', async () => {
-    const result = await chatWithAgent(
-      'RESUME_CRITIC',
-      mockResume,
-      mockJobDescription
-    );
-    expect(result.agent).toBe('ResumeCriticAgent');
+describe("backendService", () => {
+  it("should call /api/v1/chat with correct payload", async () => {
+    const result = await chatWithAgent("RESUME_CRITIC", mockResume, mockJobDescription);
+    expect(result.agent).toBe("ResumeCriticAgent");
     expect(result.confidence_score).toBeGreaterThan(0);
   });
 });
@@ -677,6 +712,7 @@ npm run build
 ### Docker Deployment
 
 **2-stage Dockerfile:**
+
 ```dockerfile
 # Stage 1: Build
 FROM node:18 AS builder
@@ -695,6 +731,7 @@ CMD ["nginx", "-g", "daemon off;"]
 ```
 
 **Build & run:**
+
 ```bash
 docker build -t interviewready-frontend:latest .
 docker run -p 3000:3000 interviewready-frontend:latest
@@ -703,6 +740,7 @@ docker run -p 3000:3000 interviewready-frontend:latest
 ### Cloud Deployment (Google Cloud Run)
 
 **Deployment via GitHub Actions:**
+
 ```yaml
 # .github/workflows/deploy.yml
 - name: Deploy Frontend to Cloud Run
@@ -723,6 +761,7 @@ See **[DEPLOYMENT.md](../DEPLOYMENT.md)** for full infrastructure setup.
 ### Build Optimization
 
 **Vite Production Build:**
+
 ```bash
 npm run build
 # Automatically:
@@ -733,6 +772,7 @@ npm run build
 ```
 
 **Bundle Analysis:**
+
 ```bash
 npm run build -- --analyze
 ```
@@ -740,6 +780,7 @@ npm run build -- --analyze
 ### Runtime Optimization
 
 **1. Code Splitting**
+
 ```typescript
 // Lazy load components
 import { lazy, Suspense } from 'react';
@@ -752,6 +793,7 @@ const InterviewCoach = lazy(() => import('./components/InterviewCoach'));
 ```
 
 **2. Memoization**
+
 ```typescript
 // Prevent unnecessary re-renders
 import { memo, useMemo, useCallback } from 'react';
@@ -763,6 +805,7 @@ const ResumePreview = memo(({ resume }: Props) => {
 ```
 
 **3. Image Optimization**
+
 ```typescript
 // Use next-gen image formats
 <img src="resume.webp" alt="Resume preview" loading="lazy" />
@@ -771,6 +814,7 @@ const ResumePreview = memo(({ resume }: Props) => {
 ### Caching Strategy
 
 **HTTP Cache Headers** (via nginx):
+
 ```nginx
 location ~* \.(js|css)$ {
   expires 1y;  # Cache static assets for 1 year
@@ -782,6 +826,7 @@ location / {
 ```
 
 **Service Worker** (optional, for PWA):
+
 ```typescript
 // Implemented in vite.config.ts with @vitejs/plugin-pwa
 ```
@@ -803,10 +848,11 @@ location / {
 **Last Updated:** March 2026  
 **Version:** 1.0  
 **Maintainers:** InterviewReady Development Team
-├── index.tsx               # Application entry point
-├── vite.config.ts          # Vite configuration
-└── package.json            # Dependencies and scripts
-```
+├── index.tsx # Application entry point
+├── vite.config.ts # Vite configuration
+└── package.json # Dependencies and scripts
+
+````
 
 ## API Integration
 
@@ -820,7 +866,7 @@ const response = await backendService.chat(message, sessionId);
 
 // Session management
 const session = await backendService.createSession();
-```
+````
 
 ### Response Handling
 
@@ -835,16 +881,19 @@ The frontend processes structured responses from different agents:
 ### Running Tests
 
 1. Run all tests:
+
 ```bash
 npm run test
 ```
 
 2. Run tests with UI:
+
 ```bash
 npm run test:ui
 ```
 
 3. Run tests in watch mode:
+
 ```bash
 npm run test:watch
 ```
@@ -860,10 +909,10 @@ npm run test:watch
 Test files should follow the naming convention `*.test.js` or `*.test.ts`:
 
 ```javascript
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 
-describe('Component/Service Name', () => {
-  it('should perform expected behavior', async () => {
+describe("Component/Service Name", () => {
+  it("should perform expected behavior", async () => {
     // Test implementation
     expect(result).toBeDefined();
   });

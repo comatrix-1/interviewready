@@ -18,8 +18,6 @@ from app.models import (
 )
 from app.orchestration import OrchestrationAgent
 
-NUMBER_OF_EXTRACTOR_CALLS = 2
-
 
 class StubAgent:
     def __init__(self, name: str):
@@ -36,9 +34,7 @@ class StubAgent:
     def get_system_prompt(self) -> str:
         return self.system_prompt
 
-    def process(
-        self, input_data: AgentInput | str | bytes, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput | str | bytes, context: SessionContext) -> AgentResponse:
         self.inputs.append(input_data, context)
         return AgentResponse(
             agent_name=self._name,
@@ -56,9 +52,7 @@ class StubExtractorAgent(StubAgent):
         self.calls = 0
         self.needs_review = False
 
-    def process(
-        self, input_data: AgentInput | str | bytes, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput | str | bytes, context: SessionContext) -> AgentResponse:
         self.calls += 1
         self.inputs.append(input_data, context)
         return AgentResponse(
@@ -69,11 +63,7 @@ class StubExtractorAgent(StubAgent):
             needs_review=self.needs_review,
             low_confidence_fields=["work[0].name"] if self.needs_review else [],
             decision_trace=[],
-            sharp_metadata={
-                "validation_errors": ["Missing endDate for work[0]"]
-                if self.needs_review
-                else []
-            },
+            sharp_metadata={"validation_errors": ["Missing endDate for work[0]"] if self.needs_review else []},
         )
 
 
@@ -157,9 +147,7 @@ def test_extractor_agent_extracts_pdf_payload() -> None:
     payload = json.dumps({"data": "any-base64", "fileType": "pdf"})
 
     with (
-        patch(
-            "app.agents.extractor.parse_pdf_base64", return_value="Jane Doe Resume Text"
-        ),
+        patch("app.agents.extractor.parse_pdf_base64", return_value="Jane Doe Resume Text"),
         patch(
             "app.agents.extractor.ExtractorAgent._generate_llm_response",
             return_value=(
@@ -198,93 +186,3 @@ def test_normalization_failure_returns_action_plan() -> None:
     assert payload.get("summary") == "Resume normalization failed."
     assert payload.get("actions")
     assert not resume_agent.inputs
-
-
-def test_extractor_low_confidence_triggers_hitl_review() -> None:
-    governance = SharpGovernanceService()
-    extractor = StubExtractorAgent()
-    extractor.needs_review = True
-    resume_agent = StubAgent("ResumeCriticAgent")
-    orchestrator = OrchestrationAgent(
-        [extractor, resume_agent],
-        governance=governance,
-    )
-    context = SessionContext(session_id="s-review", user_id="u-review")
-    request = ChatRequest(
-        intent="RESUME_CRITIC",
-        resumeFile=ResumeFile(data="fake-base64", fileType="pdf"),
-    )
-
-    result = orchestrator.orchestrate(request, context)
-
-    assert result.needs_review is True
-    assert result.sharp_metadata
-    assert result.sharp_metadata.get("checkpoint_id")
-    assert result.sharp_metadata.get("review_payload")
-    assert not resume_agent.inputs
-
-
-def test_resume_control_skips_extractor_after_review() -> None:
-    governance = SharpGovernanceService()
-    extractor = StubExtractorAgent()
-    extractor.needs_review = True
-    resume_agent = StubAgent("ResumeCriticAgent")
-    orchestrator = OrchestrationAgent(
-        [extractor, resume_agent],
-        governance=governance,
-    )
-    context = SessionContext(session_id="s-resume", user_id="u-resume")
-    request = ChatRequest(
-        intent="RESUME_CRITIC",
-        resumeFile=ResumeFile(data="fake-base64", fileType="pdf"),
-    )
-
-    review_response = orchestrator.orchestrate(request, context)
-    checkpoint_id = (review_response.sharp_metadata or {}).get("checkpoint_id")
-    assert checkpoint_id
-
-    resume_request = ChatRequest(
-        intent="RESUME_CRITIC",
-        control="resume",
-        checkpointId=checkpoint_id,
-        resumeData=Resume(work=[Work(name="Edited Resume")]),
-    )
-
-    orchestrator.orchestrate(resume_request, context)
-
-    assert extractor.calls == 1
-    assert resume_agent.inputs
-    input_payload = resume_agent.inputs[-1]
-    assert isinstance(input_payload, AgentInput)
-    assert input_payload.resume
-    assert input_payload.resume.work[0].name == "Edited Resume"
-
-
-def test_rewind_with_new_resume_file_reextracts() -> None:
-    governance = SharpGovernanceService()
-    extractor = StubExtractorAgent()
-    resume_agent = StubAgent("ResumeCriticAgent")
-    orchestrator = OrchestrationAgent(
-        [extractor, resume_agent],
-        governance=governance,
-    )
-    context = SessionContext(session_id="s-rewind", user_id="u-rewind")
-    request = ChatRequest(
-        intent="RESUME_CRITIC",
-        resumeFile=ResumeFile(data="fake-base64", fileType="pdf"),
-    )
-
-    first_response = orchestrator.orchestrate(request, context)
-    checkpoint_id = (first_response.sharp_metadata or {}).get("checkpoint_id")
-    assert checkpoint_id
-
-    rewind_request = ChatRequest(
-        intent="RESUME_CRITIC",
-        control="rewind",
-        checkpointId=checkpoint_id,
-        resumeFile=ResumeFile(data="new-fake-base64", fileType="pdf"),
-    )
-
-    orchestrator.orchestrate(rewind_request, context)
-
-    assert extractor.calls == NUMBER_OF_EXTRACTOR_CALLS

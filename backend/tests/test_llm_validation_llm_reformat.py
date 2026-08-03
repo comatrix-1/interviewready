@@ -3,10 +3,10 @@
 The llm_validation module is loaded via importlib to avoid importing the
 heavy backend package.
 """
+
 import importlib.util
 from pathlib import Path
 
-import pytest
 from pydantic import BaseModel, Field
 
 # --- Load llm_validation module ---
@@ -40,8 +40,10 @@ class TestContainer(BaseModel):
 #  reformat_with_llm — mock generate_fn
 # ===============================================================
 
+
 def test_llm_returns_valid_json():
     """When the LLM returns valid JSON, return the parsed instance."""
+
     def _generate(system: str, user: str) -> str:
         return '{"items": [{"name": "from-llm", "value": 42}], "label": "llm-ok"}'
 
@@ -59,6 +61,7 @@ def test_llm_returns_valid_json():
 def test_llm_returns_non_json_uses_sanitizer_fallback():
     """When the LLM returns text with embedded JSON, the sanitizer should
     fall back to extracting the JSON substring and parsing it."""
+
     def _generate(system: str, user: str) -> str:
         return "Sure! Here's the data: {'items': [{'name': 'cleaned'}], 'label': 'fix'}"
 
@@ -75,6 +78,7 @@ def test_llm_returns_non_json_uses_sanitizer_fallback():
 
 def test_llm_returns_empty():
     """Empty LLM response -> None."""
+
     def _generate(system: str, user: str) -> str:
         return ""
 
@@ -84,6 +88,7 @@ def test_llm_returns_empty():
 
 def test_llm_generate_fn_raises():
     """When generate_fn raises, reformat_with_llm returns None (no crash)."""
+
     def _generate(system: str, user: str) -> str:
         raise RuntimeError("API timeout")
 
@@ -95,8 +100,10 @@ def test_llm_generate_fn_raises():
 #  make_llm_reformatter factory
 # ===============================================================
 
+
 def test_make_llm_reformatter_creates_callable():
     """Factory returns a function with the right signature."""
+
     def _generate(system: str, user: str) -> str:
         return '{"items":[],"label":"factory"}'
 
@@ -126,9 +133,11 @@ def test_make_llm_reformatter_with_hint():
 #  Integration: validate_or_repair with llm_reformat fallback
 # ===============================================================
 
+
 def test_validate_or_repair_invokes_reformat_on_failure():
     """When strict parse and sanitizers fail, validate_or_repair calls
     the llm_reformat callback."""
+
     def _generate(system: str, user: str) -> str:
         return '{"items": [], "label": "recovered-by-llm"}'
 
@@ -145,6 +154,7 @@ def test_validate_or_repair_invokes_reformat_on_failure():
 
 def test_validate_or_repair_llm_fails_falls_to_default():
     """When LLM reformat also fails, status is 'default'."""
+
     def _generate(system: str, user: str) -> str:
         raise RuntimeError("API failed")
 
@@ -163,6 +173,7 @@ def test_validate_or_repair_llm_fails_falls_to_default():
 
 def test_validate_or_repair_ok_does_not_invoke_llm():
     """When strict parse succeeds, llm_reformat should NOT be called."""
+
     def _generate(system: str, user: str) -> str:
         raise RuntimeError("should not be called")
 

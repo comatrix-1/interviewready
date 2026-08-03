@@ -1,4 +1,7 @@
-"""Security constants and directives for agent system prompts."""
+"""Application-wide constants."""
+
+# Truncation limit for log/response previews
+PREVIEW_MAX_LENGTH = 100
 
 ANTI_JAILBREAK_DIRECTIVE = """
 ## SECURITY CONSTRAINTS

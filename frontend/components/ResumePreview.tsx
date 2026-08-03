@@ -24,19 +24,14 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
       { id: "certificates", label: "Certificates" },
       { id: "awards", label: "Awards" },
     ],
-    []
+    [],
   );
 
-    if (!resume) {
+  if (!resume) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-white">
         <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center mb-4">
-          <svg
-            className="w-8 h-8 opacity-20"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-8 h-8 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -45,12 +40,8 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
             ></path>
           </svg>
         </div>
-        <p className="font-semibold text-sm text-slate-600">
-          Resume Preview Workspace
-        </p>
-        <p className="text-xs text-slate-400">
-          Structured data will appear here after parsing.
-        </p>
+        <p className="font-semibold text-sm text-slate-600">Resume Preview Workspace</p>
+        <p className="text-xs text-slate-400">Structured data will appear here after parsing.</p>
       </div>
     );
   }
@@ -67,9 +58,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
       <div className="p-8 border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-md z-10">
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-              Resume Preview
-            </h2>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Resume Preview</h2>
           </div>
         </div>
 
@@ -79,9 +68,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-1.5 text-[11px] font-medium transition-all focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${
-                activeTab === tab.id
-                  ? "bg-white text-slate-950 shadow-sm"
-                  : "hover:text-slate-900"
+                activeTab === tab.id ? "bg-white text-slate-950 shadow-sm" : "hover:text-slate-900"
               }`}
             >
               {tab.label}
@@ -180,9 +167,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
                   className="p-4 bg-white border border-slate-200 rounded-xl"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-bold text-slate-900">
-                      {skill.name || "Skill"}
-                    </h4>
+                    <h4 className="text-sm font-bold text-slate-900">{skill.name || "Skill"}</h4>
                   </div>
                 </div>
               ))
@@ -203,9 +188,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
                   className="p-6 bg-slate-50/50 border border-slate-200 rounded-xl"
                 >
                   <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-bold text-sm text-slate-900">
-                      {proj.name || "Project"}
-                    </h4>
+                    <h4 className="font-bold text-sm text-slate-900">{proj.name || "Project"}</h4>
                     <span className="text-[10px] font-bold text-slate-400">
                       {formatRange(proj.startDate, proj.endDate)}
                     </span>
@@ -229,9 +212,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
                     </ul>
                   )}
                   {proj.url && (
-                    <div className="mt-3 text-[11px] text-slate-400 break-all">
-                      {proj.url}
-                    </div>
+                    <div className="mt-3 text-[11px] text-slate-400 break-all">{proj.url}</div>
                   )}
                 </div>
               ))
@@ -262,9 +243,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
                       {cert.issuer || "Issuer"}
                     </p>
                     {cert.date && (
-                      <p className="text-[10px] text-slate-300 font-medium mt-1">
-                        {cert.date}
-                      </p>
+                      <p className="text-[10px] text-slate-300 font-medium mt-1">{cert.date}</p>
                     )}
                     {cert.url && (
                       <p className="text-[10px] text-slate-300 font-medium mt-1 break-all">
@@ -306,9 +285,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ resume }) => {
                       </div>
                     )}
                     {award.summary && (
-                      <p className="text-[11px] text-slate-500 mt-3">
-                        {award.summary}
-                      </p>
+                      <p className="text-[11px] text-slate-500 mt-3">{award.summary}</p>
                     )}
                   </div>
                 </div>

@@ -34,4 +34,3 @@ def test_agent_response_rejects_string_content() -> None:
             decision_trace=[],
             sharp_metadata={},
         )
-

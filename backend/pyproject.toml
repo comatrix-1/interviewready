@@ -30,7 +30,7 @@ dependencies = [
     "websockets>=13.0",
     "slowapi>=0.1.9",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12, <3.14"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -60,22 +60,63 @@ include = ["app/mock_responses.json"]
 allow-direct-references = true
 
 [tool.black]
-line-length = 88
-target-version = ['py311']
+line-length = 128
+target-version = ['py312']
 
 [tool.ruff]
-line-length = 88
-target-version = "py311"
+line-length = 128
+target-version = "py312"
 
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-select = ["E4", "E7", "E9", "F", "I"]
-ignore = []
+select = [
+    # pycodestyle
+    "E",
+    # warnings
+    "W",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # FastAPI
+    "FAST",
+    # pylint
+    "PL",
+]
+ignore = [
+    # Line length
+    "E501",
+    # Too many arguments in function definition
+    "PLR0913"
+]
+
+[tool.ruff.lint.per-file-ignores]
+# TESTS: allow pytest style freedom
+"tests/**/*.py" = [
+    "PLR2004",  # magic values OK in assertions
+    "S101",     # allow assert statements
+    "PLR0913",  # too many arguments (fixtures often do this)
+]
+# SCRIPT / UTILITIES: slightly relaxed complexity rules
+"scripts/**/*.py" = [
+    "PLR0912",  # too many branches
+    "PLR0915",  # too many statements
+]
+# INIT FILES often import-only
+"__init__.py" = [
+    "F401",     # unused imports
+]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -85,6 +126,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.11",
     "pytest>=9.0.2",
     "ruff>=0.15.6",
 ]

@@ -45,13 +45,9 @@ async def chat_endpoint(
         propagate_attributes(user_id=user_id, session_id=session_id),
     ):
         try:
-            context = get_or_create_session_context(
-                session_id=session_id, user_id=user_id
-            )
+            context = get_or_create_session_context(session_id=session_id, user_id=user_id)
         except PermissionError as exc:
-            langfuse.update_current_span(
-                output={"error": "permission_denied", "reason": str(exc)}
-            )
+            langfuse.update_current_span(output={"error": "permission_denied", "reason": str(exc)})
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=str(exc),
@@ -60,18 +56,14 @@ async def chat_endpoint(
         try:
             orchestrator = get_orchestration_agent()
         except Exception as exc:
-            langfuse.update_current_span(
-                output={"error": "orchestrator_unavailable", "reason": str(exc)}
-            )
+            langfuse.update_current_span(output={"error": "orchestrator_unavailable", "reason": str(exc)})
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Orchestration service unavailable: {exc}",
             ) from exc
 
         try:
-            internal_response = await run_in_threadpool(
-                orchestrator.orchestrate, chat_request, context
-            )
+            internal_response = await run_in_threadpool(orchestrator.orchestrate, chat_request, context)
             payload = _extract_api_payload(internal_response)
             payload = _attach_payload_metadata(payload, internal_response)
             metadata = _extract_response_metadata(internal_response)
@@ -92,17 +84,13 @@ async def chat_endpoint(
             )
             return result
         except ValueError as exc:
-            langfuse.update_current_span(
-                output={"error": "invalid_request", "reason": str(exc)}
-            )
+            langfuse.update_current_span(output={"error": "invalid_request", "reason": str(exc)})
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc),
             ) from exc
         except Exception as exc:
-            langfuse.update_current_span(
-                output={"error": "orchestration_failed", "reason": str(exc)}
-            )
+            langfuse.update_current_span(output={"error": "orchestration_failed", "reason": str(exc)})
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to process chat request: {exc}",
@@ -156,8 +144,6 @@ def _attach_payload_metadata(
             "confidence_score": response.confidence_score,
             "needs_review": response.needs_review,
             "low_confidence_fields": response.low_confidence_fields or [],
-            "checkpoint_id": (response.sharp_metadata or {}).get("checkpoint_id"),
-            "review_payload": (response.sharp_metadata or {}).get("review_payload"),
             "review_required": bool(response.needs_review),
         }
     )

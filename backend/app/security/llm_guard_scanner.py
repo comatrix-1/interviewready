@@ -1,6 +1,8 @@
 """LLM Guard scanner service for input/output security."""
 
+from functools import lru_cache
 from typing import Any
+
 from ..core.config import settings
 from ..core.logging import logger
 
@@ -8,28 +10,21 @@ from ..core.logging import logger
 # tolerate failures on environments without spaCy / incompatible pydantic.
 try:
     import datafog as DataFog
-except Exception as _e:
+except Exception:
     DataFog = None
-    logger = logger  # keep linter happy; real logger is imported above
 
 
 HAS_LLM_GUARD = False
 
-# Cached scanner instances (created once at startup)
-# LLM Guard scanners:
-_prompt_injection_scanner = None
-_refusal_scanner = None
-
 try:
     # LLM Guard: Only import PromptInjection and NoRefusal
-    # Anonymize and Sensitive are replaced by DataFog
-    from llm_guard.input_scanners import PromptInjection  # LLM Guard
-    from llm_guard.output_scanners import NoRefusal  # LLM Guard
+    from llm_guard.input_scanners import PromptInjection
+    from llm_guard.output_scanners import NoRefusal
 
     HAS_LLM_GUARD = True
     logger.info("LLM Guard loaded (PromptInjection, NoRefusal)")
 
-except Exception as e:  # catch broader errors (pydantic/spaCy issues)
+except Exception as e:
     HAS_LLM_GUARD = False
     logger.warning(f"LLM Guard unavailable, disabling security scanning: {e}")
 
@@ -38,9 +33,10 @@ class LLMGuardScanner:
     """Scanner for detecting prompt injection and sensitive content."""
 
     def __init__(self):
-        global _prompt_injection_scanner, _refusal_scanner
-
         self.enabled = getattr(settings, "LLM_GUARD_ENABLED", True) and HAS_LLM_GUARD
+
+        self._prompt_injection_scanner = None
+        self._refusal_scanner = None
 
         if not HAS_LLM_GUARD:
             logger.warning("LLM Guard not installed. Security scanning disabled.")
@@ -49,25 +45,16 @@ class LLMGuardScanner:
         else:
             logger.info("Initializing security scanners...")
 
-            # LLM Guard: PromptInjection scanner (input) - detects prompt injection attacks
-            _prompt_injection_scanner = PromptInjection()
-            logger.info("Created PromptInjection scanner at startup")  # LLM Guard
+            self._prompt_injection_scanner = PromptInjection()
+            logger.info("Created PromptInjection scanner at startup")
 
-            # LLM Guard: NoRefusal scanner (output) - detects model refusals
-            _refusal_scanner = NoRefusal()
-            logger.info("Created NoRefusal scanner at startup")  # LLM Guard
+            self._refusal_scanner = NoRefusal()
+            logger.info("Created NoRefusal scanner at startup")
 
             logger.info("Security scanners initialized (PromptInjection, NoRefusal)")
 
     def scan_input(self, prompt: str) -> tuple[bool, str, list[dict[str, Any]]]:
-        """Scan user input for prompt injection and PII.
-
-        Args:
-            prompt: User input to scan
-
-        Returns:
-            Tuple of (is_safe, sanitized_prompt, list of issues)
-        """
+        """Scan user input for prompt injection and PII."""
         if not self.enabled:
             return True, prompt, [{"note": "scanner_disabled"}]
 
@@ -75,35 +62,33 @@ class LLMGuardScanner:
         sanitized = prompt
 
         try:
-            # LLM Guard: Scan for prompt injection attacks
-            sanitized, is_valid, risk_score = _prompt_injection_scanner.scan(sanitized)
+            sanitized, is_valid, risk_score = self._prompt_injection_scanner.scan(sanitized)
 
             if not is_valid:
                 issue = {
-                    "scanner": "PromptInjection",  # LLM Guard
+                    "scanner": "PromptInjection",
                     "risk_score": risk_score,
                     "reason": "Potential prompt injection detected",
                 }
                 logger.security_event(
-                    "prompt_injection_detected", risk_score=risk_score, issue=issue
+                    "prompt_injection_detected",
+                    risk_score=risk_score,
+                    issue=issue,
                 )
                 return False, sanitized, [issue]
 
-            # NOT LLM GUARD - DataFog with regex engine for PII detection in input
-            # DataFog.scan_prompt() scans user input for PII (emails, phones, SSN, etc.)
-            # Using regex engine (~1 MB) instead of spaCy to avoid large model downloads
             if DataFog is not None:
                 try:
                     datafog_result = DataFog.scan_prompt(sanitized, engine="regex")
                     if datafog_result.entities:
-                        # Redact PII using DataFog
                         sanitized = DataFog.sanitize(sanitized, engine="regex")
-                        issue = {
-                            "scanner": "DataFog",  # NOT LLM GUARD
-                            "risk_score": min(len(datafog_result.entities) / 10, 1.0),
-                            "reason": f"PII detected in input ({len(datafog_result.entities)} entities)",
-                        }
-                        issues.append(issue)
+                        issues.append(
+                            {
+                                "scanner": "DataFog",
+                                "risk_score": min(len(datafog_result.entities) / 10, 1.0),
+                                "reason": f"PII detected in input ({len(datafog_result.entities)} entities)",
+                            }
+                        )
                 except Exception as e:
                     logger.warning(f"DataFog PII scan failed: {e}")
 
@@ -114,14 +99,7 @@ class LLMGuardScanner:
             return True, prompt, []
 
     def scan_output(self, output: str) -> tuple[bool, str, list[dict[str, Any]]]:
-        """Scan model output for sensitive information and refusals.
-
-        Args:
-            output: Model output to scan
-
-        Returns:
-            Tuple of (is_safe, sanitized_output, list of issues)
-        """
+        """Scan model output for sensitive information and refusals."""
         if not self.enabled:
             return True, output, [{"note": "scanner_disabled"}]
 
@@ -129,32 +107,32 @@ class LLMGuardScanner:
         sanitized = output
 
         try:
-            # LLM Guard: Scan for model refusals
-            sanitized, is_valid, risk_score = _refusal_scanner.scan("", sanitized)
+            sanitized, is_valid, risk_score = self._refusal_scanner.scan("", sanitized)
+
             if not is_valid:
                 issues.append(
                     {
-                        "scanner": "NoRefusal",  # LLM Guard
+                        "scanner": "NoRefusal",
                         "risk_score": risk_score,
                         "reason": "Refusal detected",
                     }
                 )
 
-            # NOT LLM GUARD - DataFog with regex engine for PII detection in output
-            # DataFog.filter_output() scans model output for PII
-            # Using regex engine (~1 MB) instead of spaCy to avoid large model downloads
             if DataFog is not None:
                 try:
-                    datafog_result = DataFog.filter_output(sanitized, engine="regex")
+                    datafog_result = DataFog.filter_output(
+                        sanitized,
+                        engine="regex",
+                    )
                     if datafog_result.entities:
-                        # Redact PII using DataFog
                         sanitized = datafog_result.redacted_text
-                        issue = {
-                            "scanner": "DataFog",  # NOT LLM GUARD
-                            "risk_score": min(len(datafog_result.entities) / 10, 1.0),
-                            "reason": f"Sensitive content detected in output ({len(datafog_result.entities)} entities)",
-                        }
-                        issues.append(issue)
+                        issues.append(
+                            {
+                                "scanner": "DataFog",
+                                "risk_score": min(len(datafog_result.entities) / 10, 1.0),
+                                "reason": (f"Sensitive content detected in output ({len(datafog_result.entities)} entities)"),
+                            }
+                        )
                 except Exception as e:
                     logger.warning(f"DataFog output scan failed: {e}")
 
@@ -172,30 +150,18 @@ class LLMGuardScanner:
             logger.exception(f"LLM Guard output scan failed: {e}")
             return True, output, []
 
-    def scan_both(
-        self, input_text: str, output_text: str
-    ) -> tuple[bool, bool, list[dict[str, Any]]]:
-        """Scan both input and output.
-
-        Args:
-            input_text: User input
-            output_text: Model output
-
-        Returns:
-            Tuple of (input_safe, output_safe, all_issues)
-        """
+    def scan_both(self, input_text: str, output_text: str) -> tuple[bool, bool, list[dict[str, Any]]]:
         input_safe, _, input_issues = self.scan_input(input_text)
         output_safe, _, output_issues = self.scan_output(output_text)
-
         return input_safe, output_safe, input_issues + output_issues
 
+
+# ---- Singleton (Ruff-friendly, no globals mutation) ----
 
 _llm_guard_scanner: LLMGuardScanner | None = None
 
 
+@lru_cache(maxsize=1)
 def get_llm_guard_scanner() -> LLMGuardScanner:
     """Get or create the global LLM Guard scanner instance."""
-    global _llm_guard_scanner
-    if _llm_guard_scanner is None:
-        _llm_guard_scanner = LLMGuardScanner()
-    return _llm_guard_scanner
+    return LLMGuardScanner()

@@ -18,21 +18,11 @@ class ResumeModel(Base):
     id = Column(String, primary_key=True)
     skills = Column(ARRAY(String), nullable=True)
 
-    experiences = relationship(
-        "ExperienceModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
-    )
-    educations = relationship(
-        "EducationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
-    )
-    projects = relationship(
-        "ProjectModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
-    )
-    certifications = relationship(
-        "CertificationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
-    )
-    awards = relationship(
-        "AwardModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN
-    )
+    experiences = relationship("ExperienceModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    educations = relationship("EducationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    projects = relationship("ProjectModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    certifications = relationship("CertificationModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
+    awards = relationship("AwardModel", back_populates="resume", cascade=CASCADE_DELETE_ORPHAN)
 
 
 class ExperienceModel(Base):

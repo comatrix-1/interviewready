@@ -11,21 +11,13 @@ Focus on correctness, usefulness, and clarity of feedback based only on the prov
 
 AGENT_RUBRICS: dict[str, str] = {
     "ResumeCriticAgent": (
-        "Score structure, clarity, ATS compliance, and actionable critique. "
-        "Penalize missing or vague issue descriptions."
+        "Score structure, clarity, ATS compliance, and actionable critique. Penalize missing or vague issue descriptions."
     ),
     "ContentStrengthAgent": (
-        "Score evidence strength, quantification, and missing impact. "
-        "Penalize suggestions that add unsupported claims."
+        "Score evidence strength, quantification, and missing impact. Penalize suggestions that add unsupported claims."
     ),
-    "JobAlignmentAgent": (
-        "Score alignment to job requirements, precision of missing keywords, "
-        "and grounding to the JD text."
-    ),
-    "InterviewCoachAgent": (
-        "Score question relevance, progression across the interview, and "
-        "coherence with message history."
-    ),
+    "JobAlignmentAgent": ("Score alignment to job requirements, precision of missing keywords, and grounding to the JD text."),
+    "InterviewCoachAgent": ("Score question relevance, progression across the interview, and coherence with message history."),
 }
 
 

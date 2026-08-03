@@ -66,9 +66,7 @@ def _safe_load(
     return None
 
 
-def _parse_balanced_json(
-    text: str, *, allow_array: bool
-) -> dict[str, Any] | list[Any] | None:
+def _parse_balanced_json(text: str, *, allow_array: bool) -> dict[str, Any] | list[Any] | None:
     """Parse the first balanced JSON object/array substring from text."""
     if not text:
         return None

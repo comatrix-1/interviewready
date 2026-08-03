@@ -1,6 +1,6 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { InterviewMessage, InterviewMode } from '../../types';
+﻿import React, { useEffect, useRef, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import { InterviewMessage, InterviewMode } from "../../types";
 
 // Custom hook for WebSocket setup to reduce cognitive complexity
 const useWebSocketConnection = (
@@ -12,7 +12,7 @@ const useWebSocketConnection = (
     onInterrupted: () => void;
     onTurnComplete: () => void;
     onConnectionChange: (status: "connecting" | "connected" | "error" | "closed") => void;
-  }
+  },
 ) => {
   const socketRef = useRef<WebSocket | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -20,26 +20,25 @@ const useWebSocketConnection = (
   >("connecting");
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Store callbacks in a ref so the WebSocket effect doesn't re-run when identities change.
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
+  const onLiveEventRef = useRef(onLiveEvent);
+  onLiveEventRef.current = onLiveEvent;
+
   useEffect(() => {
     if (mode !== "VOICE") return;
 
     let isComponentMounted = true;
-    const protocol =
-      globalThis.location.protocol === "https:" ? "wss:" : "ws:";
-    const API_BASE_URL =
-      import.meta.env.VITE_API_BASE_URL || globalThis.location.origin;
+    const protocol = globalThis.location.protocol === "https:" ? "wss:" : "ws:";
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || globalThis.location.origin;
 
-    const hostAndPath = API_BASE_URL.replace(/^https?:\/\//, "").replace(
-      /\/$/,
-      ""
-    );
+    const hostAndPath = API_BASE_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
     const wsUrl = `${protocol}//${hostAndPath}/api/v1/interview/live?sessionId=${sessionId}`;
 
     const initializeRelaySession = async () => {
       try {
-        console.log(
-          "[VOICE_FRONTEND] Connecting to Backend Relay WebSocket..."
-        );
+        console.log("[VOICE_FRONTEND] Connecting to Backend Relay WebSocket...");
         const ws = new WebSocket(wsUrl);
         ws.binaryType = "arraybuffer";
         socketRef.current = ws;
@@ -48,10 +47,9 @@ const useWebSocketConnection = (
           if (!isComponentMounted) return;
           console.log("[VOICE_FRONTEND] Relay Connection Established");
           setConnectionStatus("connected");
-          callbacks?.onConnectionChange("connected");
+          callbacksRef.current?.onConnectionChange("connected");
 
-          if (heartbeatIntervalRef.current)
-            clearInterval(heartbeatIntervalRef.current);
+          if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
           heartbeatIntervalRef.current = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ event: "ping", type: "control" }));
@@ -65,28 +63,26 @@ const useWebSocketConnection = (
           if (event.data instanceof ArrayBuffer) {
             const binary = event.data;
             const dataView = new DataView(binary);
-            const float32: Float32Array<ArrayBuffer> = new Float32Array(
-              binary.byteLength / 2
-            );
+            const float32: Float32Array<ArrayBuffer> = new Float32Array(binary.byteLength / 2);
             for (let i = 0; i < float32.length; i++) {
               float32[i] = dataView.getInt16(i * 2, true) / 32768;
             }
-            callbacks?.onAudioData(float32);
+            callbacksRef.current?.onAudioData(float32);
           } else if (typeof event.data === "string") {
             try {
               const msg = JSON.parse(event.data);
 
               if (msg.type === "interrupted") {
                 console.log("[VOICE_FRONTEND] Interruption signal from relay");
-                callbacks?.onInterrupted();
+                callbacksRef.current?.onInterrupted();
               }
 
               if (msg.type === "turn_complete") {
-                callbacks?.onTurnComplete();
+                callbacksRef.current?.onTurnComplete();
               }
 
-              if (onLiveEvent) {
-                onLiveEvent(msg);
+              if (onLiveEventRef.current) {
+                onLiveEventRef.current(msg);
               }
             } catch (e) {
               console.error("Relay message parse error:", e);
@@ -97,15 +93,15 @@ const useWebSocketConnection = (
         ws.onerror = (error) => {
           console.error("[VOICE_FRONTEND] Relay WebSocket Error:", error);
           setConnectionStatus("error");
-          callbacks?.onConnectionChange("error");
+          callbacksRef.current?.onConnectionChange("error");
         };
 
         ws.onclose = (event) => {
           console.log(
-            `[VOICE_FRONTEND] Relay Connection Closed (Code: ${event.code}, Reason: ${event.reason || "none"})`
+            `[VOICE_FRONTEND] Relay Connection Closed (Code: ${event.code}, Reason: ${event.reason || "none"})`,
           );
           setConnectionStatus("closed");
-          callbacks?.onConnectionChange("closed");
+          callbacksRef.current?.onConnectionChange("closed");
           if (heartbeatIntervalRef.current) {
             clearInterval(heartbeatIntervalRef.current);
             heartbeatIntervalRef.current = null;
@@ -114,11 +110,11 @@ const useWebSocketConnection = (
       } catch (err) {
         console.error("[VOICE_FRONTEND] Relay initialization failed:", err);
         setConnectionStatus("error");
-        callbacks?.onConnectionChange("error");
+        callbacksRef.current?.onConnectionChange("error");
       }
     };
 
-    initializeRelaySession();
+    void initializeRelaySession();
 
     return () => {
       isComponentMounted = false;
@@ -129,39 +125,31 @@ const useWebSocketConnection = (
         clearInterval(heartbeatIntervalRef.current);
       }
     };
-  }, [mode, sessionId, callbacks, onLiveEvent]);
+  }, [mode, sessionId]);
 
   return { socketRef, connectionStatus };
 };
 
 // Extracted markdown components to reduce inline definitions
-const markdownComponents = {
-  p: ({ children }: { children: React.ReactNode }) => (
-    <p className="mb-2 last:mb-0">{children}</p>
-  ),
-  ul: ({ children }: { children: React.ReactNode }) => (
-    <ul className="list-disc pl-4 mb-2">{children}</ul>
-  ),
-  li: ({ children }: { children: React.ReactNode }) => (
-    <li className="mb-0.5">{children}</li>
-  ),
-  strong: ({ children }: { children: React.ReactNode }) => (
-    <span className="font-bold">{children}</span>
-  ),
+const markdownComponents: Components = {
+  p: ({ node: _node, ...props }) => <p className="mb-2 last:mb-0">{props.children}</p>,
+  ul: ({ node: _node, ...props }) => <ul className="list-disc pl-4 mb-2">{props.children}</ul>,
+  li: ({ node: _node, ...props }) => <li className="mb-0.5">{props.children}</li>,
+  strong: ({ node: _node, ...props }) => <strong className="font-bold">{props.children}</strong>,
 };
 
-export const InterviewStep: React.FC<{ 
-	  history: InterviewMessage[]; 
-	  onSend: (msg: string) => void;
-	  onSendAudio: (audio: Uint8Array) => void;
-	  isLoading: boolean;
-	  isComplete?: boolean;
-	  chatEndRef: React.RefObject<HTMLDivElement | null>;
-	  mode: InterviewMode;
-	  sessionId: string;
-	  onExit?: () => void;
-	  onLiveEvent?: (event: { type: string; text?: string }) => void;
-	}> = ({
+export const InterviewStep: React.FC<{
+  history: InterviewMessage[];
+  onSend: (msg: string) => void;
+  onSendAudio: (audio: Uint8Array) => void;
+  isLoading: boolean;
+  isComplete?: boolean;
+  chatEndRef: React.RefObject<HTMLDivElement | null>;
+  mode: InterviewMode;
+  sessionId: string;
+  onExit?: () => void;
+  onLiveEvent?: (event: { type: string; text?: string }) => void;
+}> = ({
   history,
   onSend,
   onSendAudio,
@@ -182,12 +170,8 @@ export const InterviewStep: React.FC<{
   const isQueueProcessingRef = React.useRef(false);
   const nextStartTimeRef = React.useRef(0);
   const animationFrameRef = React.useRef<number | null>(null);
-  const silenceTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const resumeListeningTimeoutRef = React.useRef<
-    ReturnType<typeof setTimeout> | null
-  >(null);
+  const silenceTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumeListeningTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSendingAudioRef = React.useRef(true);
 
   // Refs to track current state inside stale closures (WebSocket handlers, timers, VAD)
@@ -202,9 +186,7 @@ export const InterviewStep: React.FC<{
   const processorRef = React.useRef<AudioWorkletNode | null>(null);
   // Single shared AudioContext for playback â€” avoids creating a new one per audio chunk
   const playbackContextRef = React.useRef<AudioContext | null>(null);
-  const activePlaybackSourcesRef = React.useRef<Set<AudioBufferSourceNode>>(
-    new Set(),
-  );
+  const activePlaybackSourcesRef = React.useRef<Set<AudioBufferSourceNode>>(new Set());
   // Separate AudioContext for microphone capture
   const recordingContextRef = React.useRef<AudioContext | null>(null);
   // Tracks if the worklet module is registered for the recording context
@@ -308,9 +290,7 @@ export const InterviewStep: React.FC<{
       socketRef.current?.readyState === WebSocket.OPEN
     ) {
       console.log("[VOICE_FRONTEND] Signaling audio stream end to backend");
-      socketRef.current.send(
-        JSON.stringify({ type: "realtimeInput", event: "audio_stream_end" }),
-      );
+      socketRef.current.send(JSON.stringify({ type: "realtimeInput", event: "audio_stream_end" }));
     }
 
     if (mode === "CHAT" && audioChunksRef.current.length > 0) {
@@ -318,8 +298,7 @@ export const InterviewStep: React.FC<{
       const sampleRate = 16000;
       const allSamples: number[] = [];
       audioChunksRef.current.forEach((chunk) => {
-        const ratio =
-          (recordingContextRef.current?.sampleRate || 16000) / sampleRate;
+        const ratio = (recordingContextRef.current?.sampleRate || 16000) / sampleRate;
         for (let i = 0; i < chunk.length; i += ratio) {
           allSamples.push(chunk[Math.floor(i)] * 32767);
         }
@@ -331,62 +310,68 @@ export const InterviewStep: React.FC<{
   };
 
   // Use custom hook for WebSocket connection to reduce cognitive complexity
-  const { socketRef, connectionStatus } = useWebSocketConnection(
-    mode,
-    sessionId,
-    onLiveEvent,
-    {
-      onAudioData: (data) => {
-        playbackQueueRef.current.push(data);
-        aiTurnActiveRef.current = true;
+  const { socketRef, connectionStatus } = useWebSocketConnection(mode, sessionId, onLiveEvent, {
+    onAudioData: (data) => {
+      playbackQueueRef.current.push(data);
+      aiTurnActiveRef.current = true;
 
-        if (!isSpeakingRef.current) {
-          isSpeakingRef.current = true;
-          setIsSpeaking(true);
-          isVoiceActiveRef.current = false;
-          setIsVoiceActive(false);
-          if (isRecordingRef.current) {
-            isSendingAudioRef.current = false;
-            teardownRecording(false);
-          }
-        }
-
-        if (!isQueueProcessingRef.current) {
-          processPlaybackQueue();
-        }
-      },
-      onInterrupted: () => {
-        console.log("[VOICE_FRONTEND] Interruption signal from relay");
-        stopPlaybackImmediately();
+      if (!isSpeakingRef.current) {
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
         isVoiceActiveRef.current = false;
         setIsVoiceActive(false);
-        if (playbackContextRef.current?.state === "running") {
-          playbackContextRef.current.suspend().then(() => {
-            nextStartTimeRef.current = 0;
-            playbackContextRef.current?.resume();
-          });
-        }
-        isSpeakingRef.current = false;
-        aiTurnActiveRef.current = false;
-        setIsSpeaking(false);
-      },
-      onTurnComplete: () => {
-        aiTurnActiveRef.current = false;
-        isSendingAudioRef.current = true;
-        if (playbackQueueRef.current.length === 0) {
-          isSpeakingRef.current = false;
-          setIsSpeaking(false);
-          queueResumeListening();
-        }
-      },
-      onConnectionChange: (status) => {
-        if (status === "closed") {
-          stopPlaybackImmediately();
+        if (isRecordingRef.current) {
+          isSendingAudioRef.current = false;
           teardownRecording(false);
         }
-      },
-    }
-  );
+      }
+
+      if (!isQueueProcessingRef.current) {
+        void processPlaybackQueue();
+      }
+    },
+    onInterrupted: () => {
+      console.log("[VOICE_FRONTEND] Interruption signal from relay");
+      stopPlaybackImmediately();
+      isVoiceActiveRef.current = false;
+      setIsVoiceActive(false);
+      if (playbackContextRef.current?.state === "running") {
+        void playbackContextRef.current
+          .suspend()
+          .then(async () => {
+            nextStartTimeRef.current = 0;
+            try {
+              if (playbackContextRef.current) {
+                await playbackContextRef.current.resume();
+              }
+            } catch (e) {
+              console.warn("Playback Context resume failed", e);
+            }
+          })
+          .catch((e) => {
+            console.warn("Playback Context suspend failed", e);
+          });
+      }
+      isSpeakingRef.current = false;
+      aiTurnActiveRef.current = false;
+      setIsSpeaking(false);
+    },
+    onTurnComplete: () => {
+      aiTurnActiveRef.current = false;
+      isSendingAudioRef.current = true;
+      if (playbackQueueRef.current.length === 0) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        queueResumeListening();
+      }
+    },
+    onConnectionChange: (status) => {
+      if (status === "closed") {
+        stopPlaybackImmediately();
+        teardownRecording(false);
+      }
+    },
+  });
 
   const processPlaybackQueue = async () => {
     if (playbackQueueRef.current.length === 0) return;
@@ -394,12 +379,10 @@ export const InterviewStep: React.FC<{
     // Use the shared ref-based AudioContext to avoid creating a new one per audio chunk
     let currentCtx = playbackContextRef.current;
     if (!currentCtx || currentCtx.state === "closed") {
-      console.log(
-        "[VOICE_DEBUG] Creating new playback AudioContext at 24000Hz",
-      );
-      currentCtx = new (
-        globalThis.AudioContext || (globalThis as any).webkitAudioContext
-      )({ sampleRate: 24000 });
+      console.log("[VOICE_DEBUG] Creating new playback AudioContext at 24000Hz");
+      currentCtx = new (window.AudioContext || window.webkitAudioContext!)({
+        sampleRate: 24000,
+      });
       playbackContextRef.current = currentCtx;
       nextStartTimeRef.current = 0;
     }
@@ -415,10 +398,7 @@ export const InterviewStep: React.FC<{
 
     // Double check state after resume attempt
     if (currentCtx.state !== "running") {
-      console.warn(
-        "[VOICE_DEBUG] Playback AudioContext is not running:",
-        currentCtx.state,
-      );
+      console.warn("[VOICE_DEBUG] Playback AudioContext is not running:", currentCtx.state);
     }
 
     isQueueProcessingRef.current = true;
@@ -452,10 +432,7 @@ export const InterviewStep: React.FC<{
       source.onended = () => {
         activePlaybackSourcesRef.current.delete(source);
         // Only reset speaking status if no more audio chunks are queued AND AI is not currently generating more
-        if (
-          playbackQueueRef.current.length === 0 &&
-          activePlaybackSourcesRef.current.size === 0
-        ) {
+        if (playbackQueueRef.current.length === 0 && activePlaybackSourcesRef.current.size === 0) {
           console.log("[VOICE_FRONTEND] Playback queue empty");
           // Important: We only mark speaking as false if turn is not active or we're waiting for user
           if (!aiTurnActiveRef.current) {
@@ -487,9 +464,7 @@ export const InterviewStep: React.FC<{
     // Select a natural sounding voice if available
     const voices = globalThis.speechSynthesis.getVoices();
     const preferredVoice =
-      voices.find(
-        (v) => v.name.includes("Google") || v.name.includes("Natural"),
-      ) || voices[0];
+      voices.find((v) => v.name.includes("Google") || v.name.includes("Natural")) || voices[0];
     if (preferredVoice) utterance.voice = preferredVoice;
 
     utterance.rate = 1;
@@ -505,7 +480,7 @@ export const InterviewStep: React.FC<{
       if (mode === "VOICE" && !isRecordingRef.current) {
         // Delay slightly to avoid catching the end of the AI's own voice
         setTimeout(() => {
-          if (!isSpeakingRef.current) startRecording();
+          if (!isSpeakingRef.current) void startRecording();
         }, 500);
       }
     };
@@ -547,9 +522,9 @@ export const InterviewStep: React.FC<{
     let context = recordingContextRef.current;
     if (!context || context.state === "closed") {
       console.log("[VOICE_DEBUG] Creating new recording AudioContext");
-      context = new (
-        globalThis.AudioContext || (globalThis as any).webkitAudioContext
-      )({ sampleRate: 16000 });
+      context = new (window.AudioContext || window.webkitAudioContext!)({
+        sampleRate: 16000,
+      });
       recordingContextRef.current = context;
       context.onstatechange = () =>
         console.log("[VOICE_DEBUG] RecordingContext state:", context?.state);
@@ -567,9 +542,7 @@ export const InterviewStep: React.FC<{
       aiTurnActiveRef.current ||
       socketRef.current?.readyState !== WebSocket.OPEN
     ) {
-      console.log(
-        "[VOICE_DEBUG] Aborting microphone start after context resume",
-      );
+      console.log("[VOICE_DEBUG] Aborting microphone start after context resume");
       return null;
     }
 
@@ -627,11 +600,7 @@ export const InterviewStep: React.FC<{
       resumeListeningTimeoutRef.current = null;
     }
     // Use refs for the guard to avoid stale closure issues
-    if (
-      isRecordingRef.current ||
-      isSpeakingRef.current ||
-      isStartingRecordingRef.current
-    ) {
+    if (isRecordingRef.current || isSpeakingRef.current || isStartingRecordingRef.current) {
       console.log("[VOICE_DEBUG] startRecording blocked:", {
         isRecording: isRecordingRef.current,
         isSpeaking: isSpeakingRef.current,
@@ -691,19 +660,14 @@ export const InterviewStep: React.FC<{
         aiTurnActiveRef.current ||
         socketRef.current?.readyState !== WebSocket.OPEN
       ) {
-        console.log(
-          "[VOICE_DEBUG] Aborting microphone start after worklet setup",
-        );
+        console.log("[VOICE_DEBUG] Aborting microphone start after worklet setup");
         stream.getTracks().forEach((track) => track.stop());
         isStartingRecordingRef.current = false;
         return;
       }
 
       const source = context.createMediaStreamSource(stream);
-      const workletNode = new AudioWorkletNode(
-        context,
-        "audio-recorder-worklet",
-      );
+      const workletNode = new AudioWorkletNode(context, "audio-recorder-worklet");
 
       workletNode.port.onmessage = (ev) => {
         if (ev.data.event === "chunk") {
@@ -756,9 +720,7 @@ export const InterviewStep: React.FC<{
         const checkSilence = () => {
           if (!stream.active) return;
           if (socketRef.current?.readyState !== WebSocket.OPEN) {
-            console.log(
-              "[VOICE_FRONTEND] Stopping VAD because websocket is no longer open",
-            );
+            console.log("[VOICE_FRONTEND] Stopping VAD because websocket is no longer open");
             teardownRecording(false);
             return;
           }
@@ -774,8 +736,7 @@ export const InterviewStep: React.FC<{
           }
           const rms = Math.sqrt(sumSquares / bufferLength);
           const speechDetectedNow =
-            Date.now() - recordingStartedAt > VAD_WARMUP_MS &&
-            rms > SPEECH_RMS_THRESHOLD;
+            Date.now() - recordingStartedAt > VAD_WARMUP_MS && rms > SPEECH_RMS_THRESHOLD;
 
           if (speechDetectedNow) {
             consecutiveSpeechFrames += 1;
@@ -826,39 +787,30 @@ export const InterviewStep: React.FC<{
     if (isSpeaking) {
       return "Analyzing your profile...";
     }
-    
+
     if (isRecording) {
       return "I'm listening to your response";
     }
-    
+
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       return "Waiting for conversation...";
     }
-    
+
     return "";
   };
 
   const getButtonIcon = () => {
     if (isRecording) {
       return (
-        <svg
-          className="w-10 h-10"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 24 24">
           <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
         </svg>
       );
     }
-    
+
     if (isSpeaking) {
       return (
-        <svg
-          className="w-10 h-10"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -868,14 +820,9 @@ export const InterviewStep: React.FC<{
         </svg>
       );
     }
-    
+
     return (
-      <svg
-        className="w-10 h-10"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
+      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -887,9 +834,10 @@ export const InterviewStep: React.FC<{
   };
 
   const getButtonClassName = () => {
-    const baseClasses = "relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 shadow-xl";
+    const baseClasses =
+      "relative w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 shadow-xl";
     const disabledClasses = "disabled:opacity-50";
-    
+
     let stateClasses;
     if (isRecording) {
       stateClasses = isVoiceActive
@@ -898,9 +846,10 @@ export const InterviewStep: React.FC<{
     } else if (isSpeaking) {
       stateClasses = "bg-blue-500 text-white shadow-blue-200";
     } else {
-      stateClasses = "bg-white border-2 border-slate-100 text-slate-400 hover:border-slate-300 hover:text-slate-600";
+      stateClasses =
+        "bg-white border-2 border-slate-100 text-slate-400 hover:border-slate-300 hover:text-slate-600";
     }
-    
+
     return `${baseClasses} ${stateClasses} ${disabledClasses}`;
   };
 
@@ -913,7 +862,7 @@ export const InterviewStep: React.FC<{
         </>
       );
     }
-    
+
     if (isRecording) {
       return (
         <>
@@ -924,7 +873,7 @@ export const InterviewStep: React.FC<{
         </>
       );
     }
-    
+
     if (isLoading) {
       return (
         <>
@@ -933,7 +882,7 @@ export const InterviewStep: React.FC<{
         </>
       );
     }
-    
+
     if (connectionStatus === "connected") {
       return (
         <span className="text-emerald-600 flex items-center gap-1.5">
@@ -942,7 +891,7 @@ export const InterviewStep: React.FC<{
         </span>
       );
     }
-    
+
     if (connectionStatus === "error" || connectionStatus === "closed") {
       return (
         <span className="text-red-500 flex items-center gap-1.5">
@@ -951,7 +900,7 @@ export const InterviewStep: React.FC<{
         </span>
       );
     }
-    
+
     return (
       <span className="text-amber-500 flex items-center gap-1.5">
         <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce"></div>
@@ -963,33 +912,23 @@ export const InterviewStep: React.FC<{
   const handleMicClick = async () => {
     // Crucial: AudioContext must be resumed from a user gesture
     try {
-      if (
-        !playbackContextRef.current ||
-        playbackContextRef.current.state === "closed"
-      ) {
-        playbackContextRef.current = new (
-          globalThis.AudioContext || (globalThis as any).webkitAudioContext
-        )({ sampleRate: 24000 });
+      if (!playbackContextRef.current || playbackContextRef.current.state === "closed") {
+        playbackContextRef.current = new (window.AudioContext || window.webkitAudioContext!)({
+          sampleRate: 24000,
+        });
       }
       if (playbackContextRef.current.state === "suspended") {
-        console.log(
-          "[VOICE_FRONTEND] Resuming playback context from mic click",
-        );
+        console.log("[VOICE_FRONTEND] Resuming playback context from mic click");
         await playbackContextRef.current.resume();
       }
 
-      if (
-        !recordingContextRef.current ||
-        recordingContextRef.current.state === "closed"
-      ) {
-        recordingContextRef.current = new (
-          globalThis.AudioContext || (globalThis as any).webkitAudioContext
-        )({ sampleRate: 16000 });
+      if (!recordingContextRef.current || recordingContextRef.current.state === "closed") {
+        recordingContextRef.current = new (window.AudioContext || window.webkitAudioContext!)({
+          sampleRate: 16000,
+        });
       }
       if (recordingContextRef.current.state === "suspended") {
-        console.log(
-          "[VOICE_FRONTEND] Resuming recording context from mic click",
-        );
+        console.log("[VOICE_FRONTEND] Resuming recording context from mic click");
         await recordingContextRef.current.resume();
       }
     } catch (e) {
@@ -1000,19 +939,17 @@ export const InterviewStep: React.FC<{
 
     // Manual fallback: If AI is stuck in speaking mode, allow force-stop/start
     if (isSpeakingRef.current || aiTurnActiveRef.current) {
-      console.log(
-        "[VOICE_FRONTEND] Manual Override: Forcing AI to stop and opening mic",
-      );
+      console.log("[VOICE_FRONTEND] Manual Override: Forcing AI to stop and opening mic");
       stopPlaybackImmediately();
       aiTurnActiveRef.current = false;
-      startRecording();
+      void startRecording();
       return;
     }
 
     if (isRecordingRef.current) {
       stopRecording(true);
     } else {
-      startRecording();
+      void startRecording();
     }
   };
 
@@ -1041,11 +978,7 @@ export const InterviewStep: React.FC<{
             </div>
           )}
 
-          <button
-            onClick={handleMicClick}
-            disabled={isLoading}
-            className={getButtonClassName()}
-          >
+          <button onClick={handleMicClick} disabled={isLoading} className={getButtonClassName()}>
             {getButtonIcon()}
           </button>
         </div>
@@ -1075,7 +1008,7 @@ export const InterviewStep: React.FC<{
       <div className="flex-1 overflow-y-auto space-y-4 pr-3 mb-4 scrollbar-thin scrollbar-thumb-slate-200">
         {history.map((msg, i) => (
           <div
-            key={`${msg.role}-${i}-${msg.text.slice(0, 20)}`}
+            key={`${msg.role}-${i}`}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
@@ -1086,11 +1019,7 @@ export const InterviewStep: React.FC<{
               }`}
             >
               <div className="prose prose-sm max-w-none prose-slate">
-                <ReactMarkdown
-                  components={markdownComponents}
-                >
-                  {msg.text}
-                </ReactMarkdown>
+                <ReactMarkdown components={markdownComponents}>{msg.text}</ReactMarkdown>
               </div>
             </div>
           </div>
@@ -1100,8 +1029,7 @@ export const InterviewStep: React.FC<{
 
       {isComplete && (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          Interview complete. Review your summary above and click Exit to leave
-          the mock interview.
+          Interview complete. Review your summary above and click Exit to leave the mock interview.
         </div>
       )}
 
@@ -1156,12 +1084,7 @@ export const InterviewStep: React.FC<{
             disabled={isLoading || isComplete}
             className="ml-auto bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center justify-center transition-all"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"

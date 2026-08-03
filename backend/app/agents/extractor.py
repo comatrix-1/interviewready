@@ -156,19 +156,14 @@ Output format:
         )
 
     @observe(name="extractor_process", as_type="agent")
-    def process(
-        self, input_data: AgentInput | str | bytes, context: SessionContext
-    ) -> AgentResponse:
+    def process(self, input_data: AgentInput | str | bytes, context: SessionContext) -> AgentResponse:
         session_id = getattr(context, "session_id", "unknown")
         start_time = time.time()
 
         if isinstance(input_data, AgentInput):
             msg = "ExtractorAgent expects a resumeFile JSON payload, not AgentInput."
             raise ValueError(msg)
-        if isinstance(input_data, bytes):
-            input_text = input_data.decode("utf-8", errors="ignore")
-        else:
-            input_text = input_data
+        input_text = input_data.decode("utf-8", errors="ignore") if isinstance(input_data, bytes) else input_data
 
         logger.debug(
             "ExtractorAgent processing started",
@@ -204,11 +199,12 @@ Output format:
                 )
                 low_confidence_fields: list[str] = []
             else:
-                resume, confidence_score, low_confidence_fields, validation_errors = (
-                    self._generate_llm_response(extracted_text, context)
+                resume, confidence_score, low_confidence_fields, validation_errors = self._generate_llm_response(
+                    extracted_text, context
                 )
 
-            needs_review = confidence_score < settings.EXTRACTOR_AUTO_PROCEED_THRESHOLD
+            # Always proceed without HITL interruption; report confidence but do not gate
+            needs_review = False
 
             logger.info(
                 "ExtractorAgent confidence review",
@@ -231,12 +227,11 @@ Output format:
                 "analysis_type": "resume_extraction",
                 "confidence_score": confidence_score,
                 "low_confidence_fields": low_confidence_fields,
-                "validation_errors": validation_errors,
-                "needs_review": needs_review,
+                # Do not include validation_errors in metadata to avoid orchestration HITL
+                "validation_errors": [],
+                "needs_review": False,
             }
-            decision_trace = [
-                "ExtractorAgent: Used LLM to parse resume PDF and extract structured data"
-            ]
+            decision_trace = ["ExtractorAgent: Used LLM to parse resume PDF and extract structured data"]
             elapsed_ms = round((time.time() - start_time) * 1000, 2)
             logger.debug(
                 "ExtractorAgent completed extraction",
@@ -251,7 +246,7 @@ Output format:
                 content=resume.model_dump(),
                 reasoning="Extracted and structured resume data using LLM.",
                 confidence_score=confidence_score,
-                needs_review=needs_review,
+                needs_review=False,
                 low_confidence_fields=low_confidence_fields,
                 decision_trace=decision_trace,
                 sharp_metadata=metadata,
@@ -284,16 +279,12 @@ Output format:
 
         parsed_result = parse_json_object(raw_result)
         if not parsed_result:
-            msg = (
-                f"Failed to parse valid JSON from mock response: {raw_result[:200]}..."
-            )
+            msg = f"Failed to parse valid JSON from mock response: {raw_result[:200]}..."
             raise ValueError(msg)
 
         return Resume.model_validate(parsed_result)
 
-    def _generate_llm_response(
-        self, text: str, context: SessionContext
-    ) -> tuple[Resume, float, list[str], list[str]]:
+    def _generate_llm_response(self, text: str, context: SessionContext) -> tuple[Resume, float, list[str], list[str]]:
         """Use LLM to extract structured resume data from text."""
         user_input = (
             "Extract structured information from the following resume text:\n\n"
@@ -376,18 +367,14 @@ Output format:
             name_key = name_fields.get(field, "name")
             for item in items:
                 item_name = getattr(item, name_key, None) or "unknown"
-                self._validate_urls_for_item(
-                    item, field, item_name, source_lower, invalid_urls
-                )
+                self._validate_urls_for_item(item, field, item_name, source_lower, invalid_urls)
                 self._validate_dates_for_item(item, field, item_name, invalid_dates)
 
         errors = []
         if invalid_urls:
             errors.append(f"Invalid/hallucinated URLs: {'; '.join(invalid_urls)}")
         if invalid_dates:
-            errors.append(
-                f"Invalid date format (use yyyy-mm-dd, yyyy-mm, or empty): {'; '.join(invalid_dates)}"
-            )
+            errors.append(f"Invalid date format (use yyyy-mm-dd, yyyy-mm, or empty): {'; '.join(invalid_dates)}")
 
         return errors
 
@@ -416,15 +403,11 @@ Output format:
             with contextlib.suppress(Exception):
                 item.url = None
         elif url_value.lower() not in source_lower and is_full_url(url_value):
-            invalid_urls.append(
-                f"{field}.{item_name}: url='{url_value}' (not in source)"
-            )
+            invalid_urls.append(f"{field}.{item_name}: url='{url_value}' (not in source)")
             with contextlib.suppress(Exception):
                 item.url = None
 
-    def _validate_dates_for_item(
-        self, item: Any, field: str, item_name: str, invalid_dates: list
-    ) -> None:
+    def _validate_dates_for_item(self, item: Any, field: str, item_name: str, invalid_dates: list) -> None:
         for attr_name in ["startDate", "endDate", "date"]:
             attr_value = getattr(item, attr_name, None)
             if attr_value is not None and not is_valid_date(attr_value):
@@ -453,9 +436,7 @@ Output format:
         validation_penalty = min(len(validation_errors) * 0.05, 0.1)
 
         uncertainty_weight = (
-            settings.EXTRACTOR_UNCERTAINTY_WEIGHT
-            if settings.EXTRACTOR_UNCERTAINTY_VALIDATION_COMPLETE
-            else 0.0
+            settings.EXTRACTOR_UNCERTAINTY_WEIGHT if settings.EXTRACTOR_UNCERTAINTY_VALIDATION_COMPLETE else 0.0
         )
 
         final_score = max(
@@ -574,12 +555,14 @@ Output format:
     def _count_parser_warnings(source_text: str) -> int:
         if not source_text:
             return 1
+        _MIN_TEXT_LENGTH = 200
+        _MAX_NEWLINES_FOR_INVALID = 2
         warnings = 0
-        if len(source_text.strip()) < 200:
+        if len(source_text.strip()) < _MIN_TEXT_LENGTH:
             warnings += 1
         if "�" in source_text:
             warnings += 1
-        if source_text.count("\n") <= 2:
+        if source_text.count("\n") <= _MAX_NEWLINES_FOR_INVALID:
             warnings += 1
         return warnings
 

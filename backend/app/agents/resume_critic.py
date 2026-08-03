@@ -8,22 +8,22 @@ from typing import Any
 from langfuse import observe
 
 from app.core.config import settings
-from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, RESUME_SCHEMA
+from app.core.constants import ANTI_JAILBREAK_DIRECTIVE, PREVIEW_MAX_LENGTH, RESUME_SCHEMA
 from app.core.logging import logger
 from app.models.agent import AgentInput, AgentResponse, ResumeCriticReport
 from app.models.session import SessionContext
+from app.utils.json_parser import parse_json_object
 from app.utils.resume_location import resume_location_exists
 
 from .base import BaseAgent
 
 
-
 class ResumeCriticAgent(BaseAgent):
     """Agent for analyzing resume structure, ATS compatibility, and impact."""
 
-
     USE_MOCK_RESPONSE = settings.MOCK_RESUME_CRITIC_AGENT
     MOCK_RESPONSE_KEY = "ResumeCriticAgent"
+    _CONFIDENCE_LOW_THRESHOLD = 0.3
 
     SYSTEM_PROMPT = (
         """
@@ -107,16 +107,10 @@ class ResumeCriticAgent(BaseAgent):
             "ResumeCriticAgent processing started",
             session_id=session_id,
             input_length=len(input_text),
-            input_preview=input_text[:100] + "..."
-            if len(input_text) > 100
-            else input_text,
+            input_preview=input_text[:PREVIEW_MAX_LENGTH] + "..." if len(input_text) > PREVIEW_MAX_LENGTH else input_text,
         )
         try:
-            raw_result = (
-                self.get_mock_response_by_key(self.MOCK_RESPONSE_KEY)
-                if self.USE_MOCK_RESPONSE
-                else None
-            )
+            raw_result = self.get_mock_response_by_key(self.MOCK_RESPONSE_KEY) if self.USE_MOCK_RESPONSE else None
 
             if self.USE_MOCK_RESPONSE and raw_result is None:
                 logger.warning(
@@ -130,22 +124,16 @@ class ResumeCriticAgent(BaseAgent):
                 return self._resolve_reference_date(context)
 
             tools = [get_reference_date]
-            raw_result = raw_result or self.call_gemini(
-                input_text, context, tools=tools
-            )
+            raw_result = raw_result or self.call_gemini(input_text, context, tools=tools)
 
             # Extract just the critique part if the LLM wrapped it, or use the whole thing
             parsed = self._parse_json(raw_result)
-            critique_data = (
-                parsed.get("critique", parsed) if isinstance(parsed, dict) else {}
-            )
+            critique_data = parsed.get("critique", parsed) if isinstance(parsed, dict) else {}
 
             # Re-serialize for parse_and_validate
             raw_critique = json.dumps(critique_data)
 
-            structured_result = self.parse_and_validate(
-                raw_critique, ResumeCriticReport
-            ).model_dump()
+            structured_result = self.parse_and_validate(raw_critique, ResumeCriticReport).model_dump()
 
             resume_payload: dict[str, Any] = {}
             if input_data.resume is not None:
@@ -156,10 +144,7 @@ class ResumeCriticAgent(BaseAgent):
                 valid_issues = [
                     issue
                     for issue in issues
-                    if isinstance(issue, dict)
-                    and resume_location_exists(
-                        resume_payload, issue.get("location", "")
-                    )
+                    if isinstance(issue, dict) and resume_location_exists(resume_payload, issue.get("location", ""))
                 ]
                 removed = len(issues) - len(valid_issues)
                 structured_result["issues"] = valid_issues
@@ -199,7 +184,7 @@ class ResumeCriticAgent(BaseAgent):
                 content=structured_result,
                 reasoning="Analyzed resume structure and content impact.",
                 confidence_score=confidence_score,
-                needs_review=confidence_score < 0.3,
+                needs_review=confidence_score < self._CONFIDENCE_LOW_THRESHOLD,
                 low_confidence_fields=[],
                 decision_trace=decision_trace,
                 sharp_metadata=sharp_metadata,
@@ -231,9 +216,6 @@ class ResumeCriticAgent(BaseAgent):
         if not text:
             return {}
 
-
-        from app.utils.json_parser import parse_json_object
-
         return parse_json_object(text)
 
     @staticmethod
@@ -257,11 +239,7 @@ class ResumeCriticAgent(BaseAgent):
             return 50
 
         severity_weights = {"HIGH": 1.0, "MEDIUM": 0.7, "LOW": 0.4}
-        scores = [
-            severity_weights.get(i.get("severity", "LOW"), 0.4)
-            for i in issues
-            if isinstance(i, dict)
-        ]
+        scores = [severity_weights.get(i.get("severity", "LOW"), 0.4) for i in issues if isinstance(i, dict)]
         return int(min(sum(scores) / len(scores), 1.0) * 100)
 
     @staticmethod

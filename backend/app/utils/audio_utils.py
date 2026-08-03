@@ -4,9 +4,7 @@ import io
 import wave
 
 
-def pcm_to_wav(
-    pcm_data: bytes, sample_rate: int = 16000, channels: int = 1, sample_width: int = 2
-) -> bytes:
+def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000, channels: int = 1, sample_width: int = 2) -> bytes:
     """Convert raw PCM audio data to WAV format.
 
     Args:
@@ -39,7 +37,8 @@ def validate_audio_format(audio_data: bytes) -> bool:
     Returns:
         True if valid WAV or other supported format
     """
-    if len(audio_data) < 44:
+    _WAV_HEADER_SIZE = 44
+    if len(audio_data) < _WAV_HEADER_SIZE:
         return False
 
     # Check for WAV header

@@ -1,3 +1,5 @@
+import React from "react";
+
 export const ReportHeader: React.FC<{
   title: string;
   summary: string;
@@ -9,9 +11,7 @@ export const ReportHeader: React.FC<{
     <div className="flex items-start justify-between border-b border-slate-100 pb-4 gap-4">
       <div className="min-w-0">
         <h3 className="text-lg font-semibold text-slate-900 mb-1">{title}</h3>
-        <p className="text-[12px] text-slate-500 leading-relaxed">
-          {summary}
-        </p>
+        <p className="text-[12px] text-slate-500 leading-relaxed">{summary}</p>
       </div>
       {hasScore && (
         <div className="text-right flex-none">
