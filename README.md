@@ -135,32 +135,18 @@ This transforms LLM output into a **traceable decision system**, not just genera
 
 ## API capabilities
 
-### Evaluate single candidate
+The backend exposes a REST + WebSocket API under `/api/v1`. When running locally, interactive docs are available at `http://localhost:8080/docs`.
 
-**POST /evaluate**
-
-Input:
-
-- resume or response text
-- job description (optional)
-
-Output:
-
-- structured evaluation
-- scores per agent
-- final decision + trace
-
-### Batch evaluation
-
-**POST /evaluate_batch**
-
-Processes multiple candidates through the full multi-agent pipeline and returns aggregated results.
-
-### Trace inspection
-
-**GET /trace/{evaluation_id}**
-
-Returns full reasoning path across all agents and governance steps.
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/chat` | Main orchestration endpoint — routes to the appropriate agent based on `intent` |
+| GET | `/api/v1/agents` | List available agents and their system prompts |
+| POST | `/api/v1/sessions/new` | Create a new session |
+| GET | `/api/v1/sessions/{session_id}/resume` | Retrieve resume data for a session |
+| GET | `/api/v1/interview/token` | Get an ephemeral token for the Gemini Live API |
+| WS | `/api/v1/interview/live` | Real-time audio interview WebSocket relay |
+| POST | `/api/v1/ats/analyze` | ATS compatibility analysis for a resume |
+| GET | `/health` | System health check |
 
 ## System behavior example
 
