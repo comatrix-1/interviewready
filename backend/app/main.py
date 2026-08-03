@@ -55,9 +55,10 @@ backend_url = "https://interviewready-backend-266623940622.asia-southeast1.run.a
 if backend_url not in origins:
     origins.append(backend_url)
 
-# RELAXED CORS for debugging 403 errors in production
-# In production, we'll try to use "*" if explicit list fails, but FastAPI requires explicit list with credentials=True
-# So we'll stick to our list but ensure it's comprehensive.
+# TODO(tech-debt): CORS wildcard with allow_credentials=True is a browser protocol violation.
+# Browsers reject credentialed requests to wildcard origins. This silently breaks
+# cross-origin requests in non-prod environments. Fix: use explicit origins list in all envs.
+# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS/Errors/CORSNotSupportingCredentials
 
 app.add_middleware(
     CORSMiddleware,

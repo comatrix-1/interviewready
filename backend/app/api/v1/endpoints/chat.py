@@ -31,6 +31,9 @@ async def chat_endpoint(
     session_id: Annotated[str, Query(alias="sessionId")],
 ) -> ChatApiResponse:
     """Run orchestration for the chat message within a user-owned session."""
+    # TODO(auth): user_id is hardcoded. All requests are attributed to the same actor,
+    # which breaks per-user rate limiting, session ownership checks, and audit trails.
+    # Replace with authenticated user identity when auth is implemented.
     user_id = "dev-user"
 
     with (
