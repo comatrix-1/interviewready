@@ -1,5 +1,9 @@
 # Task list — Validate LLM Outputs & Repair Flow
 
+> **Status (as of 2026-08-03):** Tasks 1–4 (schema + utility + tests) are complete.
+> Tasks 5–8 (agent integration, metrics logging, CI gate, rollout) are outstanding.
+> The `validate_or_repair` utility is not yet called from any agent or orchestration code.
+
 This task list breaks work into TDD-style incremental steps. Each task is self-contained and reviewable. Follow the plan document (requirements.md + design.md).
 
 ### Task 0: Setup test fixtures and a work branch
@@ -9,9 +13,9 @@ Files:
 - Modify: N/A
 
 Steps:
-- [ ] Create a work branch: git checkout -b specs/validate-llm-outputs
-- [ ] Add the specs files (requirements.md, design.md, task-list.md) and commit
-- [ ] Push branch (optional)
+- [x] Create a work branch: git checkout -b specs/validate-llm-outputs
+- [x] Add the specs files (requirements.md, design.md, task-list.md) and commit
+- [x] Push branch (optional)
 
 ---
 
@@ -22,7 +26,7 @@ Files:
 - Test: backend/tests/test_llm_responses.py
 
 Steps:
-- [ ] Write failing test: backend/tests/test_llm_responses.py — assert that OrchestrationResult exists and has fields `decision: str`, `confidence: float`, `details: list`.
+- [x] Write failing test: backend/tests/test_llm_responses.py — assert that OrchestrationResult exists and has fields `decision: str`, `confidence: float`, `details: list`.
 
   ```python
   from backend.app.models.llm_responses import OrchestrationResult
@@ -32,10 +36,10 @@ Steps:
       assert r.decision == "approve"
   ```
 
-- [ ] Run: pytest backend/tests/test_llm_responses.py::test_orchestration_schema_fields -v (expected: FAIL because module missing)
-- [ ] Implement minimal module with Pydantic model OrchestrationResult and defaults
-- [ ] Run tests, expect PASS
-- [ ] Commit changes: git add backend/app/models/llm_responses.py backend/tests/test_llm_responses.py && git commit -m "feat: add OrchestrationResult schema"
+- [x] Run: pytest backend/tests/test_llm_responses.py::test_orchestration_schema_fields -v (expected: FAIL because module missing)
+- [x] Implement minimal module with Pydantic model OrchestrationResult and defaults
+- [x] Run tests, expect PASS
+- [x] Commit changes: git add backend/app/models/llm_responses.py backend/tests/test_llm_responses.py && git commit -m "feat: add OrchestrationResult schema"
 
 ---
 
@@ -46,11 +50,11 @@ Files:
 - Test: backend/tests/test_llm_validation_sanitizers.py
 
 Steps:
-- [ ] Write failing tests for sanitizer behaviors: extract_json_substring, fix_single_quotes, remove_trailing_commas, balance_brackets.
-- [ ] Run tests to verify failures
-- [ ] Implement sanitizer helper functions as pure functions in llm_validation.py
-- [ ] Run tests until PASS
-- [ ] Commit: "feat: add llm response sanitizer helpers"
+- [x] Write failing tests for sanitizer behaviors: extract_json_substring, fix_single_quotes, remove_trailing_commas, balance_brackets.
+- [x] Run tests to verify failures
+- [x] Implement sanitizer helper functions as pure functions in llm_validation.py
+- [x] Run tests until PASS
+- [x] Commit: "feat: add llm response sanitizer helpers"
 
 ---
 
@@ -61,10 +65,10 @@ Files:
 - Test: backend/tests/test_llm_validation_core.py
 
 Steps:
-- [ ] Write failing tests: validate_or_repair accepts valid JSON string -> returns parsed instance + status "ok"; accepts malformed-but-repairable string -> returns parsed instance + status "repaired".
-- [ ] Implement validate_or_repair to run strict parse, then sanitizers, parse again, and return appropriate status. For now, stub reformat LLM call as not implemented.
-- [ ] Run tests until PASS
-- [ ] Commit: "feat: add validate_or_repair core flow"
+- [x] Write failing tests: validate_or_repair accepts valid JSON string -> returns parsed instance + status "ok"; accepts malformed-but-repairable string -> returns parsed instance + status "repaired".
+- [x] Implement validate_or_repair to run strict parse, then sanitizers, parse again, and return appropriate status. For now, stub reformat LLM call as not implemented.
+- [x] Run tests until PASS
+- [x] Commit: "feat: add validate_or_repair core flow"
 
 ---
 
@@ -75,10 +79,10 @@ Files:
 - Test: backend/tests/test_llm_validation_llm_reformat.py
 
 Steps:
-- [ ] Write failing tests mocking the LLM client to return a valid JSON when asked; assert validate_or_repair uses the LLM when sanitizers fail and returns status "repaired" or "ok" as appropriate.
-- [ ] Implement LLM reformat helper that uses current LLM client abstraction (import existing client wrapper). The helper must send a concise prompt and parse the response.
-- [ ] Run tests until PASS
-- [ ] Commit: "feat: add LLM reformat step to validate_or_repair"
+- [x] Write failing tests mocking the LLM client to return a valid JSON when asked; assert validate_or_repair uses the LLM when sanitizers fail and returns status "repaired" or "ok" as appropriate.
+- [x] Implement LLM reformat helper that uses current LLM client abstraction (import existing client wrapper). The helper must send a concise prompt and parse the response.
+- [x] Run tests until PASS
+- [x] Commit: "feat: add LLM reformat step to validate_or_repair"
 
 ---
 
