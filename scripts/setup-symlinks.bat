@@ -33,6 +33,16 @@ if not exist ".agents\" (
 )
 
 REM ----------------------------
+REM Ensure .claude -> .agents symlink
+REM ----------------------------
+if exist ".claude" (
+    echo .claude already exists - skipping
+) else (
+    mklink /D ".claude" ".agents"
+    echo Created .claude symlink -> .agents
+)
+
+REM ----------------------------
 REM Ensure .qoder -> .agents symlink
 REM ----------------------------
 if exist ".qoder" (
@@ -40,6 +50,16 @@ if exist ".qoder" (
 ) else (
     mklink /D ".qoder" ".agents"
     echo Created .qoder symlink -> .agents
+)
+
+REM ----------------------------
+REM Ensure .kiro -> .agents symlink
+REM ----------------------------
+if exist ".kiro" (
+    echo .kiro already exists - skipping
+) else (
+    mklink /D ".kiro" ".agents"
+    echo Created .kiro symlink -> .agents
 )
 
 echo.

@@ -117,4 +117,6 @@ __pycache__
 
 # Coding Agent-related files (ignore and use setup-symlinks.bat to create symlinks)
 .qoder
+.claude
+.kiro
 CLAUDE.md
