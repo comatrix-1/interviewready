@@ -1,7 +1,7 @@
 site_name: InterviewReady Documentation
 site_description: Production-Ready Multi-Agent AI Interview Coaching System
 site_author: InterviewReady Team
-repo_url: https://github.com/interviewready/interviewready
+repo_url: https://github.com/comatrix-1/interviewready
 
 # Material theme configuration
 theme:
