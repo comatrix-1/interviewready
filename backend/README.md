@@ -121,7 +121,7 @@ Response Aggregation & Return
 |-----------|-----------|---------|---------|
 | **Web Framework** | FastAPI | 0.100+ | High-performance async REST API |
 | **ASGI Server** | Uvicorn | 0.24+ | ASGI server implementation |
-| **Python** | 3.11+ | Latest | Language runtime |
+| **Python** | 3.12+ | Latest | Language runtime |
 | **LLM Orchestration** | LangGraph | Latest | Stateful multi-agent workflows |
 | **LLM Integration** | LangChain | Latest | LLM chain utilities |
 | **Data Validation** | Pydantic V2 | 2.x | Type-safe schemas & validation |
@@ -141,7 +141,7 @@ Response Aggregation & Return
 
 ### Prerequisites
 
-- **Python 3.11+** - Install from [python.org](https://www.python.org/)
+- **Python 3.12+** - Install from [python.org](https://www.python.org/)
 - **uv package manager** - Install via `pip install uv` or see [astral.sh/uv](https://astral.sh/uv/)
 - **Google Gemini API Key** - Get from [Google AI Studio](https://aistudio.google.com/app/apikey)
 - **Git** - For version control
@@ -188,11 +188,11 @@ API_TIMEOUT=30      # seconds
 uv run python -m app.main
 ```
 
-The application will start at `http://localhost:8000`
+The application will start at `http://localhost:8080`
 
 **5. Access API Documentation**
-- **Swagger UI:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
+- **Swagger UI:** http://localhost:8080/docs
+- **ReDoc:** http://localhost:8080/redoc
 
 ---
 
@@ -363,12 +363,6 @@ System health check.
 ```json
 {
   "status": "healthy",
-  "timestamp": "2024-03-31T12:00:00Z",
-  "services": {
-    "gemini": "operational",
-    "langfuse": "operational",
-    "database": "operational"
-  },
   "version": "1.0.0"
 }
 ```
@@ -379,20 +373,17 @@ All endpoints follow consistent error format:
 
 ```json
 {
-  "detail": "Error description",
-  "error_code": "INVALID_REQUEST|API_ERROR|GOVERNANCE_REJECTION",
-  "timestamp": "2024-03-31T12:00:00Z",
-  "request_id": "<session-id>"
+  "detail": "Error description"
 }
 ```
 
 **Common Status Codes:**
 - `200 OK` - Successful request
 - `400 Bad Request` - Invalid input (schema validation failed)
-- `401 Unauthorized` - Missing/invalid session ID
-- `422 Unprocessable Entity` - Governance rejection (low confidence, bias flags)
+- `403 Forbidden` - Session permission denied
 - `429 Too Many Requests` - Rate limit exceeded
 - `500 Internal Server Error` - API or service failure (with mock fallback)
+- `503 Service Unavailable` - Orchestration service unavailable
 
 ---
 
@@ -598,28 +589,34 @@ uv run pytest backend/tests/test_interview_coach.py::test_five_question_progress
 
 ### Test Files
 
-| File | Purpose | Test Count |
-|------|---------|-----------|
-| `test_agents.py` | Agent logic & response generation | 12 |
-| `test_orchestration_governance.py` | Orchestration routing & governance audits | 8 |
-| `test_api_endpoints.py` | API endpoint request/response handling | 6 |
-| `test_interview_coach.py` | Multi-turn interview flow & security | 10 |
-| `test_agent_structural_checks.py` | Schema validation & JSON structure | 4 |
-| `test_agent_evals.py` | Agent evaluations on Langfuse datasets | 2 |
-
-**Total Test Count:** 42 tests, 100% automated in CI pipeline
+| File | Purpose |
+|------|---------|
+| `test_agents.py` | Agent smoke tests (real API, skipped in CI without key) |
+| `test_orchestration_governance.py` | Orchestration routing & governance audits |
+| `test_api_endpoints.py` | API endpoint request/response handling |
+| `test_interview_coach.py` | Multi-turn interview flow & security |
+| `test_security.py` | LLM Guard, PII redaction, output sanitization |
+| `test_ats_engine.py` | ATS compatibility scoring |
+| `test_llm_responses.py` | Pydantic schema validation for LLM responses |
+| `test_llm_validation_core.py` | validate_or_repair core logic |
+| `test_llm_validation_sanitizers.py` | Sanitizer heuristics |
+| `test_llm_validation_llm_reformat.py` | LLM reformat fallback |
+| `test_agent_contract.py` | Agent interface contract tests |
+| `test_agent_evals.py` | Langfuse dataset evaluations |
+| `test_agent_structural_checks.py` | JSON structure & schema validation |
+| `test_resume_input_priority.py` | Resume input priority logic |
 
 ### Interactive Testing
 
 **Using Swagger UI** (Recommended):
 1. Start backend: `uv run python -m app.main`
-2. Open: http://localhost:8000/docs
+2. Open: http://localhost:8080/docs
 3. Click "Try it out" on `/api/v1/chat`
 4. Enter request JSON, click "Execute"
 
 **Using curl:**
 ```bash
-curl -X POST "http://localhost:8000/api/v1/chat" \
+curl -X POST "http://localhost:8080/api/v1/chat" \
   -H "Content-Type: application/json" \
   -d '{
     "intent": "RESUME_CRITIC",
@@ -636,7 +633,7 @@ curl -X POST "http://localhost:8000/api/v1/chat" \
 **Docker Compose:**
 ```bash
 docker-compose up backend
-# Backend available at http://localhost:8000
+# Backend available at http://localhost:8080
 # MockGeminiService active by default
 ```
 
