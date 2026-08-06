@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     # Google Configuration
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_LIVE_MODEL: str = "gemini-3.1-flash-live-preview"
     GEMINI_API_KEY: str | None = None
     GOOGLE_AI_API_KEY: str | None = None
 
@@ -26,11 +27,6 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: str | list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://interviewready-frontend-266623940622.asia-southeast1.run.app",
-        "https://interviewready-backend-266623940622.asia-southeast1.run.app",
-        "https://interviewready-backend-bnlvcku7xq-as.a.run.app",
     ]
 
     @field_validator("ALLOWED_HOSTS", mode="before")

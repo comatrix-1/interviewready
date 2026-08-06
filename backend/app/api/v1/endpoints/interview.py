@@ -13,10 +13,7 @@ from app.core.config import settings
 from app.core.logging import logger
 
 router = APIRouter()
-# TODO(tech-debt): LIVE_MODEL is hardcoded and bypasses settings.GEMINI_MODEL in core/config.py.
-# This model string should be moved to config.py as GEMINI_LIVE_MODEL so it can be updated
-# without a code change.
-LIVE_MODEL = "gemini-3.1-flash-live-preview"
+LIVE_MODEL = settings.GEMINI_LIVE_MODEL
 
 
 def _build_system_instruction(context) -> str:

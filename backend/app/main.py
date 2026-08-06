@@ -45,16 +45,6 @@ if isinstance(settings.ALLOWED_HOSTS, list):
 else:
     origins = [settings.ALLOWED_HOSTS] if settings.ALLOWED_HOSTS != "*" else []
 
-# Ensure frontend is always in the list
-frontend_url = "https://interviewready-frontend-266623940622.asia-southeast1.run.app"
-if frontend_url not in origins:
-    origins.append(frontend_url)
-
-# Add backend itself to origins for WebSocket handshake consistency
-backend_url = "https://interviewready-backend-266623940622.asia-southeast1.run.app"
-if backend_url not in origins:
-    origins.append(backend_url)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
