@@ -55,14 +55,9 @@ backend_url = "https://interviewready-backend-266623940622.asia-southeast1.run.a
 if backend_url not in origins:
     origins.append(backend_url)
 
-# TODO(tech-debt): CORS wildcard with allow_credentials=True is a browser protocol violation.
-# Browsers reject credentialed requests to wildcard origins. This silently breaks
-# cross-origin requests in non-prod environments. Fix: use explicit origins list in all envs.
-# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS/Errors/CORSNotSupportingCredentials
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.APP_ENV != "prod" else origins,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,7 +85,6 @@ async def check_request_size(request, call_next):
 
 @app.middleware("http")
 async def log_requests(request, call_next):
-    request.headers.get("origin")
     response = await call_next(request)
     return response
 
