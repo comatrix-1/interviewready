@@ -12,9 +12,6 @@
     "lint:all": "npm run lint:frontend && npm run lint:backend && npm run lint:backend:imports",
     "prepare": "husky"
   },
-  "dependencies": {
-    "portless": "^0.14.0"
-  },
   "packageManager": "npm@11.16.0",
   "devDependencies": {
     "husky": "^9.1.7"

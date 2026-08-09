@@ -1,6 +1,6 @@
 const baseUrl =
   process.env.BACKEND_URL ??
-  'http://interviewready-backend.localhost:1355';
+  'http://localhost:8000';
 
 async function check(path) {
   const response = await fetch(`${baseUrl}${path}`);

@@ -35,16 +35,14 @@ function waitForBackend() {
   });
 }
 
-const npx = process.platform === "win32" ? "npx.cmd" : "npx";
 const spawnOpts = {
   stdio: "inherit",
   shell: true,
-  env: { ...process.env, PORTLESS_HTTPS: process.env.PORTLESS_HTTPS ?? "0" },
 };
 
 const backend = spawn(
-  npx,
-  ["portless", "run", "--name", "interviewready-backend", "uv", "run", "fastapi", "dev"],
+  "uv",
+  ["run", "fastapi", "dev"],
   { ...spawnOpts, cwd: resolve(root, "backend") },
 );
 
@@ -52,8 +50,8 @@ const children = [backend];
 
 function spawnFrontend() {
   const frontend = spawn(
-    npx,
-    ["portless", "run", "--name", "interviewready-frontend", "npm", "run", "dev"],
+    "npm",
+    ["run", "dev"],
     { ...spawnOpts, cwd: resolve(root, "frontend") },
   );
   children.push(frontend);
