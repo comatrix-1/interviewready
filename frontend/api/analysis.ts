@@ -5,9 +5,8 @@ import { getUserHeaders } from "../utils/identity";
 
 const ANALYSIS_URL = `${API_BASE_URL}/api/v1/analysis`;
 
-const authHeaders = (authToken: string) => ({
+const identityHeaders = () => ({
   "Content-Type": "application/json",
-  Authorization: `Bearer ${authToken}`,
   ...getUserHeaders(),
 });
 
@@ -28,13 +27,13 @@ export interface ParseResumeResult {
   validationErrors: string[];
 }
 
-export const parseResumeFile = async (
-  authToken: string,
-  file: { data: string; fileType: "pdf" },
-): Promise<ParseResumeResult> => {
+export const parseResumeFile = async (file: {
+  data: string;
+  fileType: "pdf";
+}): Promise<ParseResumeResult> => {
   const response = await fetch(`${ANALYSIS_URL}/parse`, {
     method: "POST",
-    headers: authHeaders(authToken),
+    headers: identityHeaders(),
     body: JSON.stringify({ file }),
   });
 
@@ -45,13 +44,10 @@ export const parseResumeFile = async (
   return (await response.json()) as ParseResumeResult;
 };
 
-export const resumeCriticAgent = async (
-  authToken: string,
-  resume: Resume,
-): Promise<ResumeCriticReport> => {
+export const resumeCriticAgent = async (resume: Resume): Promise<ResumeCriticReport> => {
   const response = await fetch(`${ANALYSIS_URL}/critique`, {
     method: "POST",
-    headers: authHeaders(authToken),
+    headers: identityHeaders(),
     body: JSON.stringify({ resume }),
   });
 
@@ -63,13 +59,12 @@ export const resumeCriticAgent = async (
 };
 
 export const alignmentAgent = async (
-  authToken: string,
   resume: Resume | null | undefined,
   jobDescription: string,
 ): Promise<AlignmentReport> => {
   const response = await fetch(`${ANALYSIS_URL}/alignment`, {
     method: "POST",
-    headers: authHeaders(authToken),
+    headers: identityHeaders(),
     body: JSON.stringify({ resume, jobDescription }),
   });
 

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { getOrCreateSession, seedSessionContext } from "../api/session";
 
-const AUTH_TOKEN = "test-token";
 const SESSION_PREFIX = "interviewready_session_";
 
 const sessionResponse = (sessionId: string) => ({
@@ -28,7 +27,7 @@ describe("getOrCreateSession", () => {
   it("creates a new session and persists it when none is stored", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(sessionResponse("session_1"));
 
-    const id = await getOrCreateSession("alice", AUTH_TOKEN);
+    const id = await getOrCreateSession("alice");
 
     expect(id).toBe("session_1");
     expect(storedSessionId("alice")).toBe("session_1");
@@ -38,7 +37,7 @@ describe("getOrCreateSession", () => {
   it("reuses the stored session without calling the API", async () => {
     localStorage.setItem(`${SESSION_PREFIX}alice`, "session_kept");
 
-    const id = await getOrCreateSession("alice", AUTH_TOKEN);
+    const id = await getOrCreateSession("alice");
 
     expect(id).toBe("session_kept");
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -48,8 +47,8 @@ describe("getOrCreateSession", () => {
     globalThis.fetch = vi.fn().mockResolvedValue(sessionResponse("session_shared"));
 
     const [first, second] = await Promise.all([
-      getOrCreateSession("alice", AUTH_TOKEN),
-      getOrCreateSession("alice", AUTH_TOKEN),
+      getOrCreateSession("alice"),
+      getOrCreateSession("alice"),
     ]);
 
     expect(first).toBe("session_shared");
@@ -63,8 +62,8 @@ describe("getOrCreateSession", () => {
       .mockResolvedValueOnce(sessionResponse("session_alice"))
       .mockResolvedValueOnce(sessionResponse("session_bob"));
 
-    const alice = await getOrCreateSession("alice", AUTH_TOKEN);
-    const bob = await getOrCreateSession("bob", AUTH_TOKEN);
+    const alice = await getOrCreateSession("alice");
+    const bob = await getOrCreateSession("bob");
 
     expect(alice).toBe("session_alice");
     expect(bob).toBe("session_bob");
@@ -89,20 +88,13 @@ describe("seedSessionContext", () => {
     localStorage.setItem("interviewready_username", "alice");
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
 
-    await seedSessionContext(
-      "session_1",
-      AUTH_TOKEN,
-      { skills: [{ name: "Python" }] } as never,
-      "SWE role",
-    );
+    await seedSessionContext("session_1", { skills: [{ name: "Python" }] } as never, "SWE role");
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url).toEqual(expect.stringContaining("/api/v1/sessions/session_1/context"));
     expect(init?.method).toBe("POST");
-    expect(init?.headers).toMatchObject({
-      Authorization: `Bearer ${AUTH_TOKEN}`,
-      "X-User-Id": "alice",
-    });
+    expect(init?.headers).toMatchObject({ "X-User-Id": "alice" });
+    expect(init?.headers).not.toHaveProperty("Authorization");
     expect(JSON.parse(init?.body as string)).toEqual({
       resumeData: { skills: [{ name: "Python" }] },
       jobDescription: "SWE role",
@@ -113,7 +105,7 @@ describe("seedSessionContext", () => {
     localStorage.setItem("interviewready_username", "alice");
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
 
-    await seedSessionContext("session_1", AUTH_TOKEN, null, "");
+    await seedSessionContext("session_1", null, "");
 
     const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(JSON.parse(init?.body as string)).toEqual({});

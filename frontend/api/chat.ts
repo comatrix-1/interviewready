@@ -5,7 +5,6 @@ import { getUserHeaders } from "../utils/identity";
 
 export const callChatEndpoint = async (
   sessionId: string,
-  authToken: string,
   request: ChatRequest,
 ): Promise<ChatResponse> => {
   let audioDataBase64: string | null = null;
@@ -20,7 +19,6 @@ export const callChatEndpoint = async (
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
       ...getUserHeaders(),
     },
     body: JSON.stringify(requestBody),

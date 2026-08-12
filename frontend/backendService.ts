@@ -27,8 +27,7 @@ class BackendService {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    const token = this.getAuthToken();
-    this.sessionId = await initSession(token);
+    this.sessionId = await initSession();
     this.initialized = true;
   }
 
@@ -41,23 +40,19 @@ class BackendService {
   }
 
   async callChatEndpoint(request: ChatRequest) {
-    return repoCallChatEndpoint(this.sessionId, this.getAuthToken(), request);
-  }
-
-  private getAuthToken(): string {
-    return localStorage.getItem("authToken") || "";
+    return repoCallChatEndpoint(this.sessionId, request);
   }
 
   async resumeCriticAgent(resume: Resume): Promise<ResumeCriticReport> {
-    return resumeCriticService(this.getAuthToken(), resume);
+    return resumeCriticService(resume);
   }
 
   async atsEngineAnalyze(resume: Resume, criticIssues?: ResumeCriticIssue[]): Promise<ATSReport> {
-    return atsEngineAnalyzeFn(this.getAuthToken(), resume, criticIssues);
+    return atsEngineAnalyzeFn(resume, criticIssues);
   }
 
   async alignmentAgent(resume: Resume | null | undefined, jd: string): Promise<AlignmentReport> {
-    return alignmentService(this.getAuthToken(), resume, jd);
+    return alignmentService(resume, jd);
   }
 
   async interviewCoachAgent(
@@ -65,13 +60,7 @@ class BackendService {
     jobDescription: string,
     history: { role: "user" | "agent"; text: string }[],
   ): Promise<string> {
-    return interviewCoachService(
-      this.sessionId,
-      this.getAuthToken(),
-      resume,
-      jobDescription,
-      history,
-    );
+    return interviewCoachService(this.sessionId, resume, jobDescription, history);
   }
 }
 

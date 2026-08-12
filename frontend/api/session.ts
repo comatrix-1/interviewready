@@ -17,12 +17,11 @@ const storeSessionId = (identity: string, sessionId: string): void => {
   localStorage.setItem(storedSessionKey(identity), sessionId);
 };
 
-export const initSession = async (authToken: string): Promise<string> => {
+export const initSession = async (): Promise<string> => {
   const response = await fetch(`${API_BASE_URL}/api/v1/sessions/new`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
       ...getUserHeaders(),
     },
   });
@@ -39,14 +38,14 @@ export const initSession = async (authToken: string): Promise<string> => {
  * Return the existing session id for this identity, or create (and persist) a
  * new one. Reuses the stored id on refresh so no duplicate session is created.
  */
-export const getOrCreateSession = (identity: string, authToken: string): Promise<string> => {
+export const getOrCreateSession = (identity: string): Promise<string> => {
   const stored = getStoredSessionId(identity);
   if (stored) return Promise.resolve(stored);
 
   const inFlight = inFlightSessions.get(identity);
   if (inFlight) return inFlight;
 
-  const creation = initSession(authToken)
+  const creation = initSession()
     .then((sessionId) => {
       storeSessionId(identity, sessionId);
       return sessionId;
@@ -63,7 +62,6 @@ export const getOrCreateSession = (identity: string, authToken: string): Promise
 
 export const seedSessionContext = async (
   sessionId: string,
-  authToken: string,
   resume: Resume | null | undefined,
   jobDescription: string,
 ): Promise<void> => {
@@ -75,7 +73,6 @@ export const seedSessionContext = async (
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
       ...getUserHeaders(),
     },
     body: JSON.stringify(body),

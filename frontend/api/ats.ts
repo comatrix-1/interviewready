@@ -1,6 +1,7 @@
 import type { Resume } from "@/types/resume";
 import type { ATSReport, ResumeCriticIssue } from "@/types/reports";
 import { API_BASE_URL } from "@/config/env";
+import { getUserHeaders } from "@/utils/identity";
 
 interface ATSAnalysisRequest {
   resume: Resume;
@@ -14,7 +15,6 @@ interface ATSAnalysisRequest {
 }
 
 export const atsEngineAnalyze = async (
-  authToken: string,
   resume: Resume,
   criticIssues?: ResumeCriticIssue[],
 ): Promise<ATSReport> => {
@@ -27,7 +27,7 @@ export const atsEngineAnalyze = async (
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
+      ...getUserHeaders(),
     },
     body: JSON.stringify(body),
   });

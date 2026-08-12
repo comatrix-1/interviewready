@@ -36,7 +36,6 @@ const getInitials = (name: string): string => {
 const AppContent: React.FC = () => {
   const {
     sessionId,
-    authToken,
     ensureSession,
     sessionError: sessionInitError,
     username,
@@ -190,7 +189,6 @@ const AppContent: React.FC = () => {
                 setError={setError}
                 chatEndRef={chatEndRef}
                 sessionId={sessionId}
-                authToken={authToken}
                 ensureSession={ensureSession}
               />
             </div>
@@ -225,9 +223,8 @@ const WorkflowController: React.FC<{
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   chatEndRef: React.RefObject<HTMLDivElement | null>;
   sessionId: string;
-  authToken: string;
   ensureSession: () => Promise<string>;
-}> = ({ state, updateState, setError, chatEndRef, sessionId, authToken, ensureSession }) => {
+}> = ({ state, updateState, setError, chatEndRef, sessionId, ensureSession }) => {
   const { startLoading, updateProgress, stopLoading } = useLoading();
   const [manualResumeText, setManualResumeText] = useState("");
   const [manualResumeError, setManualResumeError] = useState<string | null>(null);
@@ -238,7 +235,7 @@ const WorkflowController: React.FC<{
   useEffect(() => {
     let cancelled = false;
     setIsLoadingResumes(true);
-    listSavedResumes(authToken)
+    listSavedResumes()
       .then((resumes) => {
         if (!cancelled) setSavedResumes(resumes);
       })
@@ -253,22 +250,22 @@ const WorkflowController: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [authToken]);
+  }, []);
 
   const processPdfFile = async (file: File) => {
     updateProgress(25, 0);
     const base64 = await fileToBase64(file);
     updateProgress(50, 1);
     updateProgress(75, 2);
-    const parsed = await parseResumeFile(authToken, { data: base64, fileType: "pdf" });
+    const parsed = await parseResumeFile({ data: base64, fileType: "pdf" });
     updateProgress(90, 3);
     return parsed;
   };
 
   const runAtsAndCritic = async (resume: Resume) => {
     const [atsResult, criticResult] = await Promise.all([
-      atsEngineAnalyze(authToken, resume),
-      resumeCriticAgent(authToken, resume),
+      atsEngineAnalyze(resume),
+      resumeCriticAgent(resume),
     ]);
     updateState((prev) => ({
       ...prev,
@@ -303,8 +300,8 @@ const WorkflowController: React.FC<{
       updateProgress(50, 1);
       if (!state.currentResume) throw new Error("Current resume is null");
       const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(authToken, state.currentResume),
-        resumeCriticAgent(authToken, state.currentResume),
+        atsEngineAnalyze(state.currentResume),
+        resumeCriticAgent(state.currentResume),
       ]);
       updateProgress(100, 2);
 
@@ -351,7 +348,7 @@ const WorkflowController: React.FC<{
       }
 
       // Save first: an unsaved upload must never appear selectable or analyzable.
-      const saved = await createSavedResume(authToken, {
+      const saved = await createSavedResume({
         filename: file.name,
         resume: parsedResume,
       });
@@ -406,8 +403,8 @@ const WorkflowController: React.FC<{
       updateProgress(35, 0);
       const resumeToUse = parsed as Resume;
       const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(authToken, resumeToUse),
-        resumeCriticAgent(authToken, resumeToUse),
+        atsEngineAnalyze(resumeToUse),
+        resumeCriticAgent(resumeToUse),
       ]);
       updateProgress(100, 2);
       updateState((prev) => ({
@@ -438,8 +435,8 @@ const WorkflowController: React.FC<{
     ]);
     try {
       const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(authToken, state.currentResume),
-        resumeCriticAgent(authToken, state.currentResume),
+        atsEngineAnalyze(state.currentResume),
+        resumeCriticAgent(state.currentResume),
       ]);
       updateState((prev) => ({
         ...prev,
@@ -463,7 +460,7 @@ const WorkflowController: React.FC<{
     ]);
     try {
       updateProgress(25, 0);
-      const report = await alignmentAgent(authToken, state.currentResume, state.jobDescription);
+      const report = await alignmentAgent(state.currentResume, state.jobDescription);
       updateProgress(100, 3);
       updateState((prev) => ({
         ...prev,
@@ -500,7 +497,7 @@ const WorkflowController: React.FC<{
 
       if (mode === "VOICE") {
         // The voice relay builds its prompt from the session's resume context.
-        await seedSessionContext(id, authToken, state.currentResume, state.jobDescription);
+        await seedSessionContext(id, state.currentResume, state.jobDescription);
         return;
       }
 
@@ -512,7 +509,6 @@ const WorkflowController: React.FC<{
         updateProgress(50, 0);
         const openingQuestion = await interviewCoachAgent(
           id,
-          authToken,
           state.currentResume,
           state.jobDescription,
           [],
@@ -551,7 +547,6 @@ const WorkflowController: React.FC<{
       updateProgress(50, 0);
       const responseText = await interviewCoachAgent(
         sessionId,
-        authToken,
         state.currentResume,
         state.jobDescription,
         updatedHistory,
@@ -580,7 +575,6 @@ const WorkflowController: React.FC<{
     try {
       const { responseText, transcription } = await sendAudioMessage(
         sessionId,
-        authToken,
         state.currentResume,
         state.jobDescription,
         updatedHistory,

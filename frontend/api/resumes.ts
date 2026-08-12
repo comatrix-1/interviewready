@@ -14,12 +14,11 @@ const toApiError = async (response: Response, fallback: string): Promise<Error> 
   return new Error(typeof detail === "string" && detail ? detail : fallback);
 };
 
-export const listSavedResumes = async (authToken: string): Promise<SavedResume[]> => {
+export const listSavedResumes = async (): Promise<SavedResume[]> => {
   const response = await fetch(RESUMES_URL, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
       ...getUserHeaders(),
     },
   });
@@ -36,14 +35,12 @@ export const listSavedResumes = async (authToken: string): Promise<SavedResume[]
 };
 
 export const createSavedResume = async (
-  authToken: string,
   payload: Pick<SavedResume, "filename" | "resume">,
 ): Promise<SavedResume> => {
   const response = await fetch(RESUMES_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
       ...getUserHeaders(),
     },
     body: JSON.stringify(payload),

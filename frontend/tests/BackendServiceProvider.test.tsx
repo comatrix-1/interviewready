@@ -19,7 +19,6 @@ describe("BackendServiceProvider lazy sessions", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
-    localStorage.setItem("authToken", "tok");
   });
 
   it("does not create a session on mount", () => {

@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { alignmentAgent, parseResumeFile, resumeCriticAgent } from "../api/analysis";
 
 describe("session-free analysis API client", () => {
-  const AUTH_TOKEN = "test-token";
-
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
@@ -23,15 +21,13 @@ describe("session-free analysis API client", () => {
       }),
     });
 
-    const result = await parseResumeFile(AUTH_TOKEN, { data: "JVBERi0xLjQ=", fileType: "pdf" });
+    const result = await parseResumeFile({ data: "JVBERi0xLjQ=", fileType: "pdf" });
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url).toEqual(expect.stringContaining("/api/v1/analysis/parse"));
     expect(url as string).not.toContain("sessionId");
-    expect(init?.headers).toMatchObject({
-      Authorization: `Bearer ${AUTH_TOKEN}`,
-      "X-User-Id": "alice",
-    });
+    expect(init?.headers).toMatchObject({ "X-User-Id": "alice" });
+    expect(init?.headers).not.toHaveProperty("Authorization");
     expect(JSON.parse(init?.body as string)).toEqual({
       file: { data: "JVBERi0xLjQ=", fileType: "pdf" },
     });
@@ -44,11 +40,12 @@ describe("session-free analysis API client", () => {
       json: async () => ({ issues: [], summary: "Solid.", score: 88 }),
     });
 
-    const report = await resumeCriticAgent(AUTH_TOKEN, { name: "Alice" } as never);
+    const report = await resumeCriticAgent({ name: "Alice" } as never);
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url as string).toEqual(expect.stringContaining("/api/v1/analysis/critique"));
     expect(url as string).not.toContain("sessionId");
+    expect(init?.headers).not.toHaveProperty("Authorization");
     expect(JSON.parse(init?.body as string)).toEqual({ resume: { name: "Alice" } });
     expect(report.score).toBe(88);
   });
@@ -64,11 +61,12 @@ describe("session-free analysis API client", () => {
       }),
     });
 
-    const report = await alignmentAgent(AUTH_TOKEN, { name: "Alice" } as never, "SWE role");
+    const report = await alignmentAgent({ name: "Alice" } as never, "SWE role");
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url as string).toEqual(expect.stringContaining("/api/v1/analysis/alignment"));
     expect(url as string).not.toContain("sessionId");
+    expect(init?.headers).not.toHaveProperty("Authorization");
     expect(JSON.parse(init?.body as string)).toEqual({
       resume: { name: "Alice" },
       jobDescription: "SWE role",

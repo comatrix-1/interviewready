@@ -5,7 +5,6 @@ import { clearCurrentUsername, getCurrentUsername, setCurrentUsername } from "..
 
 interface BackendServiceContextType {
   sessionId: string;
-  authToken: string;
   sessionError: string | null;
   ensureSession: () => Promise<string>;
   username: string;
@@ -36,8 +35,6 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const authToken = localStorage.getItem("authToken") || "";
-
   // Sessions exist only for the interview coach step: create one lazily when the
   // interview starts instead of on app load. getOrCreateSession reuses a stored
   // session and dedupes concurrent creations.
@@ -45,14 +42,14 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
     if (sessionId) return sessionId;
     setSessionError(null);
     try {
-      const id = await getOrCreateSession(username || "dev-user", authToken);
+      const id = await getOrCreateSession(username || "dev-user");
       setSessionId(id);
       return id;
     } catch (err) {
       setSessionError(`Failed to initialize session: ${String(err)}`);
       return "";
     }
-  }, [sessionId, username, authToken]);
+  }, [sessionId, username]);
 
   const login = useCallback(async (rawUsername: string): Promise<boolean> => {
     const name = rawUsername.trim();
@@ -84,7 +81,6 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
   const value = useMemo(
     () => ({
       sessionId,
-      authToken,
       sessionError,
       ensureSession,
       username,
@@ -93,17 +89,7 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
       login,
       logout,
     }),
-    [
-      sessionId,
-      authToken,
-      sessionError,
-      ensureSession,
-      username,
-      isLoggingIn,
-      loginError,
-      login,
-      logout,
-    ],
+    [sessionId, sessionError, ensureSession, username, isLoggingIn, loginError, login, logout],
   );
 
   return <BackendServiceContext.Provider value={value}>{children}</BackendServiceContext.Provider>;

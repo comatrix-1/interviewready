@@ -47,7 +47,6 @@ describe("localStorage hydration hardening", () => {
 });
 
 describe("saved resume API client", () => {
-  const AUTH_TOKEN = "test-token";
   const USERNAME_KEY = "interviewready_username";
 
   beforeEach(() => {
@@ -57,7 +56,7 @@ describe("saved resume API client", () => {
     globalThis.fetch = vi.fn();
   });
 
-  it("lists saved resumes from /api/v1/resumes with auth and identity headers", async () => {
+  it("lists saved resumes from /api/v1/resumes with identity headers", async () => {
     const saved = [
       { id: "r1", filename: "first.pdf", createdAt: "2026-08-12T00:00:00Z", resume: {} },
     ];
@@ -66,17 +65,15 @@ describe("saved resume API client", () => {
       json: async () => ({ resumes: saved }),
     });
 
-    const result = await listSavedResumes(AUTH_TOKEN);
+    const result = await listSavedResumes();
 
     const fetchMock = vi.mocked(globalThis.fetch);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toEqual(expect.stringContaining("/api/v1/resumes"));
     expect(init?.method).toBe("GET");
-    expect(init?.headers).toMatchObject({
-      Authorization: `Bearer ${AUTH_TOKEN}`,
-      "X-User-Id": "alice",
-    });
+    expect(init?.headers).toMatchObject({ "X-User-Id": "alice" });
+    expect(init?.headers).not.toHaveProperty("Authorization");
     expect(result).toEqual(saved);
   });
 
@@ -94,16 +91,14 @@ describe("saved resume API client", () => {
       json: async () => created,
     });
 
-    const result = await createSavedResume(AUTH_TOKEN, payload);
+    const result = await createSavedResume(payload);
 
     const fetchMock = vi.mocked(globalThis.fetch);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toEqual(expect.stringContaining("/api/v1/resumes"));
     expect(init?.method).toBe("POST");
-    expect(init?.headers).toMatchObject({
-      Authorization: `Bearer ${AUTH_TOKEN}`,
-      "X-User-Id": "alice",
-    });
+    expect(init?.headers).toMatchObject({ "X-User-Id": "alice" });
+    expect(init?.headers).not.toHaveProperty("Authorization");
     expect(JSON.parse(init?.body as string)).toEqual(payload);
     expect(result).toEqual(created);
   });
@@ -118,7 +113,7 @@ describe("saved resume API client", () => {
       }),
     });
 
-    await expect(listSavedResumes(AUTH_TOKEN)).rejects.toThrow(
+    await expect(listSavedResumes()).rejects.toThrow(
       "Saved resumes require DATABASE_URL to be configured.",
     );
   });
