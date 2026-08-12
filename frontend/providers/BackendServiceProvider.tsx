@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import { initSession } from "../api/session";
+import { getOrCreateSession } from "../api/session";
 import { loginUser } from "../api/users";
 import { clearCurrentUsername, getCurrentUsername, setCurrentUsername } from "../utils/identity";
 
@@ -48,7 +48,9 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
   const authToken = localStorage.getItem("authToken") || "";
 
   // Sessions are owned by the logged-in user (or the dev-user fallback when
-  // nobody has logged in), so a new session is created whenever the user changes.
+  // nobody has logged in), so the stored session is scoped by identity. On load
+  // we reuse an existing session for this identity; a new one is created only
+  // when none exists (e.g. first visit or after the user changes).
   useEffect(() => {
     let cancelled = false;
     setSessionId("");
@@ -56,7 +58,7 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
     setSessionError(null);
     const init = async () => {
       try {
-        const id = await initSession(authToken);
+        const id = await getOrCreateSession(username || "dev-user", authToken);
         if (!cancelled) {
           setSessionId(id);
           setSessionReady(true);
