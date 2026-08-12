@@ -5,10 +5,10 @@ import json
 import traceback
 from typing import Annotated
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect, status
 
 from app.agents.gemini_live import GeminiLive
-from app.api.v1.services import get_or_create_session_context
+from app.api.v1.services import DEFAULT_USER_ID, get_or_create_session_context, resolve_user_id
 from app.core.config import settings
 from app.core.logging import logger
 
@@ -51,10 +51,10 @@ def _build_system_instruction(context) -> str:
 
 
 @router.get("/token")
-async def get_live_token(session_id: str):
+async def get_live_token(request: Request, session_id: str):
     """Return current live-session config for the frontend relay flow."""
-    user_id = "dev-user"
-    context = get_or_create_session_context(session_id=session_id, user_id=user_id)
+    user_id = resolve_user_id(request)
+    context = await get_or_create_session_context(session_id=session_id, user_id=user_id)
 
     return {
         "api_key": settings.GEMINI_API_KEY,
@@ -67,14 +67,17 @@ async def get_live_token(session_id: str):
 async def interview_live_websocket(
     websocket: WebSocket,
     session_id: Annotated[str, Query(alias="sessionId")],
+    user_id: Annotated[str | None, Query(alias="userId")] = None,
 ):
     """WebSocket relay between the browser and Gemini Live."""
     await websocket.accept()
     logger.info(f"[VOICE_BACKEND] WebSocket connection accepted for session {session_id}")
 
-    user_id = "dev-user"
+    # Browsers can't set custom headers on WebSocket handshakes, so the identity
+    # is passed as a query param (or header for non-browser clients).
+    user_id = (user_id or websocket.headers.get("X-User-Id") or "").strip() or DEFAULT_USER_ID
     try:
-        context = get_or_create_session_context(session_id=session_id, user_id=user_id)
+        context = await get_or_create_session_context(session_id=session_id, user_id=user_id)
     except Exception as exc:
         logger.error(f"[VOICE_BACKEND] Session context creation failed: {exc}")
         await websocket.close(code=status.WS_1011_INTERNAL_ERROR)

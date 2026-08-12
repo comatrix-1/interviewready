@@ -9,6 +9,8 @@ from langfuse import Langfuse, get_client, observe, propagate_attributes
 from app.api.v1.services import (
     get_or_create_session_context,
     get_orchestration_agent,
+    get_session_store,
+    resolve_user_id,
 )
 from app.core.config import settings
 from app.core.limiter import limiter
@@ -31,10 +33,8 @@ async def chat_endpoint(
     session_id: Annotated[str, Query(alias="sessionId")],
 ) -> ChatApiResponse:
     """Run orchestration for the chat message within a user-owned session."""
-    # TODO(auth): user_id is hardcoded. All requests are attributed to the same actor,
-    # which breaks per-user rate limiting, session ownership checks, and audit trails.
-    # Replace with authenticated user identity when auth is implemented.
-    user_id = "dev-user"
+    # Simulated auth: identity comes from the X-User-Id header (dev-user fallback).
+    user_id = resolve_user_id(request)
 
     with (
         langfuse.start_as_current_observation(
@@ -48,7 +48,7 @@ async def chat_endpoint(
         propagate_attributes(user_id=user_id, session_id=session_id),
     ):
         try:
-            context = get_or_create_session_context(session_id=session_id, user_id=user_id)
+            context = await get_or_create_session_context(session_id=session_id, user_id=user_id)
         except PermissionError as exc:
             langfuse.update_current_span(output={"error": "permission_denied", "reason": str(exc)})
             raise HTTPException(
@@ -67,6 +67,10 @@ async def chat_endpoint(
 
         try:
             internal_response = await run_in_threadpool(orchestrator.orchestrate, chat_request, context)
+            try:
+                await get_session_store().save(context)
+            except Exception as exc:
+                logger.warning(f"Failed to persist session {session_id}: {exc}")
             payload = _extract_api_payload(internal_response)
             payload = _attach_payload_metadata(payload, internal_response)
             metadata = _extract_response_metadata(internal_response)

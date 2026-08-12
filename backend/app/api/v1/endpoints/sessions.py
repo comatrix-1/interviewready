@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Request, status
 
-from app.api.v1.services import get_session_context, get_session_store
+from app.api.v1.services import get_session_context, get_session_store, resolve_user_id
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.models.resume import Resume
@@ -16,9 +16,9 @@ router = APIRouter()
 @limiter.limit(settings.DEFAULT_RATE_LIMIT)
 async def create_session(request: Request) -> dict:
     """Create a new session and return the session ID."""
-    user_id = "dev-user"
+    user_id = resolve_user_id(request)
     session_store = get_session_store()
-    session_id, _ = session_store.create_session(user_id)
+    session_id, _ = await session_store.create_session(user_id)
     return {"session_id": session_id}
 
 
@@ -29,10 +29,10 @@ async def get_session_resume(
     session_id: Annotated[str, Path()],
 ) -> Resume:
     """Return parsed resume JSON currently persisted for a session."""
-    user_id = "dev-user"
+    user_id = resolve_user_id(request)
 
     try:
-        context = get_session_context(session_id=session_id, user_id=user_id)
+        context = await get_session_context(session_id=session_id, user_id=user_id)
     except PermissionError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

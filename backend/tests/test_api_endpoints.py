@@ -165,3 +165,63 @@ def test_chat_rejects_invalid_intent():
     )
 
     assert response.status_code == 422
+
+
+def test_login_registers_user_on_first_login():
+    client = TestClient(app)
+
+    first = client.post("/api/v1/users/login", json={"username": "alice"})
+    assert first.status_code == 200
+    assert first.json() == {"username": "alice", "created": True}
+
+    second = client.post("/api/v1/users/login", json={"username": "alice"})
+    assert second.status_code == 200
+    assert second.json() == {"username": "alice", "created": False}
+
+
+def test_login_rejects_blank_username():
+    client = TestClient(app)
+
+    blank = client.post("/api/v1/users/login", json={"username": "   "})
+    assert blank.status_code == 422
+
+    empty = client.post("/api/v1/users/login", json={"username": ""})
+    assert empty.status_code == 422
+
+
+def test_session_created_with_x_user_id_header():
+    client = TestClient(app)
+
+    response = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"})
+    assert response.status_code == 200
+    session_id = response.json()["session_id"]
+
+    # The session belongs to the header user, so fetching without the header (dev-user) is forbidden.
+    forbidden = client.get(f"/api/v1/sessions/{session_id}/resume")
+    assert forbidden.status_code == 403
+
+    owned = client.get(f"/api/v1/sessions/{session_id}/resume", headers={"X-User-Id": "alice"})
+    assert owned.status_code == 404  # session exists but has no resume yet
+
+
+def test_chat_rejects_other_users_session():
+    client = TestClient(app)
+
+    response = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"})
+    session_id = response.json()["session_id"]
+
+    # A different user (or no user) may not act on alice's session.
+    stolen = client.post(
+        "/api/v1/chat",
+        params={"sessionId": session_id},
+        headers={"X-User-Id": "mallory"},
+        json=_chat_request_payload("RESUME_CRITIC"),
+    )
+    assert stolen.status_code == 403
+
+    anonymous = client.post(
+        "/api/v1/chat",
+        params={"sessionId": session_id},
+        json=_chat_request_payload("RESUME_CRITIC"),
+    )
+    assert anonymous.status_code == 403

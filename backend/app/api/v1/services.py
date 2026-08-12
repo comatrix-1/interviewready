@@ -5,18 +5,35 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from fastapi import Request
+
 from app.agents import (
     AgentRegistry,
     GeminiService,
 )
-from app.api.v1.session_store import SessionStore
+from app.db.session_store import SessionStore, build_session_store
+from app.db.user_store import UserStore, build_user_store
 from app.governance import SharpGovernanceService
 from app.orchestration import OrchestrationAgent
 
 if TYPE_CHECKING:
     from app.models import SessionContext
 
-_session_store = SessionStore()
+# Fallback identity until real authentication is implemented.
+DEFAULT_USER_ID = "dev-user"
+
+_session_store = build_session_store()
+_user_store = build_user_store()
+
+
+def resolve_user_id(request: Request) -> str:
+    """Resolve the acting user id from the ``X-User-Id`` header (fallback: dev-user)."""
+    return (request.headers.get("X-User-Id") or "").strip() or DEFAULT_USER_ID
+
+
+def get_user_store() -> UserStore:
+    """Return the user store instance."""
+    return _user_store
 
 
 def get_session_store() -> SessionStore:
@@ -37,11 +54,11 @@ def get_orchestration_agent() -> OrchestrationAgent:
     )
 
 
-def get_or_create_session_context(session_id: str, user_id: str) -> SessionContext:
+async def get_or_create_session_context(session_id: str, user_id: str) -> SessionContext:
     """Return existing session context or create it for this user."""
-    return _session_store.get_or_create(session_id=session_id, user_id=user_id)
+    return await _session_store.get_or_create(session_id=session_id, user_id=user_id)
 
 
-def get_session_context(session_id: str, user_id: str) -> SessionContext | None:
+async def get_session_context(session_id: str, user_id: str) -> SessionContext | None:
     """Return existing session context for this user, if present."""
-    return _session_store.get(session_id=session_id, user_id=user_id)
+    return await _session_store.get(session_id=session_id, user_id=user_id)

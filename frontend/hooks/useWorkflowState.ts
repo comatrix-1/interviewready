@@ -56,6 +56,11 @@ export const useWorkflowState = () => {
     setState(defaultState());
   }, []);
 
+  const hardResetSession = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    setState(defaultState());
+  }, []);
+
   const handleStepClick = useCallback(
     (status: WorkflowStatus) => {
       const canNavigate: Partial<Record<WorkflowStatus, boolean>> = {
@@ -83,5 +88,5 @@ export const useWorkflowState = () => {
     [state.currentResume, state.atsReport, state.alignmentReport, updateState],
   );
 
-  return { state, updateState, resetSession, handleStepClick };
+  return { state, updateState, resetSession, hardResetSession, handleStepClick };
 };

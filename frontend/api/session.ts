@@ -1,5 +1,6 @@
 import type { Resume } from "../types/resume";
 import { API_BASE_URL } from "../config/env";
+import { getUserHeaders } from "../utils/identity";
 
 export const initSession = async (authToken: string): Promise<string> => {
   const response = await fetch(`${API_BASE_URL}/api/v1/sessions/new`, {
@@ -7,6 +8,7 @@ export const initSession = async (authToken: string): Promise<string> => {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
+      ...getUserHeaders(),
     },
   });
 
@@ -27,6 +29,7 @@ export const fetchCurrentResume = async (
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
+      ...getUserHeaders(),
     },
   });
 

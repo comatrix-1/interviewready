@@ -41,6 +41,11 @@ class Settings(BaseSettings):
             return [i.strip() for i in v.split(",") if i.strip()]
         return v
 
+    # Database
+    # When set, enables SQLAlchemy async persistence (engine, session factory,
+    # and table creation on startup). When unset, the app runs database-free.
+    DATABASE_URL: str
+
     # Langfuse
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_SECRET_KEY: str | None = None

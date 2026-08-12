@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { WorkflowStatus, InterviewMode } from "./types/workflow";
 import type { SharedState } from "./types/workflow";
 import type { Resume } from "./types/resume";
@@ -26,19 +26,52 @@ import {
   InterviewModeSelectionStep,
 } from "./components/WorkflowSteps";
 
+const getInitials = (name: string): string => {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+  return initials || "U";
+};
+
 const AppContent: React.FC = () => {
   const {
     sessionId,
     authToken,
     sessionReady,
     sessionError: sessionInitError,
+    username,
+    isLoggingIn,
+    loginError,
+    login,
+    logout,
   } = useBackendService();
-  const { state, updateState, resetSession, handleStepClick } = useWorkflowState();
+  const { state, updateState, resetSession, hardResetSession, handleStepClick } =
+    useWorkflowState();
   const [error, setError] = useState<string | null>(sessionInitError);
+  const [loginInput, setLoginInput] = useState("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const displayError = error || sessionInitError;
+
+  // A user change (login/logout) starts a fresh workflow: the previous identity's
+  // resume, reports, and interview history don't carry over.
+  const prevUsernameRef = useRef(username);
+  useEffect(() => {
+    if (prevUsernameRef.current !== username) {
+      prevUsernameRef.current = username;
+      hardResetSession();
+    }
+  }, [username, hardResetSession]);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = await login(loginInput);
+    if (ok) setLoginInput("");
+  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white text-slate-950">
@@ -63,9 +96,49 @@ const AppContent: React.FC = () => {
           >
             Reset Session
           </button>
-          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 border border-slate-300">
-            JD
-          </div>
+
+          {username ? (
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-[11px] font-bold text-white">
+                  {getInitials(username)}
+                </div>
+                <span className="text-xs font-semibold text-slate-700 max-w-[120px] truncate">
+                  {username}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleLoginSubmit} className="relative flex items-center gap-2">
+              <input
+                type="text"
+                value={loginInput}
+                onChange={(e) => setLoginInput(e.target.value)}
+                placeholder="Username"
+                aria-label="Username"
+                maxLength={64}
+                className="w-40 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all"
+              />
+              <button
+                type="submit"
+                disabled={isLoggingIn || !loginInput.trim()}
+                className="bg-slate-900 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg hover:bg-slate-700 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                {isLoggingIn ? "Logging in..." : "Login"}
+              </button>
+              {loginError && (
+                <span className="absolute right-0 top-full mt-1.5 z-50 whitespace-nowrap text-[10px] font-medium text-red-600">
+                  {loginError}
+                </span>
+              )}
+            </form>
+          )}
         </div>
       </nav>
 

@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.limiter import limiter
+from app.db.session import dispose_db, init_db
 
 load_dotenv()
 
@@ -22,8 +23,9 @@ MAX_REQUEST_SIZE = 20 * 1024 * 1024
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    await init_db()
     yield
-    # Cleanup can be added here
+    await dispose_db()
 
 
 app = FastAPI(

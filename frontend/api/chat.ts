@@ -1,6 +1,7 @@
 import type { ChatRequest, ChatResponse } from "../types/api";
 import { API_BASE_URL } from "../config/env";
 import { uint8ArrayToBase64 } from "../utils/base64";
+import { getUserHeaders } from "../utils/identity";
 
 export const callChatEndpoint = async (
   sessionId: string,
@@ -20,6 +21,7 @@ export const callChatEndpoint = async (
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
+      ...getUserHeaders(),
     },
     body: JSON.stringify(requestBody),
   });
