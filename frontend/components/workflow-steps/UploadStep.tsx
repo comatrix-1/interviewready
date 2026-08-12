@@ -1,30 +1,41 @@
-﻿import React, { useState } from "react";
+import React from "react";
+import type { SavedResume } from "../../types/resume";
 
-export const UploadStep: React.FC<{
-  onUploadSubmit: (file: File | null) => void; // null = use manual resume from preview panel
+interface UploadStepProps {
+  savedResumes: SavedResume[];
+  selectedResumeId: string | null;
+  isUploading: boolean;
+  isLoadingResumes: boolean;
+  onSelectResume: (resumeId: string) => void;
+  onUploadSubmit: (file: File) => Promise<void>; // parse -> save -> analyze
+  onAnalyzeResume: () => Promise<void>; // analyze the selected saved resume
+  // Existing manual-JSON props (unchanged):
   manualResumeText: string;
   manualResumeError?: string | null;
   onManualResumeChange: (value: string) => void;
   onManualSubmit: () => void;
-}> = ({
+}
+
+export const UploadStep: React.FC<UploadStepProps> = ({
+  savedResumes,
+  selectedResumeId,
+  isUploading,
+  isLoadingResumes,
+  onSelectResume,
   onUploadSubmit,
+  onAnalyzeResume,
   manualResumeText,
   manualResumeError,
   onManualResumeChange,
   onManualSubmit,
 }) => {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setUploadedFile(file);
-    onUploadSubmit(file);
-  };
-
-  const handleDeleteFile = () => {
-    setUploadedFile(null);
+    // Reset the input so picking the same file again re-fires onChange (e.g. to
+    // retry after a failed parse/save).
+    e.target.value = "";
+    void onUploadSubmit(file);
   };
 
   return (
@@ -32,8 +43,38 @@ export const UploadStep: React.FC<{
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-slate-900 mb-1.5">Resume Discovery</h3>
         <p className="text-[13px] text-slate-500 leading-relaxed">
-          Upload a resume or use your edited resume preview. Analysis only runs when you trigger it.
+          Select a saved resume or upload a PDF. Analysis only runs when you trigger it.
         </p>
+      </div>
+
+      <div className="mb-6">
+        <label
+          htmlFor="saved-resume-select"
+          className="text-[11px] font-bold text-slate-500 uppercase tracking-widest"
+        >
+          Saved resume
+        </label>
+        <select
+          id="saved-resume-select"
+          value={selectedResumeId ?? ""}
+          onChange={(e) => onSelectResume(e.target.value)}
+          disabled={isLoadingResumes}
+          className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:opacity-50"
+        >
+          <option value="" disabled>
+            {isLoadingResumes ? "Loading saved resumes..." : "Select a saved resume"}
+          </option>
+          {savedResumes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.filename}
+            </option>
+          ))}
+        </select>
+        {savedResumes.length === 0 && !isLoadingResumes && (
+          <p className="mt-2 text-[11px] text-slate-400">
+            No saved resumes yet — upload a PDF below to save one.
+          </p>
+        )}
       </div>
 
       <label className="flex flex-col items-center justify-center border border-slate-200 rounded-xl p-12 cursor-pointer hover:bg-slate-50/50 hover:border-slate-300 transition-all group">
@@ -57,31 +98,15 @@ export const UploadStep: React.FC<{
         <input type="file" className="hidden" onChange={handleUpload} accept=".pdf,.txt,.md" />
       </label>
 
-      {uploadedFile && (
-        <div className="mt-4 flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
-          <span className="text-[12px] text-slate-700 font-medium truncate">
-            {uploadedFile.name}
-          </span>
-          <button
-            onClick={handleDeleteFile}
-            className="text-[11px] text-red-500 hover:text-red-700 font-semibold"
-          >
-            Remove
-          </button>
-        </div>
-      )}
-
-      {/* CTA - only show when no file uploaded */}
-      {!uploadedFile && (
-        <div className="mt-6">
-          <button
-            onClick={() => onUploadSubmit(null)}
-            className="w-full bg-slate-900 text-white text-[12px] font-semibold py-3 rounded-lg shadow-sm hover:bg-slate-800 transition-all"
-          >
-            Analyze Resume
-          </button>
-        </div>
-      )}
+      <div className="mt-6">
+        <button
+          onClick={() => void onAnalyzeResume()}
+          disabled={!selectedResumeId || isUploading || isLoadingResumes}
+          className="w-full bg-slate-900 text-white text-[12px] font-semibold py-3 rounded-lg shadow-sm hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all"
+        >
+          Analyze Resume
+        </button>
+      </div>
 
       {manualResumeText && (
         <div className="mt-8 rounded-xl border border-slate-200 bg-white p-4 space-y-3">

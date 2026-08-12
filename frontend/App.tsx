@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { WorkflowStatus, InterviewMode } from "./types/workflow";
 import type { SharedState } from "./types/workflow";
-import type { Resume } from "./types/resume";
+import type { Resume, SavedResume } from "./types/resume";
 import type { ChatRequest } from "./types/api";
-import { DEFAULT_RESUME } from "./config/constants";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
-import { callChatEndpoint, fetchCurrentResume } from "./api";
+import { callChatEndpoint, createSavedResume, fetchCurrentResume, listSavedResumes } from "./api";
 import { resumeCriticAgent } from "@/api/chat-endpoints/resumeCritic";
 import { atsEngineAnalyze } from "@/api/ats";
 import { alignmentAgent } from "@/api/chat-endpoints/alignment";
@@ -217,7 +216,7 @@ const AppContent: React.FC = () => {
         {/* Right Panel: Resume Preview */}
         <main className="flex-1 bg-slate-100/30 overflow-hidden flex flex-col relative">
           <div className="flex-1 overflow-y-auto">
-            <ResumePreview resume={state.currentResume ?? DEFAULT_RESUME} />
+            <ResumePreview resume={state.currentResume} />
           </div>
         </main>
       </div>
@@ -239,6 +238,29 @@ const WorkflowController: React.FC<{
   const { startLoading, updateProgress, stopLoading } = useLoading();
   const [manualResumeText, setManualResumeText] = useState("");
   const [manualResumeError, setManualResumeError] = useState<string | null>(null);
+  const [savedResumes, setSavedResumes] = useState<SavedResume[]>([]);
+  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingResumes(true);
+    listSavedResumes(authToken)
+      .then((resumes) => {
+        if (!cancelled) setSavedResumes(resumes);
+      })
+      .catch(() => {
+        // Non-blocking: saved resumes are an enhancement. Without DATABASE_URL the
+        // call 503s; keep the list empty and the manual JSON flow stays usable.
+        if (!cancelled) setSavedResumes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingResumes(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
 
   const processPdfFile = async (file: File) => {
     updateProgress(25, 0);
@@ -270,25 +292,30 @@ const WorkflowController: React.FC<{
     return { responseData, parsedResume };
   };
 
-  const handleSuccessfulProcessing = async (
-    _responseData: unknown,
-    parsedResume: Resume | null,
-  ) => {
-    const resumeToUse = parsedResume || state.currentResume!;
+  const runAtsAndCritic = async (resume: Resume) => {
     const [atsResult, criticResult] = await Promise.all([
-      atsEngineAnalyze(authToken, resumeToUse),
-      resumeCriticAgent(sessionId, authToken, resumeToUse),
+      atsEngineAnalyze(authToken, resume),
+      resumeCriticAgent(sessionId, authToken, resume),
     ]);
     updateState((prev) => ({
       ...prev,
-      currentResume: parsedResume || prev.currentResume,
-      history: parsedResume ? [...prev.history, parsedResume] : prev.history,
       atsReport: atsResult,
       criticIssues: criticResult.issues || [],
       status: WorkflowStatus.AWAITING_ATS_APPROVAL,
     }));
-    setManualResumeText("");
-    updateProgress(100, 3);
+  };
+
+  const handleSelectResume = (resumeId: string) => {
+    const saved = savedResumes.find((r) => r.id === resumeId);
+    if (!saved) return;
+    updateState((prev) => ({
+      ...prev,
+      selectedResumeId: saved.id,
+      currentResume: saved.resume,
+      atsReport: null,
+      criticIssues: [],
+      alignmentReport: null,
+    }));
   };
 
   const processExistingResume = async () => {
@@ -321,45 +348,62 @@ const WorkflowController: React.FC<{
     }
   };
 
-  const handleUploadSubmit = async (file: File | null) => {
+  const handleUploadSubmit = async (file: File) => {
     setError(null);
     setManualResumeError(null);
 
-    if (file) {
-      startLoading("Analyzing your resume...", [
-        "Uploading file",
-        "Running ATS engine",
-        "Analyzing resume structure",
-        "Generating insights",
-      ]);
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.type === "application/x-pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setError("Unsupported file type. Please upload a PDF resume.");
+      return;
+    }
 
-      try {
-        const isPdf =
-          file.type === "application/pdf" ||
-          file.type === "application/x-pdf" ||
-          file.name.toLowerCase().endsWith(".pdf");
-
-        if (!isPdf) {
-          setError("Unsupported file type. Please upload a PDF resume.");
-          stopLoading();
-          return;
-        }
-
-        const { responseData, parsedResume } = await processPdfFile(file);
-        await handleSuccessfulProcessing(responseData, parsedResume);
-      } catch (err: unknown) {
-        setError(toErrorMessage(err) || "Failed to process resume");
-      } finally {
-        stopLoading();
+    setIsUploading(true);
+    startLoading("Analyzing your resume...", [
+      "Uploading file",
+      "Saving resume",
+      "Running ATS engine",
+      "Analyzing resume structure",
+      "Generating insights",
+    ]);
+    try {
+      const { parsedResume } = await processPdfFile(file);
+      if (!parsedResume) {
+        setError("Failed to parse the resume. Please try another PDF.");
+        return;
       }
+
+      // Save first: an unsaved upload must never appear selectable or analyzable.
+      const saved = await createSavedResume(authToken, {
+        filename: file.name,
+        resume: parsedResume,
+      });
+      setSavedResumes((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)]);
+      updateState((prev) => ({
+        ...prev,
+        selectedResumeId: saved.id,
+        currentResume: saved.resume,
+        history: [...prev.history, saved.resume],
+      }));
+
+      await runAtsAndCritic(saved.resume);
+      updateProgress(100, 3);
+    } catch (err: unknown) {
+      setError(toErrorMessage(err) || "Failed to process resume");
+    } finally {
+      setIsUploading(false);
+      stopLoading();
+    }
+  };
+
+  const handleAnalyzeResume = async () => {
+    if (!state.selectedResumeId || !state.currentResume) {
+      setError("Select a saved resume to analyze.");
       return;
     }
-
-    if (!state.currentResume) {
-      setError("No resume available. Please upload or edit your resume.");
-      return;
-    }
-
     await processExistingResume();
   };
 
@@ -625,7 +669,13 @@ const WorkflowController: React.FC<{
     <>
       {(state.status === WorkflowStatus.IDLE || state.status === WorkflowStatus.EXTRACTING) && (
         <UploadStep
+          savedResumes={savedResumes}
+          selectedResumeId={state.selectedResumeId}
+          isUploading={isUploading}
+          isLoadingResumes={isLoadingResumes}
+          onSelectResume={handleSelectResume}
           onUploadSubmit={handleUploadSubmit}
+          onAnalyzeResume={handleAnalyzeResume}
           manualResumeText={manualResumeText}
           manualResumeError={manualResumeError}
           onManualResumeChange={setManualResumeText}
