@@ -1,7 +1,7 @@
 """Session-free analysis endpoints (parse, critique, alignment).
 
 These endpoints run the orchestrator with an ephemeral SessionContext that is
-never persisted. The interview coach is the only step that uses sessions.
+never persisted. The frontend uses sessions only for the interview coach step.
 """
 
 from fastapi import APIRouter, HTTPException, Request, status

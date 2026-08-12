@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove sessions from the resume-analysis steps (PDF parse, ATS critique, alignment) so the session store is used only by the interview coach step.
+**Goal:** Remove sessions from the resume-analysis steps (PDF parse, ATS critique, alignment) so the frontend uses the session store only for the interview coach step.
 
-**Architecture:** New session-free `/api/v1/analysis/*` endpoints (`parse`, `critique`, `alignment`) run the orchestrator with an ephemeral `SessionContext` that is never persisted, scoped by `X-User-Id` like the saved-resumes endpoints. A new `RESUME_PARSE` intent runs only the extractor (today the upload flow runs the critic and discards its output — a wasted LLM call). `POST /api/v1/chat` is tightened to accept only `INTERVIEW_COACH`, and the frontend creates its session lazily when the interview starts, seeding the session with resume + job description so the voice WebSocket relay keeps its prompt context.
+**Architecture:** New session-free `/api/v1/analysis/*` endpoints (`parse`, `critique`, `alignment`) run the orchestrator with an ephemeral `SessionContext` that is never persisted, scoped by `X-User-Id` like the saved-resumes endpoints. A new `RESUME_PARSE` intent runs only the extractor (today the upload flow runs the critic and discards its output — a wasted LLM call). `POST /api/v1/chat` stays permissive — it continues to accept every intent for backward compatibility — while the frontend creates its session lazily when the interview starts, seeding the session with resume + job description so the voice WebSocket relay keeps its prompt context.
 
 **Tech Stack:** FastAPI, Pydantic v2, SQLAlchemy async/PostgreSQL, React 19, TypeScript, Vitest, pytest.
 
 ## Global Constraints
 
-- After this change, sessions are used only by the interview coach step: `POST /api/v1/chat` (INTERVIEW_COACH), `/api/v1/sessions`, and `/api/v1/interview` (voice WebSocket). No other endpoint reads or writes sessions.
+- After this change, only `POST /api/v1/chat`, `/api/v1/sessions`, and `/api/v1/interview` (voice WebSocket) read or write sessions. `POST /api/v1/chat` remains permissive (all intents accepted) but the frontend uses it only for the interview coach step; the new analysis endpoints never read or write sessions.
 - New analysis endpoints are user-scoped via `resolve_user_id(request)` (`X-User-Id`, `dev-user` fallback) — identical to the saved-resumes endpoints. No session is created, read, or saved.
 - The voice interview depends on the session carrying `resume_data` / `job_description` (`_build_system_instruction` in `interview.py` reads them). The frontend must seed the session explicitly when a VOICE interview starts — this behavior must not regress.
 - `RESUME_PARSE` must run only the extractor/normalize stage, not the critic agent. The frontend discards the critic output from today's parse call (it re-runs the critic separately), so running it during parse is pure waste.
@@ -30,9 +30,9 @@
 | `backend/app/api/v1/endpoints/analysis.py` | **Create.** Session-free `parse` / `critique` / `alignment` endpoints |
 | `backend/app/api/v1/api.py` | Register the `/analysis` router |
 | `backend/tests/test_analysis_endpoints.py` | **Create.** Endpoint tests (stubbed orchestrator) |
-| `backend/app/api/v1/endpoints/chat.py` | Reject non-`INTERVIEW_COACH` intents |
+| `backend/app/api/v1/endpoints/chat.py` | No change (kept permissive for all intents) |
 | `backend/app/api/v1/endpoints/sessions.py` | Add `POST /sessions/{id}/context` seed endpoint |
-| `backend/tests/test_api_endpoints.py` | Move intent tests to the analysis endpoints; chat = interview-only; seed-endpoint tests |
+| `backend/tests/test_api_endpoints.py` | Move intent tests to the analysis endpoints; seed-endpoint tests |
 | `frontend/api/analysis.ts` | **Create.** Session-free client: `parseResumeFile`, `resumeCriticAgent`, `alignmentAgent`, `hasResumeContent` |
 | `frontend/api/chat-endpoints/resumeCritic.ts`, `alignment.ts` | **Delete.** Replaced by `api/analysis.ts` |
 | `frontend/api/chat-endpoints/index.ts`, `interviewCoach.ts` | Point `hasResumeContent` import at `api/analysis.ts` |
@@ -386,7 +386,7 @@ Create `backend/app/api/v1/endpoints/analysis.py`:
 """Session-free analysis endpoints (parse, critique, alignment).
 
 These endpoints run the orchestrator with an ephemeral SessionContext that is
-never persisted. The interview coach is the only step that uses sessions.
+never persisted. The frontend uses sessions only for the interview coach step.
 """
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -583,102 +583,6 @@ Expected: clean.
 ```bash
 git add backend/app/api/v1/endpoints/analysis.py backend/app/api/v1/api.py backend/tests/test_analysis_endpoints.py
 git commit -m "feat: add session-free analysis endpoints for parse, critique, alignment"
-```
-
-### Task 3: Tighten `/api/v1/chat` to interview-coach-only
-
-**Files:**
-- Modify: `backend/app/api/v1/endpoints/chat.py` (top of `chat_endpoint`, after `user_id = resolve_user_id(request)`)
-- Modify: `backend/tests/test_api_endpoints.py` (`test_agents_and_chat`, `test_chat_rejects_other_users_session`)
-
-**Interfaces:**
-- Consumes: nothing new — the existing `chat_endpoint` signature stays.
-- Produces: `POST /api/v1/chat` returns **422 with `detail` containing `"interview coach"`** for any `intent` other than `INTERVIEW_COACH`. This is the enforcement that sessions are interview-only; steps 1–3 use the Task 2 analysis endpoints instead.
-
-- [ ] **Step 1: Write the failing tests**
-
-In `backend/tests/test_api_endpoints.py`:
-
-1. Replace `test_agents_and_chat` with `test_agents_and_interview_chat` (the non-interview intents move to the analysis endpoints, covered in `test_analysis_endpoints.py`):
-
-```python
-def test_agents_and_interview_chat():
-    client = TestClient(app)
-
-    r1 = client.get("/api/v1/agents")
-    assert r1.status_code == 200
-    assert "ResumeCriticAgent" in r1.json()
-
-    with patch(
-        "app.api.v1.endpoints.chat.get_orchestration_agent",
-        return_value=StubOrchestrator(),
-    ):
-        interview_response = client.post(
-            "/api/v1/chat",
-            params={"sessionId": "s1"},
-            json=_chat_request_payload("INTERVIEW_COACH"),
-        )
-
-    assert interview_response.status_code == 200
-    assert isinstance(interview_response.json()["payload"], dict)
-
-
-def test_chat_rejects_non_interview_intents():
-    client = TestClient(app)
-
-    for intent in ("RESUME_CRITIC", "CONTENT_STRENGTH", "ALIGNMENT"):
-        response = client.post(
-            "/api/v1/chat",
-            params={"sessionId": "s1"},
-            json=_chat_request_payload(intent),
-        )
-        assert response.status_code == 422
-        assert "interview coach" in response.json()["detail"]
-```
-
-2. In `test_chat_rejects_other_users_session`, change both `_chat_request_payload("RESUME_CRITIC")` calls to `_chat_request_payload("INTERVIEW_COACH")` so the ownership (403) path is still exercised through a legal intent.
-
-- [ ] **Step 2: Run the tests to verify the new ones fail**
-
-Run: `cd backend && uv run pytest tests/test_api_endpoints.py::test_chat_rejects_non_interview_intents -v`
-Expected: FAIL — today the chat endpoint accepts `RESUME_CRITIC` and returns 200.
-
-- [ ] **Step 3: Implement the intent guard**
-
-In `backend/app/api/v1/endpoints/chat.py`, immediately after `user_id = resolve_user_id(request)`, add:
-
-```python
-    # Sessions exist only for the interview coach step. The session-free
-    # /api/v1/analysis endpoints serve the other intents.
-    if chat_request.intent != "INTERVIEW_COACH":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="POST /api/v1/chat is reserved for the interview coach; use /api/v1/analysis for other analyses.",
-        )
-```
-
-`HTTPException` and `status` are already imported in the file.
-
-- [ ] **Step 4: Run the endpoint tests to verify they pass**
-
-Run: `cd backend && uv run pytest tests/test_api_endpoints.py -v`
-Expected: PASS — `test_agents_and_interview_chat`, `test_chat_rejects_non_interview_intents`, and the updated `test_chat_rejects_other_users_session` all green.
-
-- [ ] **Step 5: Lint and commit**
-
-Run: `npm run lint:all`
-Expected: clean.
-
-```bash
-git add backend/app/api/v1/endpoints/chat.py backend/tests/test_api_endpoints.py
-```
-
-Note: `CONTENT_STRENGTH` is now reachable only through the agents registry (it never had a UI consumer). Leave the agent registered; do not add an analysis endpoint for it.
-
-Commit:
-
-```bash
-git commit -m "feat: restrict /api/v1/chat to the interview coach intent"
 ```
 
 ---
@@ -1344,14 +1248,14 @@ git commit -m "feat: create sessions lazily at interview start and seed voice co
 
 **Interfaces:**
 - Consumes: nothing from code.
-- Produces: docs that describe sessions as interview-coach-only and list the new session-free analysis endpoints.
+- Produces: docs that describe the session boundary (frontend sessions only for the interview coach; `/api/v1/chat` stays permissive) and list the new session-free analysis endpoints.
 
 - [ ] **Step 1: Update the Session Management section in `backend/README.md`**
 
 Locate the Session Management section (it currently reads: "Sessions are stored in PostgreSQL only (via `app/db/session_store.py`); there is no in-memory fallback, and `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted."). Replace it with:
 
 ```markdown
-Sessions are stored in PostgreSQL only (via `app/db/session_store.py`) and are used exclusively by the interview coach step: `POST /api/v1/chat` (INTERVIEW_COACH intent), the `/api/v1/sessions` endpoints, and the `/api/v1/interview` voice WebSocket relay. The upload/parse, ATS critique, and job-alignment steps use the session-free `/api/v1/analysis` endpoints and never touch sessions. `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted.
+Sessions are stored in PostgreSQL only (via `app/db/session_store.py`) and are read/written by `POST /api/v1/chat`, the `/api/v1/sessions` endpoints, and the `/api/v1/interview` voice WebSocket relay. `POST /api/v1/chat` remains permissive and accepts every intent; the frontend uses sessions only for the interview coach step — the upload/parse, ATS critique, and job-alignment steps use the session-free `/api/v1/analysis` endpoints, which never read or write sessions. `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted.
 ```
 
 - [ ] **Step 2: Document the analysis endpoints in `backend/README.md`**
@@ -1426,7 +1330,7 @@ curl -s -X POST "localhost:8000/api/v1/chat?sessionId=s1" \
   -H "Content-Type: application/json" \
   -d '{"intent": "RESUME_CRITIC", "resumeData": {"skills": [{"name": "Python"}]}, "jobDescription": "", "messageHistory": []}' \
   -o /dev/null -w "%{http_code}\n"
-# Expected: 422 (chat is interview-only)
+# Expected: 200 (chat stays permissive for all intents)
 ```
 
 - [ ] **Step 5: Confirm no session references remain in steps 1-3 frontend flow**
@@ -1440,10 +1344,10 @@ Run a `requesting-code-review` pass over the diff: confirm no endpoint/service s
 
 ## Self-Review
 
-1. **Spec coverage:** The user asked to separate step-1 API calls into dedicated endpoints and keep sessions only for the interview coach. Task 2 creates the dedicated session-free endpoints (parse replaces the chat+resume round-trip; critique and alignment are also session-free since the frontend calls them from steps 1-3); Task 3 enforces the boundary on `/api/v1/chat`; Task 4 keeps the voice interview working by seeding session context; Tasks 5-6 rewire the frontend (session-free steps 1-3, lazy session at interview start). ✔
+1. **Spec coverage:** The user asked to separate step-1 API calls into dedicated endpoints and keep sessions only for the interview coach. Task 2 creates the dedicated session-free endpoints (parse replaces the chat+resume round-trip; critique and alignment are also session-free since the frontend calls them from steps 1-3); `POST /api/v1/chat` stays permissive for backward compatibility; Task 4 keeps the voice interview working by seeding session context; Tasks 5-6 rewire the frontend (session-free steps 1-3, lazy session at interview start). ✔
 2. **Placeholder scan:** Every step has concrete code or exact commands; no TBDs. ✔
 3. **Type consistency:** `parseResumeFile`/`resumeCriticAgent`/`alignmentAgent` are defined in Task 5 and consumed by App.tsx and backendService.ts with matching signatures; `ensureSession: () => Promise<string>` is produced by Task 6 and consumed by App.tsx; the backend `ParseResumeResponse` aliases (`needsReview`, `confidenceScore`, `lowConfidenceFields`, `validationErrors`) match the frontend `ParseResumeResult` field names; `Intent.RESUME_PARSE` is added in Task 1 and used by Task 2. ✔
-4. **Deferred/out-of-scope, noted deliberately:** `CONTENT_STRENGTH` becomes reachable only via the agents registry (no UI consumer; documented in Task 3). The legacy `backendService.ts` class keeps its public surface but delegates to the session-free client. The `GET /api/v1/sessions/{id}/resume` endpoint stays (the seed endpoint now feeds it; it is no longer called by the frontend but is covered by the seed test).
+4. **Deferred/out-of-scope, noted deliberately:** `CONTENT_STRENGTH` stays reachable via `/api/v1/chat` and the agents registry (no UI consumer). The legacy `backendService.ts` class keeps its public surface but delegates to the session-free client. The `GET /api/v1/sessions/{id}/resume` endpoint stays (the seed endpoint now feeds it; it is no longer called by the frontend but is covered by the seed test).
 
 ## Execution Handoff
 

@@ -36,14 +36,6 @@ async def chat_endpoint(
     # Simulated auth: identity comes from the X-User-Id header (dev-user fallback).
     user_id = resolve_user_id(request)
 
-    # Sessions exist only for the interview coach step. The session-free
-    # /api/v1/analysis endpoints serve the other intents.
-    if chat_request.intent != "INTERVIEW_COACH":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="POST /api/v1/chat is reserved for the interview coach; use /api/v1/analysis for other analyses.",
-        )
-
     with (
         langfuse.start_as_current_observation(
             as_type="span",
