@@ -361,6 +361,53 @@ header on subsequent calls so sessions are owned by that user (falling back to
 
 - `created` - `true` when the user was newly registered, `false` when they already existed
 
+#### GET `/api/v1/resumes`
+
+List the saved resume snapshots owned by the calling identity. Records are
+scoped to the `X-User-Id` header (falling back to `dev-user` when absent) —
+a user never sees another user's records.
+
+**Response:**
+```json
+{
+  "resumes": [
+    {
+      "id": "3f2c1a...",
+      "filename": "resume.pdf",
+      "createdAt": "2026-08-12T00:00:00Z",
+      "resume": { "work": [], "skills": [{ "name": "Python" }] }
+    }
+  ]
+}
+```
+
+- `createdAt` - ISO-8601 creation timestamp (camelCase alias of `created_at`)
+- `resume` - the stored JSON Resume snapshot (immutable; PDF bytes are never stored)
+
+#### POST `/api/v1/resumes`
+
+Save a parsed resume as a user-owned snapshot. Returns `201 Created`.
+
+**Request:**
+```json
+{
+  "filename": "resume.pdf",
+  "resume": { "work": [], "skills": [{ "name": "Python" }] }
+}
+```
+
+**Response:** `201 Created` — the created record in the same shape as the list items above.
+
+- A blank or whitespace-only `filename` is rejected with `422`.
+- The owner is always derived from the request identity (`X-User-Id`, falling
+  back to `dev-user`); a user ID in the request body is ignored.
+
+> **Saved resumes require `DATABASE_URL`.** Without it, both endpoints return
+> `503` with `Saved resumes require DATABASE_URL to be configured.` Resumes are
+> stored as JSON snapshots in the `saved_resumes` table (no PDF bytes), and
+> without a database the frontend PDF upload/analysis path is unavailable —
+> the manual JSON flow remains the only analysis path.
+
 #### GET `/api/v1/agents`
 
 List available agents and their current system prompts.
@@ -406,9 +453,10 @@ All endpoints follow consistent error format:
 - `200 OK` - Successful request
 - `400 Bad Request` - Invalid input (schema validation failed)
 - `403 Forbidden` - Session permission denied
+- `422 Unprocessable Entity` - Validation failed (e.g. blank saved-resume filename)
 - `429 Too Many Requests` - Rate limit exceeded
 - `500 Internal Server Error` - API or service failure (with mock fallback)
-- `503 Service Unavailable` - Orchestration service unavailable
+- `503 Service Unavailable` - Orchestration service or saved-resume persistence unavailable (no `DATABASE_URL`)
 
 ---
 
@@ -636,6 +684,8 @@ uv run pytest backend/tests/test_interview_coach.py::test_five_question_progress
 | `test_agent_evals.py` | Langfuse dataset evaluations |
 | `test_agent_structural_checks.py` | JSON structure & schema validation |
 | `test_resume_input_priority.py` | Resume input priority logic |
+| `test_db_models.py` | Database model round-trips & table creation (PostgreSQL) |
+| `test_resume_store.py` | Saved-resume store persistence & scoping (PostgreSQL) |
 
 ### Interactive Testing
 

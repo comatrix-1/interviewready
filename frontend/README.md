@@ -75,7 +75,7 @@ Modern React 18 + TypeScript + Tailwind CSS single-page application for AI-power
 ```
 Landing
   ↓
-Upload Resume (PDF or Manual Entry)
+Select Saved Resume or Upload PDF
   ↓
 Enter Job Description (Primary intent)
   ↓
@@ -277,10 +277,11 @@ frontend/
 
 **Resume Upload & Processing:**
 
-- PDF file upload with client-side parsing
-- Manual resume data entry form
-- Resume preview with formatting
-- Live update to backend
+- Select a previously saved resume (loaded from `GET /api/v1/resumes` after login)
+- Upload a PDF — it is parsed, saved server-side, and selected before analysis runs
+- Selecting a saved resume refreshes the preview immediately
+- ATS analysis stays disabled until a resume is selected
+- Manual resume data entry form (the only analysis path when the backend has no `DATABASE_URL` configured)
 
 **Agent Selection:**
 
