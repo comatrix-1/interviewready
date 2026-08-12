@@ -6,8 +6,7 @@ import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
 import { createSavedResume, listSavedResumes, seedSessionContext } from "./api";
 import { clearStoredSession, deleteSession } from "./api/session";
-import { alignmentAgent, parseResumeFile, resumeCriticAgent } from "./api/analysis";
-import { atsEngineAnalyze } from "@/api/ats";
+import { alignmentAgent, checkResume, parseResumeFile } from "./api/analysis";
 import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
 import { BackendServiceProvider, useBackendService } from "./providers/BackendServiceProvider";
 import { useWorkflowState } from "./hooks/useWorkflowState";
@@ -275,14 +274,11 @@ const WorkflowController: React.FC<{
   };
 
   const runAtsAndCritic = async (resume: Resume) => {
-    const [atsResult, criticResult] = await Promise.all([
-      atsEngineAnalyze(resume),
-      resumeCriticAgent(resume),
-    ]);
+    const { ats, critic } = await checkResume(resume);
     updateState((prev) => ({
       ...prev,
-      atsReport: atsResult,
-      criticIssues: criticResult.issues || [],
+      atsReport: ats,
+      criticIssues: critic.issues || [],
       status: WorkflowStatus.AWAITING_ATS_APPROVAL,
     }));
   };
@@ -311,16 +307,13 @@ const WorkflowController: React.FC<{
     try {
       updateProgress(50, 1);
       if (!state.currentResume) throw new Error("Current resume is null");
-      const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(state.currentResume),
-        resumeCriticAgent(state.currentResume),
-      ]);
+      const { ats, critic } = await checkResume(state.currentResume);
       updateProgress(100, 2);
 
       updateState((prev) => ({
         ...prev,
-        atsReport: atsResult,
-        criticIssues: criticResult.issues || [],
+        atsReport: ats,
+        criticIssues: critic.issues || [],
         status: WorkflowStatus.AWAITING_ATS_APPROVAL,
       }));
     } catch (err: unknown) {
@@ -414,17 +407,14 @@ const WorkflowController: React.FC<{
     try {
       updateProgress(35, 0);
       const resumeToUse = parsed as Resume;
-      const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(resumeToUse),
-        resumeCriticAgent(resumeToUse),
-      ]);
+      const { ats, critic } = await checkResume(resumeToUse);
       updateProgress(100, 2);
       updateState((prev) => ({
         ...prev,
         currentResume: resumeToUse,
         history: [...prev.history, resumeToUse],
-        atsReport: atsResult,
-        criticIssues: criticResult.issues || [],
+        atsReport: ats,
+        criticIssues: critic.issues || [],
         status: WorkflowStatus.AWAITING_ATS_APPROVAL,
       }));
       setManualResumeText("");
@@ -446,14 +436,11 @@ const WorkflowController: React.FC<{
       "Checking critic issues",
     ]);
     try {
-      const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(state.currentResume),
-        resumeCriticAgent(state.currentResume),
-      ]);
+      const { ats, critic } = await checkResume(state.currentResume);
       updateState((prev) => ({
         ...prev,
-        atsReport: atsResult,
-        criticIssues: criticResult.issues || [],
+        atsReport: ats,
+        criticIssues: critic.issues || [],
       }));
     } catch (err: unknown) {
       setError(toErrorMessage(err) || "Failed to re-run ATS check");

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { alignmentAgent, parseResumeFile, resumeCriticAgent } from "../api/analysis";
+import { alignmentAgent, checkResume, parseResumeFile, resumeCriticAgent } from "../api/analysis";
 
 describe("session-free analysis API client", () => {
   beforeEach(() => {
@@ -72,5 +72,26 @@ describe("session-free analysis API client", () => {
       jobDescription: "SWE role",
     });
     expect(report.skillsMatch).toEqual(["Python"]);
+  });
+
+  it("runs the combined check via POST /api/v1/analysis/check", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ats: { ats_score: 70, sections: [], detailed_results: {}, validation_warnings: [] },
+        critic: { issues: [], summary: "Solid.", score: 88 },
+      }),
+    });
+
+    const result = await checkResume({ name: "Alice" } as never);
+
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(url as string).toEqual(expect.stringContaining("/api/v1/analysis/check"));
+    expect(JSON.parse(init?.body as string)).toEqual({
+      resume: { name: "Alice" },
+      jobDescription: "",
+    });
+    expect(result.ats.ats_score).toBe(70);
+    expect(result.critic.score).toBe(88);
   });
 });

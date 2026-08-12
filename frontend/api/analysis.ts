@@ -1,5 +1,5 @@
 import type { Resume } from "../types/resume";
-import type { AlignmentReport, ResumeCriticReport } from "../types/reports";
+import type { AlignmentReport, ATSReport, ResumeCriticReport } from "../types/reports";
 import { API_BASE_URL } from "../config/env";
 import { apiFetch, parseErrorDetail } from "./fetch";
 
@@ -55,6 +55,30 @@ export const resumeCriticAgent = async (resume: Resume): Promise<ResumeCriticRep
   }
 
   return (await response.json()) as ResumeCriticReport;
+};
+
+export interface ResumeCheckResult {
+  ats: ATSReport;
+  critic: ResumeCriticReport;
+}
+
+export const checkResume = async (
+  resume: Resume,
+  jobDescription = "",
+): Promise<ResumeCheckResult> => {
+  const response = await apiFetch(`${ANALYSIS_URL}/check`, {
+    method: "POST",
+    body: JSON.stringify({ resume, jobDescription }),
+  });
+
+  if (!response.ok) {
+    throw await parseErrorDetail(
+      response,
+      `Resume check failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return (await response.json()) as ResumeCheckResult;
 };
 
 export const alignmentAgent = async (
