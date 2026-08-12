@@ -1,22 +1,17 @@
-"""Session storage backends for API endpoints.
+"""Session storage backend for API endpoints.
 
-Two implementations of the same async interface:
-
-- :class:`MemorySessionStore` — thread-safe in-memory store (DB-free fallback).
-- :class:`DatabaseSessionStore` — PostgreSQL-backed via :class:`app.db.session`.
-
-Use :func:`build_session_store` to pick the active backend based on whether
-``DATABASE_URL`` is configured.
+PostgreSQL-only: :class:`DatabaseSessionStore` persists user-owned session
+contexts via :class:`app.db.session`. There is deliberately no in-memory
+fallback — sessions require ``DATABASE_URL`` and the app fails fast at startup
+when it is not configured.
 """
 
 from __future__ import annotations
 
 import contextlib
-import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
-from threading import RLock
 
 from sqlalchemy import delete, update
 from sqlalchemy.exc import IntegrityError
@@ -91,98 +86,6 @@ class SessionStore(ABC):
     async def cleanup_expired_sessions(self) -> int:
         """Remove expired sessions and return count of removed sessions."""
 
-
-class MemorySessionStore(SessionStore):
-    """Thread-safe in-memory store for user-owned session contexts."""
-
-    def __init__(self) -> None:
-        self._sessions: dict[str, SessionContext] = {}
-        self._session_timestamps: dict[str, float] = {}
-        self._lock = RLock()
-        self._used_session_ids: set[str] = set()
-
-    def _generate_session_id(self) -> str:
-        """Generate a unique session ID that is not currently in use."""
-
-        attempts = 0
-        while attempts < _MAX_SESSION_ID_ATTEMPTS:
-            session_id = f"session_{uuid.uuid4().hex[:16]}"
-            if session_id not in self._used_session_ids:
-                self._used_session_ids.add(session_id)
-                return session_id
-            attempts += 1
-
-        oldest_session = min(self._session_timestamps.items(), key=lambda x: x[1])
-        self._remove_session_id(oldest_session[0])
-        session_id = f"session_{uuid.uuid4().hex[:16]}"
-        self._used_session_ids.add(session_id)
-        return session_id
-
-    def _remove_session_id(self, session_id: str) -> None:
-        """Remove a session ID from the used set (called when session is expired)."""
-        self._used_session_ids.discard(session_id)
-        self._session_timestamps.pop(session_id, None)
-
-    async def create_session(self, user_id: str) -> tuple[str, SessionContext]:
-        """Create a new session and return the session ID and context."""
-        with self._lock:
-            session_id = self._generate_session_id()
-            timestamp = time.time()
-            self._session_timestamps[session_id] = timestamp
-            context = SessionContext(session_id=session_id, user_id=user_id)
-            self._sessions[session_id] = context
-            return session_id, context
-
-    async def cleanup_expired_sessions(self) -> int:
-        """Remove expired sessions and return count of removed sessions."""
-        current_time = time.time()
-        expired_session_ids = [
-            sid for sid, ts in self._session_timestamps.items() if current_time - ts > SESSION_EXPIRY_SECONDS
-        ]
-
-        for session_id in expired_session_ids:
-            self._remove_session_id(session_id)
-            self._sessions.pop(session_id, None)
-
-        return len(expired_session_ids)
-
-    async def get_or_create(self, session_id: str, user_id: str) -> SessionContext:
-        """Return existing session context or create one for the requesting user."""
-        with self._lock:
-            if session_id in self._sessions:
-                context = self._sessions[session_id]
-                if context.user_id != user_id:
-                    msg = "Unauthorized access to session"
-                    raise PermissionError(msg)
-                self._session_timestamps[session_id] = time.time()
-                return context
-
-            if session_id in self._used_session_ids:
-                msg = "Session ID already in use"
-                raise ValueError(msg)
-
-            context = SessionContext(session_id=session_id, user_id=user_id)
-            self._sessions[session_id] = context
-            self._session_timestamps[session_id] = time.time()
-            self._used_session_ids.add(session_id)
-            return context
-
-    async def get(self, session_id: str, user_id: str) -> SessionContext | None:
-        """Return existing session context for the requesting user, if any."""
-        with self._lock:
-            context = self._sessions.get(session_id)
-            if context is None:
-                return None
-
-            if context.user_id != user_id:
-                msg = "Unauthorized access to session"
-                raise PermissionError(msg)
-
-            self._session_timestamps[session_id] = time.time()
-            return context
-
-    async def save(self, context: SessionContext) -> None:
-        """In-memory contexts are mutated in place; nothing to persist."""
 
 
 class DatabaseSessionStore(SessionStore):
@@ -266,7 +169,16 @@ class DatabaseSessionStore(SessionStore):
 
 
 def build_session_store() -> SessionStore:
-    """Return the active session store backend (database when configured)."""
-    if async_session_factory is not None:
-        return DatabaseSessionStore()
-    return MemorySessionStore()
+    """Return the PostgreSQL-backed session store.
+
+    PostgreSQL is a hard requirement: there is no in-memory fallback. Raises
+    :class:`RuntimeError` when the database layer is unavailable so the app
+    fails fast at startup instead of silently running without persistence.
+    """
+    if async_session_factory is None:
+        msg = (
+            "Sessions require DATABASE_URL to be configured: "
+            "PostgreSQL is mandatory, there is no in-memory fallback."
+        )
+        raise RuntimeError(msg)
+    return DatabaseSessionStore()
