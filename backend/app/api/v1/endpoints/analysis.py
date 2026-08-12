@@ -8,11 +8,13 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.api.v1.endpoints.ats import build_ats_analysis_response
 from app.api.v1.services import get_orchestration_agent, resolve_user_id
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.models import ChatRequest, Resume, SessionContext
 from app.models.agent import ResumeFile
+from app.utils.ats_engine import analyze_resume
 
 router = APIRouter()
 
@@ -175,3 +177,60 @@ async def run_alignment(request: Request, body: AlignmentRequest) -> dict:
             detail="Alignment analysis produced no result.",
         )
     return internal.content
+
+
+class CheckRequest(BaseModel):
+    resume: Resume
+    # Optional on purpose: the UI checks a resume without a JD (empty string is
+    # sent) and the ATS engine just skips keyword matching for the job.
+    jobDescription: str = ""
+
+
+@router.post("/check")
+@limiter.limit(settings.DEFAULT_RATE_LIMIT)
+async def check_resume(request: Request, body: CheckRequest) -> dict:
+    """Run the critic, then score the resume with the critic issues applied.
+
+    One round trip replaces the UI's parallel ats/analyze + analysis/critique
+    pair. No session required.
+    """
+    user_id = resolve_user_id(request)
+    context = SessionContext(session_id=None, user_id=user_id)
+    orchestrator = get_orchestration_agent()
+    internal = await run_in_threadpool(
+        orchestrator.orchestrate,
+        ChatRequest(
+            intent="RESUME_CRITIC",
+            resumeData=body.resume,
+            jobDescription=body.jobDescription,
+            messageHistory=[],
+        ),
+        context,
+    )
+    if internal.agent_name == "NormalizeStage":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=NO_RESUME_DETAIL,
+        )
+    if not isinstance(internal.content, dict):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Critique analysis produced no result.",
+        )
+    critic = internal.content
+
+    critic_issues = [
+        {key: issue.get(key) for key in ("location", "type", "severity", "description")}
+        for issue in (critic.get("issues") or [])
+        if isinstance(issue, dict)
+    ]
+    raw = await run_in_threadpool(
+        analyze_resume,
+        body.resume,
+        job_description=body.jobDescription.strip() or None,
+        critic_issues=critic_issues or None,
+    )
+    return {
+        "ats": build_ats_analysis_response(raw).model_dump(mode="json"),
+        "critic": critic,
+    }

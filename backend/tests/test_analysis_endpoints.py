@@ -120,3 +120,82 @@ def test_alignment_rejects_blank_job_description(stub):
     )
 
     assert response.status_code == 422
+
+
+def test_check_returns_ats_and_critic_in_one_call():
+    client = TestClient(app)
+
+    class CheckStub:
+        def orchestrate(self, request: ChatRequest, context) -> AgentResponse:
+            return AgentResponse(
+                agent_name="ResumeCriticAgent",
+                content={
+                    "issues": [
+                        {
+                            "location": "work[0].highlights[0]",
+                            "type": "structure",
+                            "severity": "MEDIUM",
+                            "description": "Bullet lacks quantified impact.",
+                        }
+                    ],
+                    "score": 88,
+                    "summary": "Solid resume.",
+                },
+            )
+
+    raw = {
+        "atsScore": 70,
+        "sections": [],
+        "detailedResults": {},
+        "keywordResult": None,
+        "scoreBreakdown": None,
+        "criticPenalty": 8,
+        "criticIssuesApplied": [
+            {
+                "location": "work[0].highlights[0]",
+                "type": "structure",
+                "severity": "MEDIUM",
+                "description": "Bullet lacks quantified impact.",
+            }
+        ],
+        "semanticScore": None,
+        "validationWarnings": [],
+    }
+    with patch("app.api.v1.endpoints.analysis.get_orchestration_agent", return_value=CheckStub()), patch(
+        "app.api.v1.endpoints.analysis.analyze_resume", return_value=raw
+    ) as mock_ats:
+        response = client.post(
+            "/api/v1/analysis/check",
+            headers={"X-User-Id": "alice"},
+            json={"resume": {"name": "Alice"}, "jobDescription": "SWE role"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ats"]["ats_score"] == 70
+    assert body["critic"]["score"] == 88
+    assert mock_ats.call_args.kwargs["critic_issues"] == [
+        {
+            "location": "work[0].highlights[0]",
+            "type": "structure",
+            "severity": "MEDIUM",
+            "description": "Bullet lacks quantified impact.",
+        }
+    ]
+
+
+def test_check_rejects_empty_resume():
+    client = TestClient(app)
+
+    class EmptyStub:
+        def orchestrate(self, request: ChatRequest, context) -> AgentResponse:
+            return AgentResponse(agent_name="NormalizeStage", content=None)
+
+    with patch("app.api.v1.endpoints.analysis.get_orchestration_agent", return_value=EmptyStub()):
+        response = client.post(
+            "/api/v1/analysis/check",
+            headers={"X-User-Id": "alice"},
+            json={"resume": {}},
+        )
+
+    assert response.status_code == 422

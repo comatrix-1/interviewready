@@ -18,27 +18,8 @@ from app.utils.ats_engine import analyze_resume
 router = APIRouter()
 
 
-@router.post("/analyze")
-@limiter.limit(settings.DEFAULT_RATE_LIMIT)
-async def analyze(request: Request, body: ATSAnalysisRequest) -> ATSAnalysisResponse:
-    """Score a parsed resume for ATS compatibility."""
-    try:
-        raw = analyze_resume(
-            body.resume,
-            job_description=body.job_description,
-            critic_issues=(
-                [ci.model_dump() for ci in body.critic_issues]
-                if body.critic_issues
-                else None
-            ),
-        )
-    except Exception as exc:
-        logger.error("ATS analysis failed", error=str(exc), exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="ATS analysis failed. Please try again.",
-        ) from exc
-
+def build_ats_analysis_response(raw: dict) -> ATSAnalysisResponse:
+    """Assemble the API ATSAnalysisResponse from a raw analyze_resume dict."""
     sections = []
     for sec in raw["sections"]:
         checks = {}
@@ -79,3 +60,27 @@ async def analyze(request: Request, body: ATSAnalysisRequest) -> ATSAnalysisResp
         semantic_score=raw.get("semanticScore"),
         validation_warnings=raw.get("validationWarnings", []),
     )
+
+
+@router.post("/analyze")
+@limiter.limit(settings.DEFAULT_RATE_LIMIT)
+async def analyze(request: Request, body: ATSAnalysisRequest) -> ATSAnalysisResponse:
+    """Score a parsed resume for ATS compatibility."""
+    try:
+        raw = analyze_resume(
+            body.resume,
+            job_description=body.job_description,
+            critic_issues=(
+                [ci.model_dump() for ci in body.critic_issues]
+                if body.critic_issues
+                else None
+            ),
+        )
+    except Exception as exc:
+        logger.error("ATS analysis failed", error=str(exc), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ATS analysis failed. Please try again.",
+        ) from exc
+
+    return build_ats_analysis_response(raw)
