@@ -1,6 +1,6 @@
 import type { Resume } from "../types/resume";
 import { API_BASE_URL } from "../config/env";
-import { getUserHeaders } from "../utils/identity";
+import { apiFetch, parseErrorDetail } from "./fetch";
 
 const SESSION_STORAGE_PREFIX = "interviewready_session_";
 
@@ -18,16 +18,15 @@ const storeSessionId = (identity: string, sessionId: string): void => {
 };
 
 export const initSession = async (): Promise<string> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/sessions/new`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/sessions/new`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...getUserHeaders(),
-    },
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
+    throw await parseErrorDetail(
+      response,
+      `Failed to create session: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data = (await response.json()) as { session_id: string };
@@ -69,16 +68,15 @@ export const seedSessionContext = async (
   if (resume) body.resumeData = resume;
   if (jobDescription) body.jobDescription = jobDescription;
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/context`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/context`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...getUserHeaders(),
-    },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to seed session context: ${response.status} ${response.statusText}`);
+    throw await parseErrorDetail(
+      response,
+      `Failed to seed session context: ${response.status} ${response.statusText}`,
+    );
   }
 };

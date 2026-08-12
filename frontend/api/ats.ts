@@ -1,7 +1,7 @@
 import type { Resume } from "@/types/resume";
 import type { ATSReport, ResumeCriticIssue } from "@/types/reports";
 import { API_BASE_URL } from "@/config/env";
-import { getUserHeaders } from "@/utils/identity";
+import { apiFetch, parseErrorDetail } from "./fetch";
 
 interface ATSAnalysisRequest {
   resume: Resume;
@@ -23,17 +23,16 @@ export const atsEngineAnalyze = async (
     body.critic_issues = criticIssues;
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/ats/analyze`, {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/ats/analyze`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...getUserHeaders(),
-    },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    throw new Error(`ATS analysis failed: ${response.status} ${response.statusText}`);
+    throw await parseErrorDetail(
+      response,
+      `ATS analysis failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   return (await response.json()) as ATSReport;
