@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { getOrCreateSession } from "../api/session";
+import { getOrCreateSession, seedSessionContext } from "../api/session";
 
 const AUTH_TOKEN = "test-token";
 const SESSION_PREFIX = "interviewready_session_";
@@ -71,5 +71,51 @@ describe("getOrCreateSession", () => {
     expect(storedSessionId("alice")).toBe("session_alice");
     expect(storedSessionId("bob")).toBe("session_bob");
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("seedSessionContext", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts the resume and job description to the session context endpoint", async () => {
+    localStorage.setItem("interviewready_username", "alice");
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+
+    await seedSessionContext(
+      "session_1",
+      AUTH_TOKEN,
+      { skills: [{ name: "Python" }] } as never,
+      "SWE role",
+    );
+
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(url).toEqual(expect.stringContaining("/api/v1/sessions/session_1/context"));
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toMatchObject({
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "X-User-Id": "alice",
+    });
+    expect(JSON.parse(init?.body as string)).toEqual({
+      resumeData: { skills: [{ name: "Python" }] },
+      jobDescription: "SWE role",
+    });
+  });
+
+  it("omits empty resume and job description from the body", async () => {
+    localStorage.setItem("interviewready_username", "alice");
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+
+    await seedSessionContext("session_1", AUTH_TOKEN, null, "");
+
+    const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(JSON.parse(init?.body as string)).toEqual({});
   });
 });
