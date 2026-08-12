@@ -82,6 +82,7 @@ async def test_create_all_creates_expected_tables(db_engine):
         "awards",
         "sessions",
         "users",
+        "saved_resumes",
     } <= set(tables)
 
 

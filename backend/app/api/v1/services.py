@@ -11,6 +11,7 @@ from app.agents import (
     AgentRegistry,
     GeminiService,
 )
+from app.db.resume_store import ResumeStore, build_resume_store
 from app.db.session_store import SessionStore, build_session_store
 from app.db.user_store import UserStore, build_user_store
 from app.governance import SharpGovernanceService
@@ -39,6 +40,17 @@ def get_user_store() -> UserStore:
 def get_session_store() -> SessionStore:
     """Return the session store instance."""
     return _session_store
+
+
+@lru_cache(maxsize=1)
+def get_resume_store() -> ResumeStore:
+    """Return the cached saved-resume store.
+
+    Lazy so database-free app imports still work; raises
+    :class:`ResumePersistenceUnavailableError` on invocation when ``DATABASE_URL``
+    is not configured (there is no memory fallback).
+    """
+    return build_resume_store()
 
 
 @lru_cache(maxsize=1)

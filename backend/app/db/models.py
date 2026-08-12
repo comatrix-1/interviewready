@@ -125,6 +125,20 @@ class SessionModel(Base):
     last_active_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class SavedResumeModel(Base):
+    """SQLAlchemy model for user-owned saved resume snapshots."""
+
+    __tablename__ = "saved_resumes"
+
+    id = Column(String, primary_key=True)
+    # Plain indexed string, intentionally NOT a FK: matches SessionModel.user_id
+    # and tolerates the dev-user fallback identity that has no users row.
+    user_id = Column(String, nullable=False, index=True)
+    filename = Column(String, nullable=False)
+    resume_data = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class UserModel(Base):
     """SQLAlchemy model for registered users (simulated login identity)."""
 
