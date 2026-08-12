@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -67,16 +68,20 @@ class FakeUserStore:
 
 
 @pytest.fixture(autouse=True)
-def _stub_stores(monkeypatch):
-    """Hermetic endpoint tests: stub session/user stores, never touch Postgres."""
+def _stub_stores(monkeypatch) -> FakeSessionStore:
+    """Hermetic endpoint tests: stub session/user stores, never touch Postgres.
+
+    Autouse, but also returns the fake session store so tests can request it by
+    name to assert on stored context (e.g. the seeded session).
+    """
     fake_sessions = FakeSessionStore()
     fake_users = FakeUserStore()
     monkeypatch.setattr("app.api.v1.endpoints.chat.get_session_store", lambda: fake_sessions)
     monkeypatch.setattr("app.api.v1.endpoints.chat.get_or_create_session_context", fake_sessions.get_or_create)
     monkeypatch.setattr("app.api.v1.endpoints.sessions.get_session_store", lambda: fake_sessions)
-    monkeypatch.setattr("app.api.v1.endpoints.sessions.get_session_context", fake_sessions.get)
     monkeypatch.setattr("app.api.v1.endpoints.sessions.get_or_create_session_context", fake_sessions.get_or_create)
     monkeypatch.setattr("app.api.v1.endpoints.users.get_user_store", lambda: fake_users)
+    return fake_sessions
 
 
 class StubOrchestrator:
@@ -254,19 +259,15 @@ def test_login_rejects_blank_username():
     assert empty.status_code == 422
 
 
-def test_session_created_with_x_user_id_header():
+def test_create_session_returns_session_id():
     client = TestClient(app)
 
     response = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"})
     assert response.status_code == 200
     session_id = response.json()["session_id"]
-
-    # The session belongs to the header user, so fetching without the header (dev-user) is forbidden.
-    forbidden = client.get(f"/api/v1/sessions/{session_id}/resume")
-    assert forbidden.status_code == 403
-
-    owned = client.get(f"/api/v1/sessions/{session_id}/resume", headers={"X-User-Id": "alice"})
-    assert owned.status_code == 404  # session exists but has no resume yet
+    assert session_id.startswith("session_")
+    # Ownership is enforced on every session route (see
+    # test_chat_rejects_other_users_session and the DELETE tests in Task 4).
 
 
 def test_chat_rejects_other_users_session():
@@ -292,7 +293,8 @@ def test_chat_rejects_other_users_session():
     assert anonymous.status_code == 403
 
 
-def test_seed_session_context_sets_resume_and_job_description():
+@pytest.mark.asyncio
+async def test_seed_session_context_sets_resume_and_job_description(_stub_stores):
     client = TestClient(app)
     sid = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"}).json()["session_id"]
 
@@ -306,10 +308,11 @@ def test_seed_session_context_sets_resume_and_job_description():
     )
     assert response.status_code == 200
 
-    # The seeded resume is now retrievable via the existing session-resume endpoint.
-    owned = client.get(f"/api/v1/sessions/{sid}/resume", headers={"X-User-Id": "alice"})
-    assert owned.status_code == 200
-    assert owned.json()["skills"][0]["name"] == "Python"
+    # Assert on the in-memory store (the resume-retrieval route is removed).
+    ctx = await _stub_stores.get(sid, "alice")
+    assert ctx is not None
+    assert json.loads(ctx.resume_data)["skills"][0]["name"] == "Python"
+    assert ctx.job_description == "SWE role"
 
 
 def test_seed_session_context_forbids_other_user():
