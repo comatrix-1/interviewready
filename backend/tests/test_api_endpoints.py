@@ -75,6 +75,7 @@ def _stub_stores(monkeypatch):
     monkeypatch.setattr("app.api.v1.endpoints.chat.get_or_create_session_context", fake_sessions.get_or_create)
     monkeypatch.setattr("app.api.v1.endpoints.sessions.get_session_store", lambda: fake_sessions)
     monkeypatch.setattr("app.api.v1.endpoints.sessions.get_session_context", fake_sessions.get)
+    monkeypatch.setattr("app.api.v1.endpoints.sessions.get_or_create_session_context", fake_sessions.get_or_create)
     monkeypatch.setattr("app.api.v1.endpoints.users.get_user_store", lambda: fake_users)
 
 
@@ -262,6 +263,38 @@ def test_chat_rejects_other_users_session():
         json=_chat_request_payload("INTERVIEW_COACH"),
     )
     assert anonymous.status_code == 403
+
+
+def test_seed_session_context_sets_resume_and_job_description():
+    client = TestClient(app)
+    sid = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"}).json()["session_id"]
+
+    response = client.post(
+        f"/api/v1/sessions/{sid}/context",
+        headers={"X-User-Id": "alice"},
+        json={
+            "resumeData": {"skills": [{"name": "Python"}]},
+            "jobDescription": "SWE role",
+        },
+    )
+    assert response.status_code == 200
+
+    # The seeded resume is now retrievable via the existing session-resume endpoint.
+    owned = client.get(f"/api/v1/sessions/{sid}/resume", headers={"X-User-Id": "alice"})
+    assert owned.status_code == 200
+    assert owned.json()["skills"][0]["name"] == "Python"
+
+
+def test_seed_session_context_forbids_other_user():
+    client = TestClient(app)
+    sid = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"}).json()["session_id"]
+
+    response = client.post(
+        f"/api/v1/sessions/{sid}/context",
+        headers={"X-User-Id": "mallory"},
+        json={"resumeData": {"skills": [{"name": "Python"}]}},
+    )
+    assert response.status_code == 403
 
 
 def _stub_resume_store(**kwargs):
