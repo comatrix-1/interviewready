@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import { WorkflowStatus, InterviewMode } from "./types/workflow";
 import type { SharedState } from "./types/workflow";
-import type { Resume, SavedResume } from "./types/resume";
+import type { Resume } from "./types/resume";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
-import { createSavedResume, listSavedResumes, seedSessionContext } from "./api";
+import { createSavedResume, seedSessionContext } from "./api";
 import { clearStoredSession, deleteSession } from "./api/session";
 import { alignmentAgent, checkResume, parseResumeFile } from "./api/analysis";
 import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
 import { BackendServiceProvider, useBackendService } from "./providers/BackendServiceProvider";
 import { useWorkflowState } from "./hooks/useWorkflowState";
+import { useSavedResumes } from "./hooks/useSavedResumes";
 import { StepIndicator } from "./components/StepIndicator";
 import { ResumePreview } from "./components/ResumePreview";
 import { LoadingState } from "./components/LoadingState";
@@ -201,6 +202,7 @@ const AppContent: React.FC = () => {
                 chatEndRef={chatEndRef}
                 sessionId={sessionId}
                 ensureSession={ensureSession}
+                username={username}
               />
             </div>
           </div>
@@ -235,33 +237,13 @@ const WorkflowController: React.FC<{
   chatEndRef: React.RefObject<HTMLDivElement | null>;
   sessionId: string;
   ensureSession: () => Promise<string>;
-}> = ({ state, updateState, setError, chatEndRef, sessionId, ensureSession }) => {
+  username: string;
+}> = ({ state, updateState, setError, chatEndRef, sessionId, ensureSession, username }) => {
   const { startLoading, updateProgress, stopLoading } = useLoading();
   const [manualResumeText, setManualResumeText] = useState("");
   const [manualResumeError, setManualResumeError] = useState<string | null>(null);
-  const [savedResumes, setSavedResumes] = useState<SavedResume[]>([]);
-  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  const { savedResumes, setSavedResumes, isLoadingResumes } = useSavedResumes(username);
   const [isUploading, setIsUploading] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoadingResumes(true);
-    listSavedResumes()
-      .then((resumes) => {
-        if (!cancelled) setSavedResumes(resumes);
-      })
-      .catch(() => {
-        // Non-blocking: saved resumes are an enhancement. Without DATABASE_URL the
-        // call 503s; keep the list empty and the manual JSON flow stays usable.
-        if (!cancelled) setSavedResumes([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingResumes(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const processPdfFile = async (file: File) => {
     updateProgress(25, 0);
