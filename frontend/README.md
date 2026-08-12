@@ -332,23 +332,22 @@ Total: 5 questions across different types
 
 ### 4. Session Management
 
+Sessions exist only for the interview coach step. They are created lazily when the interview starts — never on app load, and never for the upload/parse, ATS critique, or job-alignment steps (those use the session-free `/api/v1/analysis` endpoints).
+
 **Session States:**
 
-- Local session ID generation (client-side)
-- Session persistence via localStorage
-- Multi-turn conversation history
-- Resume data caching
+- Server-side session ID created on demand at interview start (`ensureSession()`)
+- Interview context (resume + job description) seeded via `POST /api/v1/sessions/{id}/context`
+- Multi-turn conversation history tracked per session
 
 **Session Lifecycle:**
 
 ```typescript
-// Session creation
-const sessionId = generateSessionId(); // UUID
-localStorage.setItem("sessionId", sessionId);
+// Session creation — only when the interview starts
+const sessionId = await ensureSession();
 
-// Session persistence
-const resumeData = JSON.stringify(resume);
-localStorage.setItem(`resume_${sessionId}`, resumeData);
+// Seed the interview context before the first question
+await seedSessionContext(sessionId, authToken, resume, jobDescription);
 
 // Session cleanup (on logout)
 localStorage.removeItem("sessionId");

@@ -29,7 +29,7 @@ Production-ready Python FastAPI backend with LangGraph-based multi-agent AI orch
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  API LAYER (app/api/v1/)                                        │
-│  ├─ POST /chat          (Multi-intent routing)                  │
+│  ├─ POST /chat          (Interview coach routing)               │
 │  ├─ GET  /agents        (Agent registry)                        │
 │  └─ GET  /health        (System status)                         │
 │                                                                  │
@@ -288,12 +288,12 @@ Mock responses defined in `app/mock_responses.json`:
 
 #### POST `/api/v1/chat`
 
-Main orchestration endpoint for all agent interactions.
+Interview-coach endpoint for multi-turn voice/text interviews (INTERVIEW_COACH intent only). Other intents are rejected with `422`; the upload/parse, ATS critique, and job-alignment steps use the session-free `/api/v1/analysis` endpoints.
 
 **Request:**
 ```json
 {
-  "intent": "RESUME_CRITIC|CONTENT_STRENGTH|ALIGNMENT|INTERVIEW_COACH",
+  "intent": "INTERVIEW_COACH",
   "resumeData": {
     "contact": "John Doe...",
     "work": [...],
@@ -335,6 +335,16 @@ Main orchestration endpoint for all agent interactions.
 - `needs_review` - Boolean flag for human review escalation
 - `low_confidence_fields` - Array of fields below confidence threshold
 - `decision_trace` - Array of reasoning steps for auditability
+
+### Analysis endpoints (session-free)
+
+These endpoints never read or write sessions; they scope data by `X-User-Id` like the saved-resumes endpoints.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/analysis/parse` | Parse an uploaded PDF into structured `Resume` JSON (body: `{"file": {"data": "<base64>", "fileType": "pdf"}}`) |
+| `POST /api/v1/analysis/critique` | ATS/resume critique (body: `{"resume": {...}}`) |
+| `POST /api/v1/analysis/alignment` | Job alignment (body: `{"resume": {...}, "jobDescription": "..."}`) |
 
 #### POST `/api/v1/users/login`
 
@@ -699,7 +709,7 @@ uv run pytest backend/tests/test_interview_coach.py::test_five_question_progress
 curl -X POST "http://localhost:8080/api/v1/chat" \
   -H "Content-Type: application/json" \
   -d '{
-    "intent": "RESUME_CRITIC",
+    "intent": "INTERVIEW_COACH",
     "resumeData": {"contact": "John Doe", ...}
   }'
 ```
@@ -919,7 +929,7 @@ uv run lint-imports
 - Automatic session creation and tracking
 - Context preservation across multiple requests
 
-Sessions are stored in PostgreSQL only (via `app/db/session_store.py`); there is no in-memory fallback, and `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted.
+Sessions are stored in PostgreSQL only (via `app/db/session_store.py`) and are used exclusively by the interview coach step: `POST /api/v1/chat` (INTERVIEW_COACH intent), the `/api/v1/sessions` endpoints, and the `/api/v1/interview` voice WebSocket relay. The upload/parse, ATS critique, and job-alignment steps use the session-free `/api/v1/analysis` endpoints and never touch sessions. `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted.
 
 ## Testing
 
