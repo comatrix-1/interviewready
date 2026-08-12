@@ -5,10 +5,10 @@ import json
 import traceback
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from app.agents.gemini_live import GeminiLive
-from app.api.v1.services import DEFAULT_USER_ID, get_or_create_session_context, resolve_user_id
+from app.api.v1.services import DEFAULT_USER_ID, get_or_create_session_context
 from app.core.config import settings
 from app.core.logging import logger
 
@@ -48,19 +48,6 @@ def _build_system_instruction(context) -> str:
         )
 
     return system_instruction
-
-
-@router.get("/token")
-async def get_live_token(request: Request, session_id: str):
-    """Return current live-session config for the frontend relay flow."""
-    user_id = resolve_user_id(request)
-    context = await get_or_create_session_context(session_id=session_id, user_id=user_id)
-
-    return {
-        "api_key": settings.GEMINI_API_KEY,
-        "model": LIVE_MODEL,
-        "system_instruction": _build_system_instruction(context),
-    }
 
 
 @router.websocket("/live")
