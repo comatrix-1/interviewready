@@ -61,24 +61,27 @@ export const getOrCreateSession = (identity: string, authToken: string): Promise
   return creation;
 };
 
-export const fetchCurrentResume = async (
+export const seedSessionContext = async (
   sessionId: string,
   authToken: string,
-): Promise<Resume | null> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/resume`, {
-    method: "GET",
+  resume: Resume | null | undefined,
+  jobDescription: string,
+): Promise<void> => {
+  const body: { resumeData?: Resume; jobDescription?: string } = {};
+  if (resume) body.resumeData = resume;
+  if (jobDescription) body.jobDescription = jobDescription;
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/context`, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
       ...getUserHeaders(),
     },
+    body: JSON.stringify(body),
   });
 
-  if (response.status === 404) return null;
-
   if (!response.ok) {
-    throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to seed session context: ${response.status} ${response.statusText}`);
   }
-
-  return (await response.json()) as Resume;
 };

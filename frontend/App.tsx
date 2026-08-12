@@ -2,13 +2,11 @@ import React, { useState, useRef, useEffect } from "react";
 import { WorkflowStatus, InterviewMode } from "./types/workflow";
 import type { SharedState } from "./types/workflow";
 import type { Resume, SavedResume } from "./types/resume";
-import type { ChatRequest } from "./types/api";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
-import { callChatEndpoint, createSavedResume, fetchCurrentResume, listSavedResumes } from "./api";
-import { resumeCriticAgent } from "@/api/chat-endpoints/resumeCritic";
+import { createSavedResume, listSavedResumes } from "./api";
+import { alignmentAgent, parseResumeFile, resumeCriticAgent } from "./api/analysis";
 import { atsEngineAnalyze } from "@/api/ats";
-import { alignmentAgent } from "@/api/chat-endpoints/alignment";
 import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
 import { BackendServiceProvider, useBackendService } from "./providers/BackendServiceProvider";
 import { useWorkflowState } from "./hooks/useWorkflowState";
@@ -266,36 +264,16 @@ const WorkflowController: React.FC<{
     updateProgress(25, 0);
     const base64 = await fileToBase64(file);
     updateProgress(50, 1);
-
-    const request: ChatRequest = {
-      intent: "RESUME_CRITIC",
-      resumeData: null,
-      jobDescription: "",
-      messageHistory: [],
-      resumeFile: { data: base64, fileType: "pdf" },
-    };
-
     updateProgress(75, 2);
-    const response = await callChatEndpoint(sessionId, authToken, request);
-    const parsedResume = await fetchCurrentResume(sessionId, authToken);
-
-    let responseData;
-    try {
-      responseData = response.payload || JSON.parse(response.content || "{}");
-    } catch (parseErr) {
-      throw new Error(`Invalid response from backend: ${toErrorMessage(parseErr)}`, {
-        cause: parseErr,
-      });
-    }
-
+    const parsed = await parseResumeFile(authToken, { data: base64, fileType: "pdf" });
     updateProgress(90, 3);
-    return { responseData, parsedResume };
+    return parsed;
   };
 
   const runAtsAndCritic = async (resume: Resume) => {
     const [atsResult, criticResult] = await Promise.all([
       atsEngineAnalyze(authToken, resume),
-      resumeCriticAgent(sessionId, authToken, resume),
+      resumeCriticAgent(authToken, resume),
     ]);
     updateState((prev) => ({
       ...prev,
@@ -331,7 +309,7 @@ const WorkflowController: React.FC<{
       if (!state.currentResume) throw new Error("Current resume is null");
       const [atsResult, criticResult] = await Promise.all([
         atsEngineAnalyze(authToken, state.currentResume),
-        resumeCriticAgent(sessionId, authToken, state.currentResume),
+        resumeCriticAgent(authToken, state.currentResume),
       ]);
       updateProgress(100, 2);
 
@@ -370,7 +348,8 @@ const WorkflowController: React.FC<{
       "Generating insights",
     ]);
     try {
-      const { parsedResume } = await processPdfFile(file);
+      const parsedResumeResult = await processPdfFile(file);
+      const parsedResume = parsedResumeResult.resume;
       if (!parsedResume) {
         setError("Failed to parse the resume. Please try another PDF.");
         return;
@@ -433,7 +412,7 @@ const WorkflowController: React.FC<{
       const resumeToUse = parsed as Resume;
       const [atsResult, criticResult] = await Promise.all([
         atsEngineAnalyze(authToken, resumeToUse),
-        resumeCriticAgent(sessionId, authToken, resumeToUse),
+        resumeCriticAgent(authToken, resumeToUse),
       ]);
       updateProgress(100, 2);
       updateState((prev) => ({
@@ -465,7 +444,7 @@ const WorkflowController: React.FC<{
     try {
       const [atsResult, criticResult] = await Promise.all([
         atsEngineAnalyze(authToken, state.currentResume),
-        resumeCriticAgent(sessionId, authToken, state.currentResume),
+        resumeCriticAgent(authToken, state.currentResume),
       ]);
       updateState((prev) => ({
         ...prev,
@@ -489,12 +468,7 @@ const WorkflowController: React.FC<{
     ]);
     try {
       updateProgress(25, 0);
-      const report = await alignmentAgent(
-        sessionId,
-        authToken,
-        state.currentResume,
-        state.jobDescription,
-      );
+      const report = await alignmentAgent(authToken, state.currentResume, state.jobDescription);
       updateProgress(100, 3);
       updateState((prev) => ({
         ...prev,

@@ -3,7 +3,7 @@ import type { InterviewMessage } from "@/types/workflow";
 import type { ChatRequest } from "@/types/api";
 import { callChatEndpoint } from "@/api/chat";
 import { formatInterviewCoachPayload } from "@/utils/parseUtils";
-import { hasResumeContent } from "./resumeCritic";
+import { hasResumeContent } from "../analysis";
 
 export const interviewCoachAgent = async (
   sessionId: string,

@@ -6,13 +6,12 @@ import {
   type ChatRequest,
   type ATSReport,
 } from "./types";
-import {
-  callChatEndpoint as repoCallChatEndpoint,
-  fetchCurrentResume as repoFetchCurrentResume,
-} from "./api";
+import { callChatEndpoint as repoCallChatEndpoint } from "./api";
 import { initSession } from "./api/session";
-import { resumeCriticAgent as resumeCriticService } from "@/api/chat-endpoints/resumeCritic";
-import { alignmentAgent as alignmentService } from "@/api/chat-endpoints/alignment";
+import {
+  alignmentAgent as alignmentService,
+  resumeCriticAgent as resumeCriticService,
+} from "./api/analysis";
 import { interviewCoachAgent as interviewCoachService } from "@/api/chat-endpoints/interviewCoach";
 import { atsEngineAnalyze as atsEngineAnalyzeFn } from "./api/ats";
 import { formatInterviewCoachPayload as formatPayload } from "./utils/parseUtils";
@@ -45,16 +44,12 @@ class BackendService {
     return repoCallChatEndpoint(this.sessionId, this.getAuthToken(), request);
   }
 
-  async fetchCurrentResume(): Promise<Resume | null> {
-    return repoFetchCurrentResume(this.sessionId, this.getAuthToken());
-  }
-
   private getAuthToken(): string {
     return localStorage.getItem("authToken") || "";
   }
 
   async resumeCriticAgent(resume: Resume): Promise<ResumeCriticReport> {
-    return resumeCriticService(this.sessionId, this.getAuthToken(), resume);
+    return resumeCriticService(this.getAuthToken(), resume);
   }
 
   async atsEngineAnalyze(resume: Resume, criticIssues?: ResumeCriticIssue[]): Promise<ATSReport> {
@@ -62,7 +57,7 @@ class BackendService {
   }
 
   async alignmentAgent(resume: Resume | null | undefined, jd: string): Promise<AlignmentReport> {
-    return alignmentService(this.sessionId, this.getAuthToken(), resume, jd);
+    return alignmentService(this.getAuthToken(), resume, jd);
   }
 
   async interviewCoachAgent(
