@@ -341,8 +341,7 @@ Main orchestration endpoint for all agent interactions.
 Simulated login: registers the user if they don't exist yet, then returns their
 identity. Once logged in, the frontend sends the username via the `X-User-Id`
 header on subsequent calls so sessions are owned by that user (falling back to
-`dev-user` when no header is present). Users are stored in PostgreSQL when
-`DATABASE_URL` is set and in memory otherwise.
+`dev-user` when no header is present). Users are stored in PostgreSQL (the `users` table).
 
 **Request:**
 ```json
@@ -479,11 +478,11 @@ LANGFUSE_PUBLIC_KEY=pk-...            # Langfuse public key
 LANGFUSE_SECRET_KEY=sk-...            # Langfuse secret key
 LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Langfuse endpoint
 
-# Database (Optional — enables SQLAlchemy async persistence; unset = DB-free)
+# Database (Required — PostgreSQL is mandatory; no in-memory fallback)
 DATABASE_URL=postgresql+asyncpg://interviewready:interviewready@localhost:5432/interviewready
 
-> When `DATABASE_URL` is set, the app creates tables on startup and fails fast if the
-> database is unreachable. Without it, the app runs database-free.
+> `DATABASE_URL` is required. The app creates tables on startup and fails fast if the
+> database is unreachable or `DATABASE_URL` is missing.
 
 # Agent Mock Mode (Optional)
 MOCK_RESUME_CRITIC_AGENT=false        # Use mock responses instead of API
@@ -920,7 +919,7 @@ uv run lint-imports
 - Automatic session creation and tracking
 - Context preservation across multiple requests
 
-Sessions are stored in PostgreSQL (via `app/db/session_store.py`) when `DATABASE_URL` is set, and fall back to an in-memory store otherwise. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. Note: state from a *failed* chat request is not persisted (in-memory mode kept partial mutations).
+Sessions are stored in PostgreSQL only (via `app/db/session_store.py`); there is no in-memory fallback, and `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted.
 
 ## Testing
 
