@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 os.environ["DEBUG"] = "false"
@@ -9,7 +10,72 @@ os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
 
 from app.db.resume_store import ResumePersistenceUnavailableError, SavedResumeRecord
 from app.main import app
-from app.models import AgentResponse, ChatRequest, Resume, Skill
+from app.models import AgentResponse, ChatRequest, Resume, SessionContext, Skill
+
+
+class FakeSessionStore:
+    """In-memory SessionStore stub with DatabaseSessionStore ownership semantics."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[tuple[str, str], SessionContext] = {}
+
+    async def create_session(self, user_id: str) -> tuple[str, SessionContext]:
+        session_id = f"session_{len(self._sessions) + 1}"
+        context = SessionContext(session_id=session_id, user_id=user_id)
+        self._sessions[(session_id, user_id)] = context
+        return session_id, context
+
+    async def get_or_create(self, session_id: str, user_id: str) -> SessionContext:
+        existing = self._sessions.get((session_id, user_id))
+        if existing is not None:
+            return existing
+        if any(sid == session_id for (sid, _uid) in self._sessions):
+            msg = "Unauthorized access to session"
+            raise PermissionError(msg)
+        context = SessionContext(session_id=session_id, user_id=user_id)
+        self._sessions[(session_id, user_id)] = context
+        return context
+
+    async def get(self, session_id: str, user_id: str) -> SessionContext | None:
+        context = self._sessions.get((session_id, user_id))
+        if context is not None:
+            return context
+        if any(sid == session_id for (sid, _uid) in self._sessions):
+            msg = "Unauthorized access to session"
+            raise PermissionError(msg)
+        return None
+
+    async def save(self, context: SessionContext) -> None:
+        if context.session_id is not None:
+            self._sessions[(context.session_id, context.user_id)] = context
+
+    async def cleanup_expired_sessions(self) -> int:
+        return 0
+
+
+class FakeUserStore:
+    """In-memory UserStore stub: fresh registration state per test."""
+
+    def __init__(self) -> None:
+        self._usernames: set[str] = set()
+
+    async def get_or_create(self, username: str) -> bool:
+        if username in self._usernames:
+            return False
+        self._usernames.add(username)
+        return True
+
+
+@pytest.fixture(autouse=True)
+def _stub_stores(monkeypatch):
+    """Hermetic endpoint tests: stub session/user stores, never touch Postgres."""
+    fake_sessions = FakeSessionStore()
+    fake_users = FakeUserStore()
+    monkeypatch.setattr("app.api.v1.endpoints.chat.get_session_store", lambda: fake_sessions)
+    monkeypatch.setattr("app.api.v1.endpoints.chat.get_or_create_session_context", fake_sessions.get_or_create)
+    monkeypatch.setattr("app.api.v1.endpoints.sessions.get_session_store", lambda: fake_sessions)
+    monkeypatch.setattr("app.api.v1.endpoints.sessions.get_session_context", fake_sessions.get)
+    monkeypatch.setattr("app.api.v1.endpoints.users.get_user_store", lambda: fake_users)
 
 
 class StubOrchestrator:
