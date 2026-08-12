@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 langfuse = Langfuse()
 
 INTENT_TO_AGENTS = {
+    Intent.RESUME_PARSE: [],
     Intent.RESUME_CRITIC: ["ResumeCriticAgent"],
     Intent.CONTENT_STRENGTH: ["ContentStrengthAgent"],
     Intent.ALIGNMENT: ["JobAlignmentAgent"],
@@ -92,6 +93,9 @@ class OrchestrationAgent:
             result = self.workflow.invoke(state, config=config)
             final_state = result if isinstance(result, OrchestrationState) else None
             response = final_state.response if final_state is not None else result.get("response")
+
+            if not response and final_state is not None:
+                response = self._build_empty_sequence_response(final_state)
 
             if not response:
                 msg = "No response produced"
@@ -423,6 +427,36 @@ class OrchestrationAgent:
         memory.update(kwargs)
         state.shared_memory = memory
         state.context.shared_memory = memory
+
+    @staticmethod
+    def _build_empty_sequence_response(state: OrchestrationState) -> AgentResponse | None:
+        """Synthesize a parse result when the workflow ran no agent (RESUME_PARSE).
+
+        Returns None when there is nothing parseable so the caller's existing
+        "No response produced" error still applies.
+        """
+        resume_text = state.context.resume_data
+        if not resume_text:
+            return None
+        try:
+            resume_dict = json.loads(resume_text)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(resume_dict, dict) or not resume_dict:
+            return None
+        memory = state.shared_memory or {}
+        return AgentResponse(
+            agent_name="ResumeParser",
+            content={"resume": resume_dict},
+            reasoning="Resume parsed from uploaded file.",
+            confidence_score=memory.get("extractor_confidence_score") or 1.0,
+            needs_review=bool(memory.get("extractor_needs_review")),
+            low_confidence_fields=list(memory.get("extractor_low_confidence_fields") or []),
+            decision_trace=list(state.context.decision_trace or []),
+            sharp_metadata={
+                "validation_errors": list(memory.get("extractor_validation_errors") or []),
+            },
+        )
 
     def _validate_resume_data(self, resume: Resume) -> list[str]:
         errors: list[str] = []

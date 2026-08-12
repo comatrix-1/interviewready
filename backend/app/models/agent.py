@@ -54,6 +54,7 @@ class ChatRequest(BaseModel):
     """Chat request model with rich JSON structure."""
 
     intent: Literal[
+        "RESUME_PARSE",
         "RESUME_CRITIC",
         "CONTENT_STRENGTH",
         "ALIGNMENT",
@@ -203,6 +204,7 @@ class AgentInput(BaseModel):
     """Structured input passed from the orchestrator to individual agents."""
 
     intent: Literal[
+        "RESUME_PARSE",
         "RESUME_CRITIC",
         "CONTENT_STRENGTH",
         "ALIGNMENT",
@@ -216,6 +218,7 @@ class AgentInput(BaseModel):
 
 
 class Intent(StrEnum):
+    RESUME_PARSE = "RESUME_PARSE"
     RESUME_CRITIC = "RESUME_CRITIC"
     CONTENT_STRENGTH = "CONTENT_STRENGTH"
     ALIGNMENT = "ALIGNMENT"
