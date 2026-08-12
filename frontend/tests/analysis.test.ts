@@ -27,7 +27,7 @@ describe("session-free analysis API client", () => {
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(url).toEqual(expect.stringContaining("/api/v1/analysis/parse"));
-    expect(String(url)).not.toContain("sessionId");
+    expect(url as string).not.toContain("sessionId");
     expect(init?.headers).toMatchObject({
       Authorization: `Bearer ${AUTH_TOKEN}`,
       "X-User-Id": "alice",
@@ -47,8 +47,8 @@ describe("session-free analysis API client", () => {
     const report = await resumeCriticAgent(AUTH_TOKEN, { name: "Alice" } as never);
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
-    expect(String(url)).toEqual(expect.stringContaining("/api/v1/analysis/critique"));
-    expect(String(url)).not.toContain("sessionId");
+    expect(url as string).toEqual(expect.stringContaining("/api/v1/analysis/critique"));
+    expect(url as string).not.toContain("sessionId");
     expect(JSON.parse(init?.body as string)).toEqual({ resume: { name: "Alice" } });
     expect(report.score).toBe(88);
   });
@@ -67,8 +67,8 @@ describe("session-free analysis API client", () => {
     const report = await alignmentAgent(AUTH_TOKEN, { name: "Alice" } as never, "SWE role");
 
     const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
-    expect(String(url)).toEqual(expect.stringContaining("/api/v1/analysis/alignment"));
-    expect(String(url)).not.toContain("sessionId");
+    expect(url as string).toEqual(expect.stringContaining("/api/v1/analysis/alignment"));
+    expect(url as string).not.toContain("sessionId");
     expect(JSON.parse(init?.body as string)).toEqual({
       resume: { name: "Alice" },
       jobDescription: "SWE role",
