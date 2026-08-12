@@ -158,7 +158,7 @@ def _chat_request_payload(intent: str) -> dict:
     }
 
 
-def test_agents_and_chat():
+def test_agents_and_interview_chat():
     client = TestClient(app)
 
     r1 = client.get("/api/v1/agents")
@@ -169,58 +169,27 @@ def test_agents_and_chat():
         "app.api.v1.endpoints.chat.get_orchestration_agent",
         return_value=StubOrchestrator(),
     ):
-        resume_response = client.post(
-            "/api/v1/chat",
-            params={"sessionId": "s1"},
-            json=_chat_request_payload("RESUME_CRITIC"),
-        )
-        content_response = client.post(
-            "/api/v1/chat",
-            params={"sessionId": "s1"},
-            json=_chat_request_payload("CONTENT_STRENGTH"),
-        )
-        alignment_response = client.post(
-            "/api/v1/chat",
-            params={"sessionId": "s1"},
-            json=_chat_request_payload("ALIGNMENT"),
-        )
         interview_response = client.post(
             "/api/v1/chat",
             params={"sessionId": "s1"},
             json=_chat_request_payload("INTERVIEW_COACH"),
         )
 
-    assert resume_response.status_code == 200
-    resume_payload = resume_response.json()["payload"]
-    assert {
-        "score",
-        "readability",
-        "formattingRecommendations",
-        "suggestions",
-    } <= set(resume_payload.keys())
-
-    assert content_response.status_code == 200
-    content_payload = content_response.json()["payload"]
-    assert {
-        "skills",
-        "achievements",
-        "suggestions",
-        "hallucinationRisk",
-        "summary",
-    } <= set(content_payload.keys())
-
-    assert alignment_response.status_code == 200
-    alignment_payload = alignment_response.json()["payload"]
-    assert {
-        "skillsMatch",
-        "missingSkills",
-        "experienceMatch",
-        "fitScore",
-        "reasoning",
-    } <= set(alignment_payload.keys())
-
     assert interview_response.status_code == 200
     assert isinstance(interview_response.json()["payload"], dict)
+
+
+def test_chat_rejects_non_interview_intents():
+    client = TestClient(app)
+
+    for intent in ("RESUME_CRITIC", "CONTENT_STRENGTH", "ALIGNMENT"):
+        response = client.post(
+            "/api/v1/chat",
+            params={"sessionId": "s1"},
+            json=_chat_request_payload(intent),
+        )
+        assert response.status_code == 422
+        assert "interview coach" in response.json()["detail"]
 
 
 def test_chat_rejects_invalid_intent():
@@ -283,14 +252,14 @@ def test_chat_rejects_other_users_session():
         "/api/v1/chat",
         params={"sessionId": session_id},
         headers={"X-User-Id": "mallory"},
-        json=_chat_request_payload("RESUME_CRITIC"),
+        json=_chat_request_payload("INTERVIEW_COACH"),
     )
     assert stolen.status_code == 403
 
     anonymous = client.post(
         "/api/v1/chat",
         params={"sessionId": session_id},
-        json=_chat_request_payload("RESUME_CRITIC"),
+        json=_chat_request_payload("INTERVIEW_COACH"),
     )
     assert anonymous.status_code == 403
 
