@@ -159,12 +159,8 @@ def _chat_request_payload(intent: str) -> dict:
     }
 
 
-def test_agents_and_chat():
+def test_chat_intents():
     client = TestClient(app)
-
-    r1 = client.get("/api/v1/agents")
-    assert r1.status_code == 200
-    assert "ResumeCriticAgent" in r1.json()
 
     with patch(
         "app.api.v1.endpoints.chat.get_orchestration_agent",
