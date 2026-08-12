@@ -35,6 +35,23 @@ async def create_session(request: Request) -> dict:
     return {"session_id": session_id}
 
 
+@router.delete("/{session_id}")
+@limiter.limit(settings.DEFAULT_RATE_LIMIT)
+async def delete_session(
+    request: Request,
+    session_id: Annotated[str, Path()],
+) -> dict:
+    """Delete a session owned by the caller (404 for missing or foreign sessions)."""
+    user_id = resolve_user_id(request)
+    deleted = await get_session_store().delete(session_id=session_id, user_id=user_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+    return {"ok": True}
+
+
 @router.post("/{session_id}/context")
 @limiter.limit(settings.DEFAULT_RATE_LIMIT)
 async def seed_session_context(

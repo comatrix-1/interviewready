@@ -50,6 +50,9 @@ class FakeSessionStore:
         if context.session_id is not None:
             self._sessions[(context.session_id, context.user_id)] = context
 
+    async def delete(self, session_id: str, user_id: str) -> bool:
+        return self._sessions.pop((session_id, user_id), None) is not None
+
     async def cleanup_expired_sessions(self) -> int:
         return 0
 
@@ -313,6 +316,32 @@ async def test_seed_session_context_sets_resume_and_job_description(_stub_stores
     assert ctx is not None
     assert json.loads(ctx.resume_data)["skills"][0]["name"] == "Python"
     assert ctx.job_description == "SWE role"
+
+
+@pytest.mark.asyncio
+async def test_delete_session_removes_own_session(_stub_stores):
+    client = TestClient(app)
+    sid = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"}).json()["session_id"]
+
+    response = client.delete(f"/api/v1/sessions/{sid}", headers={"X-User-Id": "alice"})
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert await _stub_stores.get(sid, "alice") is None
+
+
+def test_delete_session_hides_other_users_session():
+    client = TestClient(app)
+    sid = client.post("/api/v1/sessions/new", headers={"X-User-Id": "alice"}).json()["session_id"]
+
+    response = client.delete(f"/api/v1/sessions/{sid}", headers={"X-User-Id": "mallory"})
+    assert response.status_code == 404
+
+
+def test_delete_missing_session_is_404():
+    client = TestClient(app)
+
+    response = client.delete("/api/v1/sessions/session_nope", headers={"X-User-Id": "alice"})
+    assert response.status_code == 404
 
 
 def test_seed_session_context_forbids_other_user():

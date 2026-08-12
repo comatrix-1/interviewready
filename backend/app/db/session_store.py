@@ -83,6 +83,10 @@ class SessionStore(ABC):
         """Persist the (possibly mutated) session context."""
 
     @abstractmethod
+    async def delete(self, session_id: str, user_id: str) -> bool:
+        """Delete a session owned by *user_id*; return True if a row was removed."""
+
+    @abstractmethod
     async def cleanup_expired_sessions(self) -> int:
         """Remove expired sessions and return count of removed sessions."""
 
@@ -133,6 +137,18 @@ class DatabaseSessionStore(SessionStore):
         async with async_session_factory() as session:
             await session.merge(_to_model(context))
             await session.commit()
+
+    async def delete(self, session_id: str, user_id: str) -> bool:
+        """Delete the session row only if it belongs to *user_id*."""
+        async with async_session_factory() as session:
+            result = await session.execute(
+                delete(SessionModel).where(
+                    SessionModel.id == session_id,
+                    SessionModel.user_id == user_id,
+                )
+            )
+            await session.commit()
+            return (result.rowcount or 0) > 0
 
     async def cleanup_expired_sessions(self) -> int:
         """Remove expired sessions and return count of removed sessions."""

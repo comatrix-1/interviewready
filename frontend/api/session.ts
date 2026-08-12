@@ -80,3 +80,20 @@ export const seedSessionContext = async (
     );
   }
 };
+
+export const deleteSession = async (sessionId: string): Promise<void> => {
+  const response = await apiFetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw await parseErrorDetail(
+      response,
+      `Failed to delete session: ${response.status} ${response.statusText}`,
+    );
+  }
+};
+
+export const clearStoredSession = (identity: string): void => {
+  localStorage.removeItem(storedSessionKey(identity));
+};

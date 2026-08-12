@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { getOrCreateSession, seedSessionContext } from "../api/session";
+import {
+  clearStoredSession,
+  deleteSession,
+  getOrCreateSession,
+  seedSessionContext,
+} from "../api/session";
 
 const SESSION_PREFIX = "interviewready_session_";
 
@@ -109,5 +114,33 @@ describe("seedSessionContext", () => {
 
     const [, init] = vi.mocked(globalThis.fetch).mock.calls[0];
     expect(JSON.parse(init?.body as string)).toEqual({});
+  });
+});
+
+describe("deleteSession / clearStoredSession", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("deletes the session via DELETE /api/v1/sessions/:id", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+
+    await deleteSession("session_1");
+
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(url).toEqual(expect.stringContaining("/api/v1/sessions/session_1"));
+    expect(init?.method).toBe("DELETE");
+  });
+
+  it("clearStoredSession removes the persisted session id", () => {
+    localStorage.setItem(`${SESSION_PREFIX}alice`, "session_1");
+    clearStoredSession("alice");
+    expect(storedSessionId("alice")).toBe("");
   });
 });

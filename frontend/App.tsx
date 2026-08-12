@@ -5,6 +5,7 @@ import type { Resume, SavedResume } from "./types/resume";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
 import { createSavedResume, listSavedResumes, seedSessionContext } from "./api";
+import { clearStoredSession, deleteSession } from "./api/session";
 import { alignmentAgent, parseResumeFile, resumeCriticAgent } from "./api/analysis";
 import { atsEngineAnalyze } from "@/api/ats";
 import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
@@ -69,6 +70,17 @@ const AppContent: React.FC = () => {
     if (ok) setLoginInput("");
   };
 
+  const handleResetSession = () => {
+    resetSession();
+    const identity = username || "dev-user";
+    clearStoredSession(identity);
+    if (sessionId) {
+      // Best-effort: the server TTL-sweeps stale sessions anyway, so a failure
+      // here must never block the user.
+      void deleteSession(sessionId).catch(() => {});
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white text-slate-950">
       {/* 1. Primary SaaS Navbar */}
@@ -87,7 +99,7 @@ const AppContent: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <button
-            onClick={resetSession}
+            onClick={handleResetSession}
             className="text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors"
           >
             Reset Session
