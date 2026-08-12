@@ -4,7 +4,7 @@ import type { SharedState } from "./types/workflow";
 import type { Resume, SavedResume } from "./types/resume";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
-import { createSavedResume, listSavedResumes } from "./api";
+import { createSavedResume, listSavedResumes, seedSessionContext } from "./api";
 import { alignmentAgent, parseResumeFile, resumeCriticAgent } from "./api/analysis";
 import { atsEngineAnalyze } from "@/api/ats";
 import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
@@ -37,7 +37,7 @@ const AppContent: React.FC = () => {
   const {
     sessionId,
     authToken,
-    sessionReady,
+    ensureSession,
     sessionError: sessionInitError,
     username,
     isLoggingIn,
@@ -183,23 +183,17 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
-            {sessionReady && (
-              <div className="relative">
-                <WorkflowController
-                  state={state}
-                  updateState={updateState}
-                  setError={setError}
-                  chatEndRef={chatEndRef}
-                  sessionId={sessionId}
-                  authToken={authToken}
-                />
-              </div>
-            )}
-            {!sessionReady && (
-              <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
-              </div>
-            )}
+            <div className="relative">
+              <WorkflowController
+                state={state}
+                updateState={updateState}
+                setError={setError}
+                chatEndRef={chatEndRef}
+                sessionId={sessionId}
+                authToken={authToken}
+                ensureSession={ensureSession}
+              />
+            </div>
           </div>
 
           <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between text-[10px] text-slate-400 font-medium uppercase tracking-tight">
@@ -232,7 +226,8 @@ const WorkflowController: React.FC<{
   chatEndRef: React.RefObject<HTMLDivElement | null>;
   sessionId: string;
   authToken: string;
-}> = ({ state, updateState, setError, chatEndRef, sessionId, authToken }) => {
+  ensureSession: () => Promise<string>;
+}> = ({ state, updateState, setError, chatEndRef, sessionId, authToken, ensureSession }) => {
   const { startLoading, updateProgress, stopLoading } = useLoading();
   const [manualResumeText, setManualResumeText] = useState("");
   const [manualResumeError, setManualResumeError] = useState<string | null>(null);
@@ -491,38 +486,53 @@ const WorkflowController: React.FC<{
   };
 
   const startInterview = async (mode: InterviewMode) => {
-    updateState((prev) => ({
-      ...prev,
-      interviewMode: mode,
-      status: WorkflowStatus.INTERVIEWING,
-      interviewHistory: [],
-    }));
-
-    if (mode === "VOICE") {
-      setError(null);
-      return;
-    }
-
-    startLoading("Starting interview...", [
-      "Preparing first question",
-      "Personalizing coach guidance",
-    ]);
     setError(null);
     try {
-      updateProgress(50, 0);
-      const openingQuestion = await interviewCoachAgent(
-        sessionId,
-        authToken,
-        state.currentResume,
-        state.jobDescription,
-        [],
-      );
-      updateProgress(100, 1);
+      const id = await ensureSession();
+      if (!id) throw new Error("Failed to initialize session");
+
       updateState((prev) => ({
         ...prev,
+        interviewMode: mode,
         status: WorkflowStatus.INTERVIEWING,
-        interviewHistory: [{ role: "agent", text: openingQuestion }],
+        interviewHistory: [],
       }));
+
+      if (mode === "VOICE") {
+        // The voice relay builds its prompt from the session's resume context.
+        await seedSessionContext(id, authToken, state.currentResume, state.jobDescription);
+        return;
+      }
+
+      startLoading("Starting interview...", [
+        "Preparing first question",
+        "Personalizing coach guidance",
+      ]);
+      try {
+        updateProgress(50, 0);
+        const openingQuestion = await interviewCoachAgent(
+          id,
+          authToken,
+          state.currentResume,
+          state.jobDescription,
+          [],
+        );
+        updateProgress(100, 1);
+        updateState((prev) => ({
+          ...prev,
+          status: WorkflowStatus.INTERVIEWING,
+          interviewHistory: [{ role: "agent", text: openingQuestion }],
+        }));
+      } catch (err: unknown) {
+        setError(toErrorMessage(err) || "Failed to start interview");
+        updateState((prev) => ({
+          ...prev,
+          status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
+          interviewHistory: [],
+        }));
+      } finally {
+        stopLoading();
+      }
     } catch (err: unknown) {
       setError(toErrorMessage(err) || "Failed to start interview");
       updateState((prev) => ({
@@ -530,8 +540,6 @@ const WorkflowController: React.FC<{
         status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
         interviewHistory: [],
       }));
-    } finally {
-      stopLoading();
     }
   };
 

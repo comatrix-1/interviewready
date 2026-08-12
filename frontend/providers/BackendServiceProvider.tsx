@@ -1,12 +1,4 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-  useMemo,
-  useCallback,
-} from "react";
+import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback } from "react";
 import { getOrCreateSession } from "../api/session";
 import { loginUser } from "../api/users";
 import { clearCurrentUsername, getCurrentUsername, setCurrentUsername } from "../utils/identity";
@@ -14,8 +6,8 @@ import { clearCurrentUsername, getCurrentUsername, setCurrentUsername } from "..
 interface BackendServiceContextType {
   sessionId: string;
   authToken: string;
-  sessionReady: boolean;
   sessionError: string | null;
+  ensureSession: () => Promise<string>;
   username: string;
   isLoggingIn: boolean;
   loginError: string | null;
@@ -39,7 +31,6 @@ interface BackendServiceProviderProps {
 
 export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ children }) => {
   const [sessionId, setSessionId] = useState("");
-  const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [username, setUsername] = useState<string>(() => getCurrentUsername());
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -47,33 +38,21 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
 
   const authToken = localStorage.getItem("authToken") || "";
 
-  // Sessions are owned by the logged-in user (or the dev-user fallback when
-  // nobody has logged in), so the stored session is scoped by identity. On load
-  // we reuse an existing session for this identity; a new one is created only
-  // when none exists (e.g. first visit or after the user changes).
-  useEffect(() => {
-    let cancelled = false;
-    setSessionId("");
-    setSessionReady(false);
+  // Sessions exist only for the interview coach step: create one lazily when the
+  // interview starts instead of on app load. getOrCreateSession reuses a stored
+  // session and dedupes concurrent creations.
+  const ensureSession = useCallback(async (): Promise<string> => {
+    if (sessionId) return sessionId;
     setSessionError(null);
-    const init = async () => {
-      try {
-        const id = await getOrCreateSession(username || "dev-user", authToken);
-        if (!cancelled) {
-          setSessionId(id);
-          setSessionReady(true);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setSessionError(`Failed to initialize session: ${String(err)}`);
-        }
-      }
-    };
-    void init();
-    return () => {
-      cancelled = true;
-    };
-  }, [authToken, username]);
+    try {
+      const id = await getOrCreateSession(username || "dev-user", authToken);
+      setSessionId(id);
+      return id;
+    } catch (err) {
+      setSessionError(`Failed to initialize session: ${String(err)}`);
+      return "";
+    }
+  }, [sessionId, username, authToken]);
 
   const login = useCallback(async (rawUsername: string): Promise<boolean> => {
     const name = rawUsername.trim();
@@ -106,8 +85,8 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
     () => ({
       sessionId,
       authToken,
-      sessionReady,
       sessionError,
+      ensureSession,
       username,
       isLoggingIn,
       loginError,
@@ -117,8 +96,8 @@ export const BackendServiceProvider: React.FC<BackendServiceProviderProps> = ({ 
     [
       sessionId,
       authToken,
-      sessionReady,
       sessionError,
+      ensureSession,
       username,
       isLoggingIn,
       loginError,
