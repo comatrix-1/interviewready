@@ -1,13 +1,15 @@
 import os
-from unittest.mock import patch
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 os.environ["DEBUG"] = "false"
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
 
+from app.db.resume_store import ResumePersistenceUnavailableError, SavedResumeRecord
 from app.main import app
-from app.models import AgentResponse, ChatRequest
+from app.models import AgentResponse, ChatRequest, Resume, Skill
 
 
 class StubOrchestrator:
@@ -225,3 +227,137 @@ def test_chat_rejects_other_users_session():
         json=_chat_request_payload("RESUME_CRITIC"),
     )
     assert anonymous.status_code == 403
+
+
+def _stub_resume_store(**kwargs):
+    store = MagicMock()
+    store.list_for_user = AsyncMock(return_value=kwargs.get("list_result", []))
+    store.create = AsyncMock(return_value=kwargs.get("create_result"))
+    return patch("app.api.v1.endpoints.resumes.get_resume_store", return_value=store)
+
+
+def test_list_resumes_scoped_to_header_user():
+    client = TestClient(app)
+    store = MagicMock()
+    store.list_for_user = AsyncMock(return_value=[])
+    with patch("app.api.v1.endpoints.resumes.get_resume_store", return_value=store):
+        response = client.get("/api/v1/resumes", headers={"X-User-Id": "alice"})
+
+    assert response.status_code == 200
+    assert response.json() == {"resumes": []}
+    store.list_for_user.assert_awaited_once_with(user_id="alice")
+
+
+def test_list_resumes_returns_full_envelope():
+    client = TestClient(app)
+    record = SavedResumeRecord(
+        id="r1",
+        filename="resume.pdf",
+        created_at=datetime.now(timezone.utc),  # noqa: UP017 (datetime.UTC absent in this interpreter)
+        resume=Resume(skills=[Skill(name="Python")]),
+    )
+    with _stub_resume_store(list_result=[record]):
+        response = client.get("/api/v1/resumes", headers={"X-User-Id": "alice"})
+
+    assert response.status_code == 200
+    body = response.json()["resumes"][0]
+    assert body["id"] == "r1"
+    assert body["filename"] == "resume.pdf"
+    assert datetime.fromisoformat(body["createdAt"]) == record.created_at
+    assert body["resume"] == record.resume.model_dump(mode="json")
+
+
+def test_create_saved_resume_ignores_user_id_in_body():
+    client = TestClient(app)
+    store = MagicMock()
+    store.create = AsyncMock(
+        return_value=SavedResumeRecord(
+            id="r1",
+            filename="resume.pdf",
+            created_at=datetime.now(timezone.utc),  # noqa: UP017 (datetime.UTC absent in this interpreter)
+            resume=Resume(),
+        )
+    )
+    with patch("app.api.v1.endpoints.resumes.get_resume_store", return_value=store):
+        client.post(
+            "/api/v1/resumes",
+            headers={"X-User-Id": "alice"},
+            json={
+                "user_id": "mallory",
+                "filename": "resume.pdf",
+                "resume": {"skills": [{"name": "Python"}]},
+            },
+        )
+
+    _, kwargs = store.create.await_args
+    assert kwargs["user_id"] == "alice"
+
+
+def test_create_saved_resume_returns_201():
+    client = TestClient(app)
+    created = SavedResumeRecord(
+        id="r1",
+        filename="resume.pdf",
+        created_at=datetime.now(timezone.utc),  # noqa: UP017 (datetime.UTC absent in this interpreter)
+        resume=Resume(skills=[Skill(name="Python")]),
+    )
+    with _stub_resume_store(create_result=created):
+        response = client.post(
+            "/api/v1/resumes",
+            headers={"X-User-Id": "alice"},
+            json={"filename": "resume.pdf", "resume": {"skills": [{"name": "Python"}]}},
+        )
+
+    assert response.status_code == 201
+    assert response.json()["id"] == "r1"
+    assert response.json()["filename"] == "resume.pdf"
+    assert datetime.fromisoformat(response.json()["createdAt"]) == created.created_at
+    assert response.json()["resume"] == created.resume.model_dump(mode="json")
+
+
+def test_create_saved_resume_passes_identity_and_resume():
+    client = TestClient(app)
+    store = MagicMock()
+    store.create = AsyncMock(
+        return_value=SavedResumeRecord(
+            id="r1",
+            filename="resume.pdf",
+            created_at=datetime.now(timezone.utc),  # noqa: UP017 (datetime.UTC absent in this interpreter)
+            resume=Resume(),
+        )
+    )
+    with patch("app.api.v1.endpoints.resumes.get_resume_store", return_value=store):
+        client.post(
+            "/api/v1/resumes",
+            headers={"X-User-Id": "alice"},
+            json={"filename": "resume.pdf", "resume": {"skills": [{"name": "Python"}]}},
+        )
+
+    _, kwargs = store.create.await_args
+    assert kwargs["user_id"] == "alice"
+    assert kwargs["filename"] == "resume.pdf"
+    assert kwargs["resume"] == Resume(skills=[Skill(name="Python")])
+
+
+def test_create_saved_resume_rejects_blank_filename():
+    client = TestClient(app)
+    with _stub_resume_store():
+        response = client.post(
+            "/api/v1/resumes",
+            headers={"X-User-Id": "alice"},
+            json={"filename": "   ", "resume": {"skills": [{"name": "Python"}]}},
+        )
+
+    assert response.status_code == 422
+
+
+def test_saved_resumes_unavailable_persistence_is_503():
+    client = TestClient(app)
+    with patch(
+        "app.api.v1.endpoints.resumes.get_resume_store",
+        side_effect=ResumePersistenceUnavailableError(),
+    ):
+        response = client.get("/api/v1/resumes", headers={"X-User-Id": "alice"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Saved resumes require DATABASE_URL to be configured."
