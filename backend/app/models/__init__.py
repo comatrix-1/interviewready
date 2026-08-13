@@ -16,7 +16,7 @@ from .agent import (
     ResumeFile,
     WorkflowStatus,
 )
-from .ats import ATSAnalysisRequest, ATSAnalysisResponse, BulletAnalysis, SectionAnalysis
+from .ats import ATSAnalysisResponse, BulletAnalysis, SectionAnalysis
 from .base import Award, Certificate, Education, Project, Skill, Source, Work
 from .resume import Resume
 from .session import SessionContext, SharedState
@@ -29,7 +29,6 @@ __all__ = [
     "AlignmentReport",
     "AnalysisArtifact",
     # ATS models
-    "ATSAnalysisRequest",
     "ATSAnalysisResponse",
     "Award",
     "BulletAnalysis",

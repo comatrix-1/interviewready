@@ -8,12 +8,18 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.api.v1.endpoints.ats import build_ats_analysis_response
 from app.api.v1.services import get_orchestration_agent, resolve_user_id
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.models import ChatRequest, Resume, SessionContext
 from app.models.agent import ResumeFile
+from app.models.ats import (
+    ATSAnalysisResponse,
+    BulletAnalysis,
+    KeywordMatchResult,
+    ScoreBreakdown,
+    SectionAnalysis,
+)
 from app.utils.ats_engine import analyze_resume
 
 router = APIRouter()
@@ -177,6 +183,50 @@ async def run_alignment(request: Request, body: AlignmentRequest) -> dict:
             detail="Alignment analysis produced no result.",
         )
     return internal.content
+
+
+def build_ats_analysis_response(raw: dict) -> ATSAnalysisResponse:
+    """Assemble the API ATSAnalysisResponse from a raw analyze_resume dict."""
+    sections = []
+    for sec in raw["sections"]:
+        checks = {}
+        suggestions = sec.get("suggestions", [])
+        for k, v in sec["checks"].items():
+            ba = BulletAnalysis(**v)
+            # Attach entry-level suggestions to the first check only
+            if suggestions and k == next(iter(sec["checks"])):
+                ba.suggestions = suggestions
+            checks[k] = ba
+        sections.append(SectionAnalysis(section=sec["section"], checks=checks))
+
+    detailed_results = {k: BulletAnalysis(**v) for k, v in raw["detailedResults"].items()}
+
+    # Build optional keyword_match
+    keyword_match = None
+    if raw.get("keywordResult"):
+        kr = raw["keywordResult"]
+        keyword_match = KeywordMatchResult(
+            match_percentage=kr["matchPercentage"],
+            matched_keywords=kr["matchedKeywords"],
+            missing_keywords=kr["missingKeywords"],
+        )
+
+    # Build optional score breakdown
+    score_breakdown = None
+    if raw.get("scoreBreakdown"):
+        score_breakdown = ScoreBreakdown(**raw["scoreBreakdown"])
+
+    return ATSAnalysisResponse(
+        ats_score=raw["atsScore"],
+        sections=sections,
+        detailed_results=detailed_results,
+        keyword_match=keyword_match,
+        critic_penalty=raw.get("criticPenalty"),
+        critic_issues_applied=raw.get("criticIssuesApplied"),
+        score_breakdown=score_breakdown,
+        semantic_score=raw.get("semanticScore"),
+        validation_warnings=raw.get("validationWarnings", []),
+    )
 
 
 class CheckRequest(BaseModel):
