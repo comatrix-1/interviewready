@@ -3,7 +3,7 @@
 from .base import BaseAgent, BaseAgentProtocol
 from .content_strength import ContentStrengthAgent
 from .extractor import ExtractorAgent
-from .gemini_service import GeminiService
+from .gemini_service import GeminiAuthError, GeminiError, GeminiService
 from .interview_coach import InterviewCoachAgent
 from .job_alignment import JobAlignmentAgent
 from .registry import AgentRegistry
@@ -15,6 +15,8 @@ __all__ = [
     "BaseAgentProtocol",
     "ContentStrengthAgent",
     "ExtractorAgent",
+    "GeminiAuthError",
+    "GeminiError",
     "GeminiService",
     "InterviewCoachAgent",
     "JobAlignmentAgent",

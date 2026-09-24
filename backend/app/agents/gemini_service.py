@@ -13,6 +13,32 @@ from app.core.logging import logger
 
 MAX_OUTPUT_TOKENS = 8192
 
+# Substrings of upstream API errors that indicate the request was rejected for
+# bad/missing/revoked credentials, not a transient failure.
+_AUTH_ERROR_MARKERS = (
+    "api key not valid",
+    "api_key_invalid",
+    "invalid api key",
+    "unauthorized",
+    "unauthenticated",
+    "permission denied",
+    "401",
+    "403",
+)
+
+
+def _is_auth_error_message(message: str) -> bool:
+    lowered = message.lower()
+    return any(marker in lowered for marker in _AUTH_ERROR_MARKERS)
+
+
+class GeminiError(RuntimeError):
+    """Upstream Gemini API call failed."""
+
+
+class GeminiAuthError(GeminiError):
+    """Gemini API rejected the request for bad/missing/revoked credentials."""
+
 
 class GeminiService:
     """Service for interacting with Google Gemini API."""
@@ -98,7 +124,10 @@ class GeminiService:
             return response_text, usage
         except Exception as e:
             logger.error(f"Gemini API call failed: {e!s}")
-            return f"Error calling Gemini API: {e!s}", None
+            if _is_auth_error_message(str(e)):
+                raise GeminiAuthError(str(e)) from e
+            msg = f"Gemini API call failed: {e!s}"
+            raise GeminiError(msg) from e
 
     def _generate_content(
         self,

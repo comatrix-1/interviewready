@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from langfuse import Langfuse, observe, propagate_attributes
+from langfuse import Langfuse, propagate_attributes
 from langgraph.graph import END, StateGraph
 
+from app.agents.gemini_service import GeminiError
 from app.core.logging import logger
 from app.models.agent import (
     ActionPlan,
@@ -73,16 +75,33 @@ class OrchestrationAgent:
 
     # ---------- Public API ----------
 
-    @observe(name="orchestration_execution")
     def orchestrate(self, request: ChatRequest, context: SessionContext) -> AgentResponse:
         start = time.time()
         session_id = getattr(context, "session_id", "unknown")
         user_id = getattr(context, "user_id", None)
 
-        with (
-            langfuse.start_as_current_observation(name="orchestration_execution"),
-            propagate_attributes(user_id=user_id, session_id=session_id),
-        ):
+        # Langfuse is optional: tracing setup/teardown must never break orchestration.
+        @contextmanager
+        def _optional_trace():
+            observation = propagation = None
+            try:
+                if langfuse is not None:
+                    observation = langfuse.start_as_current_observation(name="orchestration_execution")
+                    observation.__enter__()
+                if user_id is not None or session_id is not None:
+                    propagation = propagate_attributes(user_id=user_id, session_id=session_id)
+                    propagation.__enter__()
+            except Exception as exc:  # tracing setup failure must not fail the request
+                logger.warning(f"Langfuse tracing error, continuing without Langfuse: {exc}")
+            try:
+                yield
+            finally:
+                for cm in (propagation, observation):
+                    if cm is not None:
+                        with suppress(Exception):
+                            cm.__exit__(None, None, None)
+
+        with _optional_trace():
             intent = self._parse_intent(request.intent)
             if request.jobDescription:
                 context.job_description = request.jobDescription
@@ -220,6 +239,20 @@ class OrchestrationAgent:
 
         if needs_review:
             state.response = self._build_review_response(state)
+        else:
+            # For successful parse without review needed, return the parsed resume
+            state.response = AgentResponse(
+                agent_name="ResumeParser",
+                content={"resume": resume.model_dump(exclude_none=True)},
+                reasoning="Resume parsed from uploaded file.",
+                confidence_score=confidence_score,
+                needs_review=needs_review,
+                low_confidence_fields=low_confidence_fields,
+                decision_trace=list(state.context.decision_trace or []),
+                sharp_metadata={
+                    "validation_errors": validation_errors
+                },
+            )
         return state
 
     def _process_resume_input(
@@ -281,6 +314,10 @@ class OrchestrationAgent:
                 validation_errors,
                 needs_review,
             )
+        except GeminiError:
+            # Upstream LLM failures (auth, quota, outages) are not parse failures:
+            # re-raise so the API layer can reject cleanly.
+            raise
         except Exception as exc:
             return self._failure(
                 "Failed to parse resume file.",

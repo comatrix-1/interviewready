@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from langfuse import Langfuse, get_client, observe, propagate_attributes
 
+from app.agents import GeminiAuthError
 from app.api.v1.services import (
     get_or_create_session_context,
     get_orchestration_agent,
@@ -95,6 +96,13 @@ async def chat_endpoint(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc),
+            ) from exc
+        except GeminiAuthError as exc:
+            # Upstream LLM credentials rejected: clean 503, not a 500.
+            langfuse.update_current_span(output={"error": "llm_unavailable", "reason": str(exc)})
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service is temporarily unavailable. Please try again later.",
             ) from exc
         except Exception as exc:
             langfuse.update_current_span(output={"error": "orchestration_failed", "reason": str(exc)})

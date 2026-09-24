@@ -4,6 +4,7 @@ import json
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from contextlib import contextmanager, nullcontext, suppress
 from functools import wraps
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
@@ -20,7 +21,72 @@ from app.utils.json_parser import parse_json_object
 from app.utils.output_sanitizer import get_output_sanitizer
 from app.utils.resume_location import resume_location_exists
 
-langfuse = Langfuse()
+# Initialize Langfuse only if credentials are provided
+try:
+    langfuse = Langfuse()
+    # Test if Langfuse is properly configured by checking if we can access basic properties
+    # This will trigger initialization and potentially raise an exception if credentials are missing
+    _ = langfuse._client
+    LANGFUSE_ENABLED = True
+except Exception:
+    # Langfuse is not properly configured, disable it
+    langfuse = None
+    LANGFUSE_ENABLED = False
+
+
+class _NullSpan:
+    """No-op Langfuse span stand-in used when tracing is unavailable."""
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    def start_as_current_observation(self, *args: Any, **kwargs: Any) -> nullcontext:
+        return nullcontext(self)
+
+
+_NULL_SPAN = _NullSpan()
+
+
+@contextmanager
+def _optional_llm_trace(
+    agent_name: str,
+    user_id: str | None,
+    session_id: str,
+    input_text: str,
+    model_name: str,
+):
+    """Yield (trace, span) for Langfuse tracing, or no-op spans when unavailable."""
+    if langfuse is None:
+        yield _NULL_SPAN, _NULL_SPAN
+        return
+    trace_cm = propagation = span_cm = None
+    try:
+        trace_cm = langfuse.start_as_current_observation(
+            as_type="span",
+            name=f"{agent_name}_llm_call",
+            metadata={"agent": agent_name, "prompt_length": len(input_text)},
+        )
+        trace = trace_cm.__enter__()
+        propagation = propagate_attributes(user_id=user_id, session_id=session_id)
+        propagation.__enter__()
+        span_cm = trace.start_as_current_observation(
+            as_type="span",
+            name="call_gemini",
+            input={"prompt": input_text[:1000]},
+            metadata={"model": model_name},
+        )
+        span = span_cm.__enter__()
+    except Exception as exc:
+        logger.warning(f"Langfuse tracing error, continuing without Langfuse: {exc}")
+        yield _NULL_SPAN, _NULL_SPAN
+        return
+    try:
+        yield trace, span
+    finally:
+        for cm in (propagation, span_cm, trace_cm):
+            if cm is not None:
+                with suppress(Exception):
+                    cm.__exit__(None, None, None)
 
 
 class BaseAgentProtocol(Protocol):
@@ -134,20 +200,9 @@ class BaseAgent(ABC, BaseAgentProtocol):
 
         wrapped_tools = [_wrap_tool(tool) for tool in tools] if tools else None
 
-        with (
-            langfuse.start_as_current_observation(
-                as_type="span",
-                name=f"{agent_name}_llm_call",
-                metadata={"agent": agent_name, "prompt_length": len(input_text)},
-            ) as trace,
-            propagate_attributes(user_id=user_id, session_id=session_id),
-            trace.start_as_current_observation(
-                as_type="span",
-                name="call_gemini",
-                input={"prompt": input_text[:1000]},
-                metadata={"model": self.gemini_service.model_name},
-            ) as span,
-        ):
+        with _optional_llm_trace(
+            agent_name, user_id, session_id, input_text, self.gemini_service.model_name
+        ) as (trace, span):
             logger.log_api_call(
                 "gemini",
                 "generate_response",
