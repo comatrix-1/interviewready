@@ -9,7 +9,7 @@ config to production (startup logs a loud warning if set).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from functools import cache
 
 from llm_guard.input_scanners import PromptInjection
@@ -18,7 +18,8 @@ from llm_guard.output_scanners import NoRefusal
 from ..core.config import settings
 from ..core.logging import logger
 
-class ScanStatus(str, Enum):
+
+class ScanStatus(StrEnum):
     PASSED = "passed"
     BLOCKED = "blocked"
     SKIPPED = "skipped"  # only when LLM_GUARD_ENABLED=false
