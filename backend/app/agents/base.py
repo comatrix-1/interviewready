@@ -89,6 +89,38 @@ def _optional_llm_trace(
                     cm.__exit__(None, None, None)
 
 
+def _wrap_gemini_tool(tool: Callable, session_id: str, agent_name: str) -> Callable:
+    """Wrap a tool callable with debug logging for Gemini tool calls."""
+    if not callable(tool):
+        return tool
+
+    tool_name = getattr(tool, "__name__", type(tool).__name__)
+
+    @wraps(tool)
+    def _wrapped(*args, **kwargs):
+        logger.debug(
+            "Gemini tool call started",
+            session_id=session_id,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            args_count=len(args),
+            kwargs_keys=list(kwargs.keys()),
+        )
+        tool_start = time.time()
+        result = tool(*args, **kwargs)
+        tool_elapsed = time.time() - tool_start
+        logger.debug(
+            "Gemini tool call completed",
+            session_id=session_id,
+            agent_name=agent_name,
+            tool_name=tool_name,
+            execution_time_ms=round(tool_elapsed * 1000, 2),
+        )
+        return result
+
+    return _wrapped
+
+
 class BaseAgentProtocol(Protocol):
     """Protocol defining the interface for all agents."""
 
@@ -168,37 +200,9 @@ class BaseAgent(ABC, BaseAgentProtocol):
         agent_name = self.get_name()
         user_id = getattr(context, "user_id", None)
 
-        def _wrap_tool(tool: Callable) -> Callable:
-            if not callable(tool):
-                return tool
-
-            tool_name = getattr(tool, "__name__", type(tool).__name__)
-
-            @wraps(tool)
-            def _wrapped(*args, **kwargs):
-                logger.debug(
-                    "Gemini tool call started",
-                    session_id=session_id,
-                    agent_name=agent_name,
-                    tool_name=tool_name,
-                    args_count=len(args),
-                    kwargs_keys=list(kwargs.keys()),
-                )
-                tool_start = time.time()
-                result = tool(*args, **kwargs)
-                tool_elapsed = time.time() - tool_start
-                logger.debug(
-                    "Gemini tool call completed",
-                    session_id=session_id,
-                    agent_name=agent_name,
-                    tool_name=tool_name,
-                    execution_time_ms=round(tool_elapsed * 1000, 2),
-                )
-                return result
-
-            return _wrapped
-
-        wrapped_tools = [_wrap_tool(tool) for tool in tools] if tools else None
+        wrapped_tools = (
+            [_wrap_gemini_tool(tool, session_id, agent_name) for tool in tools] if tools else None
+        )
 
         with _optional_llm_trace(
             agent_name, user_id, session_id, input_text, self.gemini_service.model_name
