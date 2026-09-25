@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     JUDGE_PROMPT_COST_PER_1K_USD: float | None = None
     JUDGE_COMPLETION_COST_PER_1K_USD: float | None = None
 
+    # LLM Guard
+    LLM_GUARD_ENABLED: bool
+    LLM_GUARD_INJECTION_THRESHOLD: float = 0.5
+
     # Evals
     SKIP_EVAL_TESTS: bool = True
     EVAL_SAMPLE_RATE: float = 0.1

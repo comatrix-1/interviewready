@@ -535,10 +535,10 @@ class Settings(BaseSettings):
 from app.security.llm_guard_scanner import get_llm_guard_scanner
 
 scanner = get_llm_guard_scanner()
-result = scanner.scan_prompt(user_input)
-if result.unsafe:
+result = scanner.scan_input(user_input)
+if not result.allowed:
     # Log security event and reject request
-    raise SecurityViolationError(result.violation_types)
+    raise SecurityViolationError([issue.scanner for issue in result.issues])
 ```
 
 **Prompt Injection Patterns Detected:**

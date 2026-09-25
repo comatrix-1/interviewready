@@ -215,7 +215,10 @@ class BaseAgent(ABC, BaseAgentProtocol):
             api_start_time = time.time()
 
             llm_guard = get_llm_guard_scanner()
-            input_safe, sanitized_input, input_issues = llm_guard.scan_input(input_text)
+            scan_result = llm_guard.scan_input(input_text)
+            input_safe = scan_result.allowed
+            sanitized_input = scan_result.text
+            input_issues = scan_result.issues
 
             if not input_safe:
                 logger.security_event(
@@ -273,7 +276,10 @@ class BaseAgent(ABC, BaseAgentProtocol):
                     response_preview=response[:PREVIEW_MAX_LENGTH] + "..." if len(response) > PREVIEW_MAX_LENGTH else response,
                 )
 
-                output_safe, _, output_issues = llm_guard.scan_output(response)
+                scan_result = llm_guard.scan_output(response)
+                output_safe = scan_result.allowed
+                # output_text = scan_result.text  # Not used in this context
+                output_issues = scan_result.issues
                 if not output_safe:
                     logger.security_event(
                         "output_sensitive_detected",

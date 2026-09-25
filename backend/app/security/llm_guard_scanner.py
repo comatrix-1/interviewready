@@ -1,167 +1,101 @@
-"""LLM Guard scanner service for input/output security."""
+"""LLM Guard scanner service.
 
-from functools import lru_cache
-from typing import Any
+Policy: fail-closed. If a scan cannot run, content is blocked. The scanner
+is a hard dependency: if it cannot initialize, the app refuses to boot.
+LLM_GUARD_ENABLED=false turns scanning off explicitly — never ship that
+config to production (startup logs a loud warning if set).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from functools import cache
+
+from llm_guard.input_scanners import PromptInjection
+from llm_guard.output_scanners import NoRefusal
 
 from ..core.config import settings
 from ..core.logging import logger
 
-# Optional DataFog import (may pull in spaCy). Import lazily and
-# tolerate failures on environments without spaCy / incompatible pydantic.
-try:
-    import datafog as DataFog
-except Exception:
-    DataFog = None
+class ScanStatus(str, Enum):
+    PASSED = "passed"
+    BLOCKED = "blocked"
+    SKIPPED = "skipped"  # only when LLM_GUARD_ENABLED=false
+    ERROR = "error"
 
+@dataclass(frozen=True)
+class Issue:
+    scanner: str
+    risk_score: float
+    reason: str
 
-HAS_LLM_GUARD = False
-
-try:
-    # LLM Guard: Only import PromptInjection and NoRefusal
-    from llm_guard.input_scanners import PromptInjection
-    from llm_guard.output_scanners import NoRefusal
-
-    HAS_LLM_GUARD = True
-    logger.info("LLM Guard loaded (PromptInjection, NoRefusal)")
-
-except Exception as e:
-    HAS_LLM_GUARD = False
-    logger.warning(f"LLM Guard unavailable, disabling security scanning: {e}")
-
+@dataclass(frozen=True)
+class ScanResult:
+    status: ScanStatus
+    text: str
+    allowed: bool
+    issues: tuple[Issue, ...] = ()
 
 class LLMGuardScanner:
-    """Scanner for detecting prompt injection and sensitive content."""
+    def __init__(self, *, enabled: bool, injection_scanner, refusal_scanner) -> None:
+        self.enabled = enabled
+        self._injection_scanner = injection_scanner
+        self._refusal_scanner = refusal_scanner
 
-    def __init__(self):
-        self.enabled = getattr(settings, "LLM_GUARD_ENABLED", True) and HAS_LLM_GUARD
-
-        self._prompt_injection_scanner = None
-        self._refusal_scanner = None
-
-        if not HAS_LLM_GUARD:
-            logger.warning("LLM Guard not installed. Security scanning disabled.")
-        elif not self.enabled:
-            logger.info("LLM Guard disabled via configuration.")
-        else:
-            logger.info("Initializing security scanners...")
-
-            self._prompt_injection_scanner = PromptInjection()
-            logger.info("Created PromptInjection scanner at startup")
-
-            self._refusal_scanner = NoRefusal()
-            logger.info("Created NoRefusal scanner at startup")
-
-            logger.info("Security scanners initialized (PromptInjection, NoRefusal)")
-
-    def scan_input(self, prompt: str) -> tuple[bool, str, list[dict[str, Any]]]:
-        """Scan user input for prompt injection and PII."""
+    def scan_input(self, prompt: str) -> ScanResult:
         if not self.enabled:
-            return True, prompt, [{"note": "scanner_disabled"}]
-
-        issues = []
-        sanitized = prompt
+            return ScanResult(ScanStatus.SKIPPED, prompt, True)
 
         try:
-            sanitized, is_valid, risk_score = self._prompt_injection_scanner.scan(sanitized)
+            sanitized, is_valid, risk_score = self._injection_scanner.scan(prompt)
+        except Exception:
+            logger.exception("PromptInjection scan failed")
+            logger.security_event("scan_error", scanner="PromptInjection")
+            return ScanResult(ScanStatus.ERROR, prompt, False)
 
-            if not is_valid:
-                issue = {
-                    "scanner": "PromptInjection",
-                    "risk_score": risk_score,
-                    "reason": "Potential prompt injection detected",
-                }
-                logger.security_event(
-                    "prompt_injection_detected",
-                    risk_score=risk_score,
-                    issue=issue,
-                )
-                return False, sanitized, [issue]
+        if not is_valid:
+            issue = Issue("PromptInjection", risk_score, "Potential prompt injection detected")
+            logger.security_event(
+                "prompt_injection_detected", scanner="PromptInjection", risk_score=risk_score
+            )
+            return ScanResult(ScanStatus.BLOCKED, sanitized, False, issues=(issue,))
 
-            if DataFog is not None:
-                try:
-                    datafog_result = DataFog.scan_prompt(sanitized, engine="regex")
-                    if datafog_result.entities:
-                        sanitized = DataFog.sanitize(sanitized, engine="regex")
-                        issues.append(
-                            {
-                                "scanner": "DataFog",
-                                "risk_score": min(len(datafog_result.entities) / 10, 1.0),
-                                "reason": f"PII detected in input ({len(datafog_result.entities)} entities)",
-                            }
-                        )
-                except Exception as e:
-                    logger.warning(f"DataFog PII scan failed: {e}")
+        return ScanResult(ScanStatus.PASSED, sanitized, True)
 
-            return True, sanitized, issues
-
-        except Exception as e:
-            logger.exception(f"LLM Guard input scan failed: {e}")
-            return True, prompt, []
-
-    def scan_output(self, output: str) -> tuple[bool, str, list[dict[str, Any]]]:
-        """Scan model output for sensitive information and refusals."""
+    def scan_output(self, output: str) -> ScanResult:
         if not self.enabled:
-            return True, output, [{"note": "scanner_disabled"}]
-
-        issues = []
-        sanitized = output
+            return ScanResult(ScanStatus.SKIPPED, output, True)
 
         try:
-            sanitized, is_valid, risk_score = self._refusal_scanner.scan("", sanitized)
+            sanitized, is_valid, risk_score = self._refusal_scanner.scan("", output)
+        except Exception:
+            logger.exception("NoRefusal scan failed")
+            logger.security_event("scan_error", scanner="NoRefusal")
+            return ScanResult(ScanStatus.ERROR, output, False)
 
-            if not is_valid:
-                issues.append(
-                    {
-                        "scanner": "NoRefusal",
-                        "risk_score": risk_score,
-                        "reason": "Refusal detected",
-                    }
-                )
+        if not is_valid:
+            issue = Issue("NoRefusal", risk_score, "Refusal detected")
+            logger.security_event(
+                "model_refusal_detected", scanner="NoRefusal", risk_score=risk_score
+            )
+            return ScanResult(ScanStatus.BLOCKED, sanitized, False, issues=(issue,))
 
-            if DataFog is not None:
-                try:
-                    datafog_result = DataFog.filter_output(
-                        sanitized,
-                        engine="regex",
-                    )
-                    if datafog_result.entities:
-                        sanitized = datafog_result.redacted_text
-                        issues.append(
-                            {
-                                "scanner": "DataFog",
-                                "risk_score": min(len(datafog_result.entities) / 10, 1.0),
-                                "reason": (f"Sensitive content detected in output ({len(datafog_result.entities)} entities)"),
-                            }
-                        )
-                except Exception as e:
-                    logger.warning(f"DataFog output scan failed: {e}")
-
-            if issues:
-                logger.security_event(
-                    "output_sensitive_detected",
-                    risk_count=len(issues),
-                    issues=issues,
-                )
-                return False, sanitized, issues
-
-            return True, sanitized, []
-
-        except Exception as e:
-            logger.exception(f"LLM Guard output scan failed: {e}")
-            return True, output, []
-
-    def scan_both(self, input_text: str, output_text: str) -> tuple[bool, bool, list[dict[str, Any]]]:
-        input_safe, _, input_issues = self.scan_input(input_text)
-        output_safe, _, output_issues = self.scan_output(output_text)
-        return input_safe, output_safe, input_issues + output_issues
+        return ScanResult(ScanStatus.PASSED, sanitized, True)
 
 
-# ---- Singleton (Ruff-friendly, no globals mutation) ----
-
-_llm_guard_scanner: LLMGuardScanner | None = None
-
-
-@lru_cache(maxsize=1)
+@cache
 def get_llm_guard_scanner() -> LLMGuardScanner:
-    """Get or create the global LLM Guard scanner instance."""
-    return LLMGuardScanner()
+    """Build the process-wide scanner. Raises on init failure so the deploy
+    fails fast rather than serving unscanned traffic."""
+    if not settings.LLM_GUARD_ENABLED:
+        logger.warning(
+            "LLM Guard DISABLED via config — all traffic is unscanned. "
+            "This must never be enabled in production."
+        )
+        return LLMGuardScanner(enabled=False, injection_scanner=None, refusal_scanner=None)
+
+    injection = PromptInjection(threshold=settings.LLM_GUARD_INJECTION_THRESHOLD)
+    refusal = NoRefusal()
+    logger.info("LLM Guard scanners initialized (PromptInjection, NoRefusal)")
+    return LLMGuardScanner(enabled=True, injection_scanner=injection, refusal_scanner=refusal)

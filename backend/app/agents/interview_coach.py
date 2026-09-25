@@ -411,7 +411,10 @@ RESPOND WITH THIS EXACT JSON STRUCTURE AND NOTHING ELSE:
             issues.extend(f"heuristic:{finding}" for finding in heuristic_findings)
 
         scanner = get_llm_guard_scanner()
-        safe, _sanitized, scanner_issues = scanner.scan_input(text)
+        scan_result = scanner.scan_input(text)
+        safe = scan_result.allowed
+        # _sanitized = scan_result.text  # Not used in this context
+        scanner_issues = scan_result.issues
         if not safe:
             issues.extend(f"scanner:{issue.get('scanner', 'unknown')}" for issue in scanner_issues)
         return not issues, issues
