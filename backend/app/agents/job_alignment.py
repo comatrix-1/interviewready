@@ -17,6 +17,39 @@ from app.utils.resume_location import filter_locations
 from .base import BaseAgent
 
 
+def parse_alignment_json(raw: str) -> AlignmentReport:
+    """Parse a raw LLM response string into an AlignmentReport.
+
+    Attempts to extract a JSON object from *raw* and validate it against
+    :class:`AlignmentReport`.  On any failure (empty input, no JSON found,
+    validation error) an empty ``AlignmentReport`` with default fields is
+    returned so callers can rely on a always-valid object.
+    """
+    if not raw or not raw.strip():
+        return AlignmentReport()
+
+    parsed = parse_json_object(raw)
+    if not parsed:
+        return AlignmentReport()
+
+    try:
+        return AlignmentReport.model_validate(parsed)
+    except Exception:
+        return AlignmentReport()
+
+
+def extract_alignment_fields(
+    report: AlignmentReport,
+) -> tuple[list[str], list[str], list[str], str]:
+    """Return the four alignment fields from *report* with safe defaults."""
+    return (
+        report.skillsMatch if report.skillsMatch is not None else [],
+        report.missingSkills if report.missingSkills is not None else [],
+        report.experienceMatch if report.experienceMatch is not None else [],
+        report.summary if report.summary is not None else "",
+    )
+
+
 class JobAlignmentAgent(BaseAgent):
     """Agent for evaluating how well a resume matches a specific job description."""
 
