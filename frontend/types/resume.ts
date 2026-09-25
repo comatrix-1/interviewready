@@ -55,3 +55,10 @@ export interface ResumeSchema {
 }
 
 export type Resume = ResumeSchema;
+
+export interface SavedResume {
+  id: string;
+  filename: string;
+  createdAt: string;
+  resume: Resume;
+}

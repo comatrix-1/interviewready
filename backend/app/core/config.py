@@ -41,6 +41,11 @@ class Settings(BaseSettings):
             return [i.strip() for i in v.split(",") if i.strip()]
         return v
 
+    # Database
+    # When set, enables SQLAlchemy async persistence (engine, session factory,
+    # and table creation on startup). When unset, the app runs database-free.
+    DATABASE_URL: str
+
     # Langfuse
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_SECRET_KEY: str | None = None
@@ -50,6 +55,10 @@ class Settings(BaseSettings):
     # Optional judge cost estimation (USD per 1K tokens)
     JUDGE_PROMPT_COST_PER_1K_USD: float | None = None
     JUDGE_COMPLETION_COST_PER_1K_USD: float | None = None
+
+    # LLM Guard
+    LLM_GUARD_ENABLED: bool
+    LLM_GUARD_INJECTION_THRESHOLD: float = 0.5
 
     # Evals
     SKIP_EVAL_TESTS: bool = True

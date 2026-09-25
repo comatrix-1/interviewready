@@ -288,7 +288,7 @@ Mock responses defined in `app/mock_responses.json`:
 
 #### POST `/api/v1/chat`
 
-Main orchestration endpoint for all agent interactions.
+Main orchestration endpoint for all agent interactions. The frontend's upload/parse, ATS critique, and job-alignment steps use the session-free `/api/v1/analysis` endpoints; `/api/v1/chat` remains available for every intent.
 
 **Request:**
 ```json
@@ -336,6 +336,87 @@ Main orchestration endpoint for all agent interactions.
 - `low_confidence_fields` - Array of fields below confidence threshold
 - `decision_trace` - Array of reasoning steps for auditability
 
+### Analysis endpoints (session-free)
+
+These endpoints never read or write sessions; they scope data by `X-User-Id` like the saved-resumes endpoints.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/analysis/parse` | Parse an uploaded PDF into structured `Resume` JSON (body: `{"file": {"data": "<base64>", "fileType": "pdf"}}`) |
+| `POST /api/v1/analysis/critique` | ATS/resume critique (body: `{"resume": {...}}`) |
+| `POST /api/v1/analysis/alignment` | Job alignment (body: `{"resume": {...}, "jobDescription": "..."}`) |
+
+#### POST `/api/v1/users/login`
+
+Simulated login: registers the user if they don't exist yet, then returns their
+identity. Once logged in, the frontend sends the username via the `X-User-Id`
+header on subsequent calls so sessions are owned by that user (falling back to
+`dev-user` when no header is present). Users are stored in PostgreSQL (the `users` table).
+
+**Request:**
+```json
+{
+  "username": "alice"
+}
+```
+
+**Response:**
+```json
+{
+  "username": "alice",
+  "created": true
+}
+```
+
+- `created` - `true` when the user was newly registered, `false` when they already existed
+
+#### GET `/api/v1/resumes`
+
+List the saved resume snapshots owned by the calling identity. Records are
+scoped to the `X-User-Id` header (falling back to `dev-user` when absent) —
+a user never sees another user's records.
+
+**Response:**
+```json
+{
+  "resumes": [
+    {
+      "id": "3f2c1a...",
+      "filename": "resume.pdf",
+      "createdAt": "2026-08-12T00:00:00Z",
+      "resume": { "work": [], "skills": [{ "name": "Python" }] }
+    }
+  ]
+}
+```
+
+- `createdAt` - ISO-8601 creation timestamp (camelCase alias of `created_at`)
+- `resume` - the stored JSON Resume snapshot (immutable; PDF bytes are never stored)
+
+#### POST `/api/v1/resumes`
+
+Save a parsed resume as a user-owned snapshot. Returns `201 Created`.
+
+**Request:**
+```json
+{
+  "filename": "resume.pdf",
+  "resume": { "work": [], "skills": [{ "name": "Python" }] }
+}
+```
+
+**Response:** `201 Created` — the created record in the same shape as the list items above.
+
+- A blank or whitespace-only `filename` is rejected with `422`.
+- The owner is always derived from the request identity (`X-User-Id`, falling
+  back to `dev-user`); a user ID in the request body is ignored.
+
+> **Saved resumes require `DATABASE_URL`.** Without it, both endpoints return
+> `503` with `Saved resumes require DATABASE_URL to be configured.` Resumes are
+> stored as JSON snapshots in the `saved_resumes` table (no PDF bytes), and
+> without a database the frontend PDF upload/analysis path is unavailable —
+> the manual JSON flow remains the only analysis path.
+
 #### GET `/api/v1/agents`
 
 List available agents and their current system prompts.
@@ -381,9 +462,10 @@ All endpoints follow consistent error format:
 - `200 OK` - Successful request
 - `400 Bad Request` - Invalid input (schema validation failed)
 - `403 Forbidden` - Session permission denied
+- `422 Unprocessable Entity` - Validation failed (e.g. blank saved-resume filename)
 - `429 Too Many Requests` - Rate limit exceeded
 - `500 Internal Server Error` - API or service failure (with mock fallback)
-- `503 Service Unavailable` - Orchestration service unavailable
+- `503 Service Unavailable` - Orchestration service or saved-resume persistence unavailable (no `DATABASE_URL`)
 
 ---
 
@@ -405,6 +487,12 @@ GEMINI_API_KEY=sk-...                 # Google Gemini API key
 LANGFUSE_PUBLIC_KEY=pk-...            # Langfuse public key
 LANGFUSE_SECRET_KEY=sk-...            # Langfuse secret key
 LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Langfuse endpoint
+
+# Database (Required — PostgreSQL is mandatory; no in-memory fallback)
+DATABASE_URL=postgresql+asyncpg://interviewready:interviewready@localhost:5432/interviewready
+
+> `DATABASE_URL` is required. The app creates tables on startup and fails fast if the
+> database is unreachable or `DATABASE_URL` is missing.
 
 # Agent Mock Mode (Optional)
 MOCK_RESUME_CRITIC_AGENT=false        # Use mock responses instead of API
@@ -447,10 +535,10 @@ class Settings(BaseSettings):
 from app.security.llm_guard_scanner import get_llm_guard_scanner
 
 scanner = get_llm_guard_scanner()
-result = scanner.scan_prompt(user_input)
-if result.unsafe:
+result = scanner.scan_input(user_input)
+if not result.allowed:
     # Log security event and reject request
-    raise SecurityViolationError(result.violation_types)
+    raise SecurityViolationError([issue.scanner for issue in result.issues])
 ```
 
 **Prompt Injection Patterns Detected:**
@@ -605,6 +693,8 @@ uv run pytest backend/tests/test_interview_coach.py::test_five_question_progress
 | `test_agent_evals.py` | Langfuse dataset evaluations |
 | `test_agent_structural_checks.py` | JSON structure & schema validation |
 | `test_resume_input_priority.py` | Resume input priority logic |
+| `test_db_models.py` | Database model round-trips & table creation (PostgreSQL) |
+| `test_resume_store.py` | Saved-resume store persistence & scoping (PostgreSQL) |
 
 ### Interactive Testing
 
@@ -825,7 +915,7 @@ Each layer may only import from layers below it. In particular:
 
 - `utils` and `models` are leaf nodes — no upward imports.
 - `agents`, `orchestration`, `governance` are the business-logic (services) tier. `orchestration` sits above `agents` and `governance` and may import both; `agents` and `governance` do not import each other.
-- `api` (routers) may use any service/model/util/core layer but never reaches across to another router or down to `db` directly.
+- `api` (routers) may use any service/model/util/core layer but never reaches across to another router or down to `db` directly. The api-layer service facade (`app/api/v1/services.py`) may reach `db` via the session store, since `db` sits below `api` in the layer order.
 - `security` sits below the service tier — currently only `agents` uses it.
 
 Run locally:
@@ -838,6 +928,8 @@ uv run lint-imports
 - Stateful conversations with session persistence
 - Automatic session creation and tracking
 - Context preservation across multiple requests
+
+Sessions are stored in PostgreSQL only (via `app/db/session_store.py`) and are read/written by `POST /api/v1/chat`, the `/api/v1/sessions` endpoints, and the `/api/v1/interview` voice WebSocket relay. `POST /api/v1/chat` remains permissive and accepts every intent; the frontend uses sessions only for the interview coach step — the upload/parse, ATS critique, and job-alignment steps use the session-free `/api/v1/analysis` endpoints, which never read or write sessions. `DATABASE_URL` is required to start the app. Context is hydrated from the database on each request and persisted after a successful chat orchestration (`save()`); the `sessions` table is swept of expired rows on session creation. State from a *failed* chat request is not persisted.
 
 ## Testing
 

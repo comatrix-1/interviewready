@@ -8,6 +8,8 @@ from app.db.models import (
     ExperienceModel,
     ProjectModel,
     ResumeModel,
+    SessionModel,
+    UserModel,
 )
 
 __all__ = [
@@ -18,4 +20,6 @@ __all__ = [
     "ExperienceModel",
     "ProjectModel",
     "ResumeModel",
+    "SessionModel",
+    "UserModel",
 ]

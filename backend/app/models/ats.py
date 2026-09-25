@@ -1,12 +1,10 @@
-"""Pydantic v2 models for the ATS scoring endpoint."""
+"""Pydantic v2 models for ATS scoring."""
 
 from __future__ import annotations
 
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from .resume import Resume
 
 PassStatus = Literal["ok", "no", "min"]
 
@@ -59,16 +57,8 @@ class ScoreBreakdown(BaseModel):
     max_possible: float = Field(gt=0, description="Maximum possible raw score")
 
 
-class ATSAnalysisRequest(BaseModel):
-    """Request body for ``POST /api/v1/ats/analyze``."""
-
-    resume: Resume
-    job_description: str | None = None
-    critic_issues: list[CriticIssue] | None = None
-
-
 class ATSAnalysisResponse(BaseModel):
-    """Response body for ``POST /api/v1/ats/analyze``."""
+    """Response body for ATS scoring, returned by ``/api/v1/analysis/check``."""
 
     ats_score: int = Field(ge=0, le=100)
     sections: list[SectionAnalysis]

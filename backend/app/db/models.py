@@ -1,6 +1,7 @@
 """SQLAlchemy database models."""
 
-from sqlalchemy import ARRAY, Column, Date, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -106,3 +107,42 @@ class AwardModel(Base):
     description = Column(Text, nullable=True)
 
     resume = relationship("ResumeModel", back_populates="awards")
+
+
+class SessionModel(Base):
+    """SQLAlchemy model for persisted chat sessions."""
+
+    __tablename__ = "sessions"
+
+    id = Column(String, primary_key=True)  # session_id
+    user_id = Column(String, nullable=False, index=True)
+    shared_memory = Column(JSONB, nullable=True)  # dict[str, Any]
+    history = Column(JSONB, nullable=True)  # list[AgentResponse] as JSON
+    decision_trace = Column(JSONB, nullable=True)  # list[str]
+    resume_data = Column(Text, nullable=True)
+    job_description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_active_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SavedResumeModel(Base):
+    """SQLAlchemy model for user-owned saved resume snapshots."""
+
+    __tablename__ = "saved_resumes"
+
+    id = Column(String, primary_key=True)
+    # Plain indexed string, intentionally NOT a FK: matches SessionModel.user_id
+    # and tolerates the dev-user fallback identity that has no users row.
+    user_id = Column(String, nullable=False, index=True)
+    filename = Column(String, nullable=False)
+    resume_data = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class UserModel(Base):
+    """SQLAlchemy model for registered users (simulated login identity)."""
+
+    __tablename__ = "users"
+
+    username = Column(String, primary_key=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

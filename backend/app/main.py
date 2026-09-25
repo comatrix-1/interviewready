@@ -3,16 +3,18 @@
 from contextlib import asynccontextmanager, suppress
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langfuse.langchain import CallbackHandler
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app.agents import GeminiAuthError
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.limiter import limiter
+from app.db.session import dispose_db, init_db
 
 load_dotenv()
 
@@ -22,8 +24,9 @@ MAX_REQUEST_SIZE = 20 * 1024 * 1024
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    await init_db()
     yield
-    # Cleanup can be added here
+    await dispose_db()
 
 
 app = FastAPI(
@@ -36,6 +39,17 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def _gemini_auth_error_handler(request: Request, exc: GeminiAuthError) -> JSONResponse:
+    """Upstream LLM credentials rejected -> service unavailable, not a client error."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "AI service is temporarily unavailable. Please try again later."},
+    )
+
+
+app.add_exception_handler(GeminiAuthError, _gemini_auth_error_handler)
 
 # Configure CORS
 # When allow_credentials=True, origins must be explicit (no wildcard)

@@ -1,10 +1,11 @@
 import { useState, useCallback } from "react";
 import type { SharedState } from "../types/workflow";
 import { WorkflowStatus } from "../types/workflow";
-import { DEFAULT_RESUME, STORAGE_KEY } from "../config/constants";
+import { STORAGE_KEY } from "../config/constants";
 
-const defaultState = (): SharedState => ({
-  currentResume: DEFAULT_RESUME,
+export const defaultState = (): SharedState => ({
+  currentResume: null,
+  selectedResumeId: null,
   history: [],
   jobDescription: "",
   status: WorkflowStatus.IDLE,
@@ -21,8 +22,14 @@ const loadState = (): SharedState => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Detect stale state from before the ATS Check refactor
-      if (!VALID_STATUSES.has(parsed.status) || !("atsReport" in parsed)) {
+      // Detect stale state from before the ATS Check refactor or the
+      // saved-resume selection refactor.
+      if (
+        !VALID_STATUSES.has(parsed.status) ||
+        !("atsReport" in parsed) ||
+        !("selectedResumeId" in parsed) ||
+        (parsed.selectedResumeId !== null && typeof parsed.selectedResumeId !== "string")
+      ) {
         localStorage.removeItem(STORAGE_KEY);
         return defaultState();
       }
@@ -56,6 +63,11 @@ export const useWorkflowState = () => {
     setState(defaultState());
   }, []);
 
+  const hardResetSession = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    setState(defaultState());
+  }, []);
+
   const handleStepClick = useCallback(
     (status: WorkflowStatus) => {
       const canNavigate: Partial<Record<WorkflowStatus, boolean>> = {
@@ -83,5 +95,5 @@ export const useWorkflowState = () => {
     [state.currentResume, state.atsReport, state.alignmentReport, updateState],
   );
 
-  return { state, updateState, resetSession, handleStepClick };
+  return { state, updateState, resetSession, hardResetSession, handleStepClick };
 };

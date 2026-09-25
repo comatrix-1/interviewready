@@ -14,7 +14,8 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.4.0",
     "pydantic-settings>=2.0.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.29",
     "firebase-admin>=6.0.0",
     "google-generativeai>=0.3.0",
     "google-genai==1.67.0",
@@ -24,7 +25,6 @@ dependencies = [
     "pypdf>=6.9.1",
     "langfuse>=3.0.0",
     "llm-guard>=0.3.0",
-    "datafog[nlp]>=4.3.0",
     "pip",
     "langchain>=1.2.13",
     "websockets>=13.0",
@@ -128,5 +128,6 @@ testpaths = ["tests"]
 dev = [
     "import-linter>=2.11",
     "pytest>=9.0.2",
+    "pytest-asyncio>=0.24.0",
     "ruff>=0.15.6",
 ]

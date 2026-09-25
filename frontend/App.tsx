@@ -1,18 +1,16 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { WorkflowStatus, InterviewMode } from "./types/workflow";
 import type { SharedState } from "./types/workflow";
 import type { Resume } from "./types/resume";
-import type { ChatRequest } from "./types/api";
-import { DEFAULT_RESUME } from "./config/constants";
 import { fileToBase64, isInterviewCompleteResponse } from "./utils/fileUtils";
 import { toErrorMessage } from "./utils/errors";
-import { callChatEndpoint, fetchCurrentResume } from "./api";
-import { resumeCriticAgent } from "@/api/chat-endpoints/resumeCritic";
-import { atsEngineAnalyze } from "@/api/ats";
-import { alignmentAgent } from "@/api/chat-endpoints/alignment";
+import { createSavedResume, seedSessionContext } from "./api";
+import { clearStoredSession, deleteSession } from "./api/session";
+import { alignmentAgent, checkResume, parseResumeFile } from "./api/analysis";
 import { interviewCoachAgent, sendAudioMessage } from "@/api/chat-endpoints/interviewCoach";
 import { BackendServiceProvider, useBackendService } from "./providers/BackendServiceProvider";
 import { useWorkflowState } from "./hooks/useWorkflowState";
+import { useSavedResumes } from "./hooks/useSavedResumes";
 import { StepIndicator } from "./components/StepIndicator";
 import { ResumePreview } from "./components/ResumePreview";
 import { LoadingState } from "./components/LoadingState";
@@ -26,19 +24,62 @@ import {
   InterviewModeSelectionStep,
 } from "./components/WorkflowSteps";
 
+const getInitials = (name: string): string => {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+  return initials || "U";
+};
+
 const AppContent: React.FC = () => {
   const {
     sessionId,
-    authToken,
-    sessionReady,
+    ensureSession,
     sessionError: sessionInitError,
+    username,
+    isLoggingIn,
+    loginError,
+    login,
+    logout,
   } = useBackendService();
-  const { state, updateState, resetSession, handleStepClick } = useWorkflowState();
+  const { state, updateState, resetSession, hardResetSession, handleStepClick } =
+    useWorkflowState();
   const [error, setError] = useState<string | null>(sessionInitError);
+  const [loginInput, setLoginInput] = useState("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const displayError = error || sessionInitError;
+
+  // A user change (login/logout) starts a fresh workflow: the previous identity's
+  // resume, reports, and interview history don't carry over.
+  const prevUsernameRef = useRef(username);
+  useEffect(() => {
+    if (prevUsernameRef.current !== username) {
+      prevUsernameRef.current = username;
+      hardResetSession();
+    }
+  }, [username, hardResetSession]);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = await login(loginInput);
+    if (ok) setLoginInput("");
+  };
+
+  const handleResetSession = () => {
+    resetSession();
+    const identity = username || "dev-user";
+    clearStoredSession(identity);
+    if (sessionId) {
+      // Best-effort: the server TTL-sweeps stale sessions anyway, so a failure
+      // here must never block the user.
+      void deleteSession(sessionId).catch(() => {});
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white text-slate-950">
@@ -58,14 +99,54 @@ const AppContent: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <button
-            onClick={resetSession}
+            onClick={handleResetSession}
             className="text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors"
           >
             Reset Session
           </button>
-          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 border border-slate-300">
-            JD
-          </div>
+
+          {username ? (
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-[11px] font-bold text-white">
+                  {getInitials(username)}
+                </div>
+                <span className="text-xs font-semibold text-slate-700 max-w-[120px] truncate">
+                  {username}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleLoginSubmit} className="relative flex items-center gap-2">
+              <input
+                type="text"
+                value={loginInput}
+                onChange={(e) => setLoginInput(e.target.value)}
+                placeholder="Username"
+                aria-label="Username"
+                maxLength={64}
+                className="w-40 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all"
+              />
+              <button
+                type="submit"
+                disabled={isLoggingIn || !loginInput.trim()}
+                className="bg-slate-900 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg hover:bg-slate-700 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                {isLoggingIn ? "Logging in..." : "Login"}
+              </button>
+              {loginError && (
+                <span className="absolute right-0 top-full mt-1.5 z-50 whitespace-nowrap text-[10px] font-medium text-red-600">
+                  {loginError}
+                </span>
+              )}
+            </form>
+          )}
         </div>
       </nav>
 
@@ -113,23 +194,17 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
-            {sessionReady && (
-              <div className="relative">
-                <WorkflowController
-                  state={state}
-                  updateState={updateState}
-                  setError={setError}
-                  chatEndRef={chatEndRef}
-                  sessionId={sessionId}
-                  authToken={authToken}
-                />
-              </div>
-            )}
-            {!sessionReady && (
-              <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
-              </div>
-            )}
+            <div className="relative">
+              <WorkflowController
+                state={state}
+                updateState={updateState}
+                setError={setError}
+                chatEndRef={chatEndRef}
+                sessionId={sessionId}
+                ensureSession={ensureSession}
+                username={username}
+              />
+            </div>
           </div>
 
           <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex items-center justify-between text-[10px] text-slate-400 font-medium uppercase tracking-tight">
@@ -144,7 +219,7 @@ const AppContent: React.FC = () => {
         {/* Right Panel: Resume Preview */}
         <main className="flex-1 bg-slate-100/30 overflow-hidden flex flex-col relative">
           <div className="flex-1 overflow-y-auto">
-            <ResumePreview resume={state.currentResume ?? DEFAULT_RESUME} />
+            <ResumePreview resume={state.currentResume} />
           </div>
         </main>
       </div>
@@ -161,61 +236,46 @@ const WorkflowController: React.FC<{
   setError: React.Dispatch<React.SetStateAction<string | null>>;
   chatEndRef: React.RefObject<HTMLDivElement | null>;
   sessionId: string;
-  authToken: string;
-}> = ({ state, updateState, setError, chatEndRef, sessionId, authToken }) => {
+  ensureSession: () => Promise<string>;
+  username: string;
+}> = ({ state, updateState, setError, chatEndRef, sessionId, ensureSession, username }) => {
   const { startLoading, updateProgress, stopLoading } = useLoading();
   const [manualResumeText, setManualResumeText] = useState("");
   const [manualResumeError, setManualResumeError] = useState<string | null>(null);
+  const { savedResumes, setSavedResumes, isLoadingResumes } = useSavedResumes(username);
+  const [isUploading, setIsUploading] = useState(false);
 
   const processPdfFile = async (file: File) => {
     updateProgress(25, 0);
     const base64 = await fileToBase64(file);
     updateProgress(50, 1);
-
-    const request: ChatRequest = {
-      intent: "RESUME_CRITIC",
-      resumeData: null,
-      jobDescription: "",
-      messageHistory: [],
-      resumeFile: { data: base64, fileType: "pdf" },
-    };
-
     updateProgress(75, 2);
-    const response = await callChatEndpoint(sessionId, authToken, request);
-    const parsedResume = await fetchCurrentResume(sessionId, authToken);
-
-    let responseData;
-    try {
-      responseData = response.payload || JSON.parse(response.content || "{}");
-    } catch (parseErr) {
-      throw new Error(`Invalid response from backend: ${toErrorMessage(parseErr)}`, {
-        cause: parseErr,
-      });
-    }
-
+    const parsed = await parseResumeFile({ data: base64, fileType: "pdf" });
     updateProgress(90, 3);
-    return { responseData, parsedResume };
+    return parsed;
   };
 
-  const handleSuccessfulProcessing = async (
-    _responseData: unknown,
-    parsedResume: Resume | null,
-  ) => {
-    const resumeToUse = parsedResume || state.currentResume!;
-    const [atsResult, criticResult] = await Promise.all([
-      atsEngineAnalyze(authToken, resumeToUse),
-      resumeCriticAgent(sessionId, authToken, resumeToUse),
-    ]);
+  const runAtsAndCritic = async (resume: Resume) => {
+    const { ats, critic } = await checkResume(resume);
     updateState((prev) => ({
       ...prev,
-      currentResume: parsedResume || prev.currentResume,
-      history: parsedResume ? [...prev.history, parsedResume] : prev.history,
-      atsReport: atsResult,
-      criticIssues: criticResult.issues || [],
+      atsReport: ats,
+      criticIssues: critic.issues || [],
       status: WorkflowStatus.AWAITING_ATS_APPROVAL,
     }));
-    setManualResumeText("");
-    updateProgress(100, 3);
+  };
+
+  const handleSelectResume = (resumeId: string) => {
+    const saved = savedResumes.find((r) => r.id === resumeId);
+    if (!saved) return;
+    updateState((prev) => ({
+      ...prev,
+      selectedResumeId: saved.id,
+      currentResume: saved.resume,
+      atsReport: null,
+      criticIssues: [],
+      alignmentReport: null,
+    }));
   };
 
   const processExistingResume = async () => {
@@ -229,16 +289,13 @@ const WorkflowController: React.FC<{
     try {
       updateProgress(50, 1);
       if (!state.currentResume) throw new Error("Current resume is null");
-      const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(authToken, state.currentResume),
-        resumeCriticAgent(sessionId, authToken, state.currentResume),
-      ]);
+      const { ats, critic } = await checkResume(state.currentResume);
       updateProgress(100, 2);
 
       updateState((prev) => ({
         ...prev,
-        atsReport: atsResult,
-        criticIssues: criticResult.issues || [],
+        atsReport: ats,
+        criticIssues: critic.issues || [],
         status: WorkflowStatus.AWAITING_ATS_APPROVAL,
       }));
     } catch (err: unknown) {
@@ -248,45 +305,63 @@ const WorkflowController: React.FC<{
     }
   };
 
-  const handleUploadSubmit = async (file: File | null) => {
+  const handleUploadSubmit = async (file: File) => {
     setError(null);
     setManualResumeError(null);
 
-    if (file) {
-      startLoading("Analyzing your resume...", [
-        "Uploading file",
-        "Running ATS engine",
-        "Analyzing resume structure",
-        "Generating insights",
-      ]);
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.type === "application/x-pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setError("Unsupported file type. Please upload a PDF resume.");
+      return;
+    }
 
-      try {
-        const isPdf =
-          file.type === "application/pdf" ||
-          file.type === "application/x-pdf" ||
-          file.name.toLowerCase().endsWith(".pdf");
-
-        if (!isPdf) {
-          setError("Unsupported file type. Please upload a PDF resume.");
-          stopLoading();
-          return;
-        }
-
-        const { responseData, parsedResume } = await processPdfFile(file);
-        await handleSuccessfulProcessing(responseData, parsedResume);
-      } catch (err: unknown) {
-        setError(toErrorMessage(err) || "Failed to process resume");
-      } finally {
-        stopLoading();
+    setIsUploading(true);
+    startLoading("Analyzing your resume...", [
+      "Uploading file",
+      "Saving resume",
+      "Running ATS engine",
+      "Analyzing resume structure",
+      "Generating insights",
+    ]);
+    try {
+      const parsedResumeResult = await processPdfFile(file);
+      const parsedResume = parsedResumeResult.resume;
+      if (!parsedResume) {
+        setError("Failed to parse the resume. Please try another PDF.");
+        return;
       }
+
+      // Save first: an unsaved upload must never appear selectable or analyzable.
+      const saved = await createSavedResume({
+        filename: file.name,
+        resume: parsedResume,
+      });
+      setSavedResumes((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)]);
+      updateState((prev) => ({
+        ...prev,
+        selectedResumeId: saved.id,
+        currentResume: saved.resume,
+        history: [...prev.history, saved.resume],
+      }));
+
+      await runAtsAndCritic(saved.resume);
+      updateProgress(100, 3);
+    } catch (err: unknown) {
+      setError(toErrorMessage(err) || "Failed to process resume");
+    } finally {
+      setIsUploading(false);
+      stopLoading();
+    }
+  };
+
+  const handleAnalyzeResume = async () => {
+    if (!state.selectedResumeId || !state.currentResume) {
+      setError("Select a saved resume to analyze.");
       return;
     }
-
-    if (!state.currentResume) {
-      setError("No resume available. Please upload or edit your resume.");
-      return;
-    }
-
     await processExistingResume();
   };
 
@@ -314,17 +389,14 @@ const WorkflowController: React.FC<{
     try {
       updateProgress(35, 0);
       const resumeToUse = parsed as Resume;
-      const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(authToken, resumeToUse),
-        resumeCriticAgent(sessionId, authToken, resumeToUse),
-      ]);
+      const { ats, critic } = await checkResume(resumeToUse);
       updateProgress(100, 2);
       updateState((prev) => ({
         ...prev,
         currentResume: resumeToUse,
         history: [...prev.history, resumeToUse],
-        atsReport: atsResult,
-        criticIssues: criticResult.issues || [],
+        atsReport: ats,
+        criticIssues: critic.issues || [],
         status: WorkflowStatus.AWAITING_ATS_APPROVAL,
       }));
       setManualResumeText("");
@@ -346,14 +418,11 @@ const WorkflowController: React.FC<{
       "Checking critic issues",
     ]);
     try {
-      const [atsResult, criticResult] = await Promise.all([
-        atsEngineAnalyze(authToken, state.currentResume),
-        resumeCriticAgent(sessionId, authToken, state.currentResume),
-      ]);
+      const { ats, critic } = await checkResume(state.currentResume);
       updateState((prev) => ({
         ...prev,
-        atsReport: atsResult,
-        criticIssues: criticResult.issues || [],
+        atsReport: ats,
+        criticIssues: critic.issues || [],
       }));
     } catch (err: unknown) {
       setError(toErrorMessage(err) || "Failed to re-run ATS check");
@@ -372,12 +441,7 @@ const WorkflowController: React.FC<{
     ]);
     try {
       updateProgress(25, 0);
-      const report = await alignmentAgent(
-        sessionId,
-        authToken,
-        state.currentResume,
-        state.jobDescription,
-      );
+      const report = await alignmentAgent(state.currentResume, state.jobDescription);
       updateProgress(100, 3);
       updateState((prev) => ({
         ...prev,
@@ -400,38 +464,52 @@ const WorkflowController: React.FC<{
   };
 
   const startInterview = async (mode: InterviewMode) => {
-    updateState((prev) => ({
-      ...prev,
-      interviewMode: mode,
-      status: WorkflowStatus.INTERVIEWING,
-      interviewHistory: [],
-    }));
-
-    if (mode === "VOICE") {
-      setError(null);
-      return;
-    }
-
-    startLoading("Starting interview...", [
-      "Preparing first question",
-      "Personalizing coach guidance",
-    ]);
     setError(null);
     try {
-      updateProgress(50, 0);
-      const openingQuestion = await interviewCoachAgent(
-        sessionId,
-        authToken,
-        state.currentResume,
-        state.jobDescription,
-        [],
-      );
-      updateProgress(100, 1);
+      const id = await ensureSession();
+      if (!id) throw new Error("Failed to initialize session");
+
       updateState((prev) => ({
         ...prev,
+        interviewMode: mode,
         status: WorkflowStatus.INTERVIEWING,
-        interviewHistory: [{ role: "agent", text: openingQuestion }],
+        interviewHistory: [],
       }));
+
+      if (mode === "VOICE") {
+        // The voice relay builds its prompt from the session's resume context.
+        await seedSessionContext(id, state.currentResume, state.jobDescription);
+        return;
+      }
+
+      startLoading("Starting interview...", [
+        "Preparing first question",
+        "Personalizing coach guidance",
+      ]);
+      try {
+        updateProgress(50, 0);
+        const openingQuestion = await interviewCoachAgent(
+          id,
+          state.currentResume,
+          state.jobDescription,
+          [],
+        );
+        updateProgress(100, 1);
+        updateState((prev) => ({
+          ...prev,
+          status: WorkflowStatus.INTERVIEWING,
+          interviewHistory: [{ role: "agent", text: openingQuestion }],
+        }));
+      } catch (err: unknown) {
+        setError(toErrorMessage(err) || "Failed to start interview");
+        updateState((prev) => ({
+          ...prev,
+          status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
+          interviewHistory: [],
+        }));
+      } finally {
+        stopLoading();
+      }
     } catch (err: unknown) {
       setError(toErrorMessage(err) || "Failed to start interview");
       updateState((prev) => ({
@@ -439,8 +517,6 @@ const WorkflowController: React.FC<{
         status: WorkflowStatus.SELECTING_INTERVIEW_MODE,
         interviewHistory: [],
       }));
-    } finally {
-      stopLoading();
     }
   };
 
@@ -452,7 +528,6 @@ const WorkflowController: React.FC<{
       updateProgress(50, 0);
       const responseText = await interviewCoachAgent(
         sessionId,
-        authToken,
         state.currentResume,
         state.jobDescription,
         updatedHistory,
@@ -481,7 +556,6 @@ const WorkflowController: React.FC<{
     try {
       const { responseText, transcription } = await sendAudioMessage(
         sessionId,
-        authToken,
         state.currentResume,
         state.jobDescription,
         updatedHistory,
@@ -552,7 +626,13 @@ const WorkflowController: React.FC<{
     <>
       {(state.status === WorkflowStatus.IDLE || state.status === WorkflowStatus.EXTRACTING) && (
         <UploadStep
+          savedResumes={savedResumes}
+          selectedResumeId={state.selectedResumeId}
+          isUploading={isUploading}
+          isLoadingResumes={isLoadingResumes}
+          onSelectResume={handleSelectResume}
           onUploadSubmit={handleUploadSubmit}
+          onAnalyzeResume={handleAnalyzeResume}
           manualResumeText={manualResumeText}
           manualResumeError={manualResumeError}
           onManualResumeChange={setManualResumeText}

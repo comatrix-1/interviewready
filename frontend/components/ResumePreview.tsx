@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Resume } from "../types";
 
 interface ResumePreviewProps {
-  resume: Resume;
+  resume: Resume | null;
 }
 
 const formatRange = (start?: string, end?: string): string => {

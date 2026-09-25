@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { InterviewMessage, InterviewMode } from "../../types";
+import { getCurrentUsername } from "../../utils/identity";
 
 // Custom hook for WebSocket setup to reduce cognitive complexity
 const useWebSocketConnection = (
@@ -34,7 +35,9 @@ const useWebSocketConnection = (
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || globalThis.location.origin;
 
     const hostAndPath = API_BASE_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
-    const wsUrl = `${protocol}//${hostAndPath}/api/v1/interview/live?sessionId=${sessionId}`;
+    // Browsers can't set headers on WebSocket handshakes, so the simulated user
+    // identity is passed as a query param to keep session ownership consistent.
+    const wsUrl = `${protocol}//${hostAndPath}/api/v1/interview/live?sessionId=${sessionId}&userId=${encodeURIComponent(getCurrentUsername())}`;
 
     const initializeRelaySession = async () => {
       try {

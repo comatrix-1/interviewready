@@ -1,13 +1,10 @@
-"""Tests for the ATS scoring engine and endpoint."""
+"""Tests for the ATS scoring engine."""
 
 import os
 
 os.environ["DEBUG"] = "false"
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
 
-from fastapi.testclient import TestClient
-
-from app.main import app
 from app.models.base import Award, Certificate, Education, Project, Skill, Work
 from app.models.resume import Resume
 from app.utils.ats_engine import (
@@ -543,55 +540,11 @@ class TestCriticIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Endpoint integration tests
+# ATS scoring integration tests
 # ---------------------------------------------------------------------------
 
 
-class TestATSEndpoint:
-    def test_analyze_endpoint(self):
-        client = TestClient(app)
-        payload = {
-            "resume": {
-                "work": [
-                    {
-                        "name": "Acme",
-                        "highlights": [
-                            "Increased revenue by 30% through new pipelines",
-                            "Led team of 12 engineers building microservices",
-                        ],
-                    },
-                ],
-                "skills": [{"name": "Python"}],
-                "education": [{"institution": "MIT"}],
-            },
-        }
-        response = client.post("/api/v1/ats/analyze", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert "ats_score" in data
-        assert "sections" in data
-        assert "detailed_results" in data
-        assert isinstance(data["ats_score"], int)
-        assert 0 <= data["ats_score"] <= 100
-        # Backward compat: new fields are null when not provided
-        assert data["keyword_match"] is None
-        assert data["critic_penalty"] is None
-
-    def test_analyze_endpoint_empty_resume(self):
-        client = TestClient(app)
-        payload = {"resume": {}}
-        response = client.post("/api/v1/ats/analyze", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["ats_score"] == 0
-        # Resume-level checks are always present
-        assert len(data["sections"]) >= 3
-
-    def test_analyze_endpoint_invalid_body(self):
-        client = TestClient(app)
-        response = client.post("/api/v1/ats/analyze", json={"bad": "data"})
-        assert response.status_code == 422
-
+class TestATSScoring:
     def test_analyze_with_awards_and_certificates(self):
         """Awards and certificates contribute to the score."""
         resume = Resume(
@@ -648,46 +601,6 @@ class TestATSEndpoint:
         result = _check_passive_voice(["Was built by the team"])
         assert result["pass"] == "no"
 
-    def test_endpoint_with_jd(self):
-        """Endpoint accepts optional job_description and returns keyword_match."""
-        client = TestClient(app)
-        payload = {
-            "resume": {
-                "skills": [{"name": "Python"}, {"name": "FastAPI"}],
-                "work": [{"highlights": ["Built REST APIs with FastAPI"]}],
-            },
-            "job_description": "Python developer with FastAPI experience building REST APIs",
-        }
-        response = client.post("/api/v1/ats/analyze", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["keyword_match"] is not None
-        assert data["keyword_match"]["match_percentage"] > 0
-        assert len(data["keyword_match"]["matched_keywords"]) > 0
-
-    def test_endpoint_with_critic_issues(self):
-        """Endpoint accepts optional critic_issues and returns critic_penalty."""
-        client = TestClient(app)
-        payload = {
-            "resume": {
-                "work": [{"name": "Acme", "position": "Eng", "startDate": "2020-01",
-                          "endDate": "2023-01",
-                          "highlights": ["Built platform serving 1M users daily",
-                                         "Led team of 8 engineers"]}],
-                "skills": [{"name": "Python"}],
-            },
-            "critic_issues": [
-                {"location": "work[0]", "type": "ats", "severity": "HIGH",
-                 "description": "Missing keywords"},
-                {"location": "skills", "type": "structure", "severity": "LOW",
-                 "description": "Too few skills"},
-            ],
-        }
-        response = client.post("/api/v1/ats/analyze", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["critic_penalty"] == -6  # HIGH=-5 + LOW=-1
-        assert len(data["critic_issues_applied"]) == 2
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ export interface InterviewMessage {
 
 export interface SharedState {
   currentResume: ResumeSchema | null;
+  selectedResumeId: string | null;
   history: ResumeSchema[];
   jobDescription: string;
   status: WorkflowStatus;

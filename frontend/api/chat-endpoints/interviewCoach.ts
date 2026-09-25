@@ -3,11 +3,10 @@ import type { InterviewMessage } from "@/types/workflow";
 import type { ChatRequest } from "@/types/api";
 import { callChatEndpoint } from "@/api/chat";
 import { formatInterviewCoachPayload } from "@/utils/parseUtils";
-import { hasResumeContent } from "./resumeCritic";
+import { hasResumeContent } from "../analysis";
 
 export const interviewCoachAgent = async (
   sessionId: string,
-  authToken: string,
   resume: Resume | null | undefined,
   jobDescription: string,
   history: InterviewMessage[],
@@ -19,13 +18,12 @@ export const interviewCoachAgent = async (
   };
   if (hasResumeContent(resume)) request.resumeData = resume;
 
-  const response = await callChatEndpoint(sessionId, authToken, request);
+  const response = await callChatEndpoint(sessionId, request);
   return formatInterviewCoachPayload(response.payload ?? response.content);
 };
 
 export const sendAudioMessage = async (
   sessionId: string,
-  authToken: string,
   resume: Resume | null | undefined,
   jobDescription: string,
   history: InterviewMessage[],
@@ -39,7 +37,7 @@ export const sendAudioMessage = async (
     audioData: audio,
   };
 
-  const response = await callChatEndpoint(sessionId, authToken, request);
+  const response = await callChatEndpoint(sessionId, request);
   const responseText = formatInterviewCoachPayload(response.payload ?? response.content);
   return { responseText, transcription: response.transcription };
 };
